@@ -24,4 +24,15 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
-docs
+# TypeScript
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+playwright/.cache/
+
+# OS files
+Thumbs.db
+# Note: docs/ is tracked (contains roadmap and project documentation)
