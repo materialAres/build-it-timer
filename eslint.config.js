@@ -3,14 +3,13 @@ import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 
-export default tseslint.config(
+export default tseslint.defineConfig(
   {
-    ignores: ['.wxt/**', 'node_modules/**', '.output/**', 'dist/**'],
+    ignores: ['.wxt/**', 'node_modules/**', '.output/**', 'dist/**', 'eslint.config.js', 'vitest.config.ts', 'wxt.config.ts', 'playwright.config.ts'],
   },
   js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
+    ...tseslint.configs.strictTypeChecked,
   {
-    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -33,19 +32,6 @@ export default tseslint.config(
       react: {
         version: 'detect',
       },
-    },
-  },
-  {
-    files: ['**/*.config.{ts,js,mjs}'],
-    languageOptions: {
-      parserOptions: {
-        projectService: false,
-      },
-    },
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/strict-boolean-expressions': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 );
