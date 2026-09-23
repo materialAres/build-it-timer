@@ -1,6 +1,6 @@
 # Istruzioni — Aggiornare il changelog
 
-> Documento di processo per gli agenti AI. Descrive **quando** e **come** aggiornare `.continue/rules/changelog.md` ogni volta che un task della `docs/roadmap.md` viene completato.
+> Documento di processo per gli agenti AI. Descrive **quando** e **come** aggiornare `.continue/rules/changelog.md` ogni volta che un task della `docs/roadmap-en.md` viene completato.
 
 ## Regola generale (obbligatoria)
 
@@ -27,7 +27,7 @@ Non rinviare l'aggiornamento a "dopo": scrivi la voce mentre hai ancora fresco c
 
 ## Come aggiornare (procedura passo-passo)
 
-1. **Leggi lo stato corrente** di `.continue/rules/changelog.md` e la scheda del task in `docs/roadmap.md` (§2).
+1. **Leggi lo stato corrente** di `.continue/rules/changelog.md` e la scheda del task in `docs/roadmap-en.md` (§2).
 2. **Compila/correggi la colonna "Commit"**: se lo sviluppatore ha già committato il task, puoi leggere l'hash esistente in sola lettura (`git log --oneline -1`, `git rev-parse --short HEAD`) e inserirlo. Se il task non è ancora committato (caso normale, dato che l'agente non committa mai: vedi "Version control"), scrivi `—` / `da committare` e non inventare alcun hash.
 3. **Aggiorna la sezione "Stato attuale"**:
    - sposta il marcatore "Aggiornato a: **<ID task>**";

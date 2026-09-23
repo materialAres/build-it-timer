@@ -1,7 +1,7 @@
 # Piano di Sviluppo — Timer Focus (BuildIt)
 
 > Estensione browser per la produttività: timer di focus con città ASCII city-builder, allowlist/blocklist con malus, sistema di score.
-> Stack: React, WXT, Zustand (`persist`), `declarativeNetRequest`, `browser.alarms`, `framer-motion`, Content Scripts + Shadow DOM, `tldts`.
+> Stack: React, WXT, Zustand (`persist`), `declarativeNetRequest`, `browser.alarms`, `framer-motion`, Content Scripts + Shadow DOM, `tldts`, `@wxt-dev/i18n` (internazionalizzazione EN/IT basata su `browser.i18n`).
 > Package manager di default: **bun** (tutti i comandi di installazione, esecuzione script e gestione dipendenze usano bun, non npm/pnpm/yarn).
 
 ---
@@ -21,6 +21,7 @@
    2.5 [Milestone 2 — Funzionalità core](#milestone-2--funzionalità-core)
    2.6 [Milestone 3 — Funzionalità secondarie](#milestone-3--funzionalità-secondarie)
    2.7 [Milestone 4 — Rifiniture e Nice-to-have](#milestone-4--rifiniture-e-nice-to-have)
+   2.8 [Milestone 5 — Hardening di sicurezza](#milestone-5--hardening-di-sicurezza)
 3. [Strategia di testing (TDD)](#3-strategia-di-testing-tdd)
    3.1 [Regola generale — ciclo red/green/refactor](#31-regola-generale--ciclo-redgreenrefactor)
    3.2 [Strumenti per tipo di test](#32-strumenti-per-tipo-di-test)
@@ -46,7 +47,7 @@ Questa sezione definisce le regole vincolanti per tutto il codice scritto nel pr
 | **Separation of Concerns** | Tre "mondi" separati e comunicanti solo tramite lo store persistito e messaggi tipizzati: (1) **background** — timer, alarms, DNR rules, calcolo score/malus; (2) **content script** — solo overlay di alert su sito bloccato, nessuna logica di business; (3) **popup/UI** — solo presentazione (città ASCII, controlli timer, gestione preset), legge lo stato ma non lo calcola. |
 | **DRY** | La logica di normalizzazione dominio (via `tldts`) è centralizzata in una sola funzione (`getRegistrableDomain(url)`), usata sia dal matcher allowlist/blocklist sia dal generatore di regole DNR sia dalla palette hash — mai duplicata. |
 | **KISS** | Il motore di crescita città compone gli edifici da un numero finito di moduli ASCII predefiniti (basi, piani, cime — vedi `tile-library.ts`) selezionati proceduralmente, non generati algoritmicamente carattere per carattere da zero: la varietà nasce dalla combinazione dei moduli, non da un motore procedurale complesso. L'ottimizzazione con TexturePacker/sprite sheet resta rimandata (vedi Milestone 4) e non deve complicare l'MVP ASCII. |
-| **YAGNI** | Non si costruisce fin da subito un sistema di plugin per preset di terze parti, né supporto multi-lingua, né sync multi-dispositivo: nulla di tutto ciò è nel documento sorgente. Si implementa solo ciò che è esplicitamente richiesto; ogni estensione futura va proposta come nuovo task, non anticipata nel codice attuale. |
+| **YAGNI** | Non si costruisce fin da subito un sistema di plugin per preset di terze parti, né sync multi-dispositivo: nulla di tutto ciò è nel documento sorgente. Si implementa solo ciò che è esplicitamente richiesto; ogni estensione futura va proposta come nuovo task, non anticipata nel codice attuale. **Eccezione**: il supporto multi-lingua (i18n) è richiesto esplicitamente fin dall'inizio (EN di default, IT) e va implementato con il modulo ufficiale WXT `@wxt-dev/i18n`, scegliendo la lingua **automaticamente da quella del browser** (IT solo se il browser è in italiano, altrimenti EN) — nessun selettore manuale — e in modo che aggiungere nuove lingue sia banale (vedi M3.T9). |
 
 > **Nota tecnica — due orologi distinti.** Il documento richiede che i caratteri della città vengano inseriti uno alla volta ogni 2 secondi, mentre `browser.alarms` (usato per la persistenza del timer, vedi M1.T5) ha un tick minimo di 60 secondi per vincolo di piattaforma. I due meccanismi **non vanno confusi**: `browser.alarms` resta l'unica fonte di verità per la persistenza del countdown attraverso i riavvii del service worker; il tick di inserimento carattere ogni 2s è invece un timer a grana fine (`setInterval`/`requestAnimationFrame`-based) che vive lato popup/background solo mentre il contesto è attivo e viene ricalcolato in modo deterministico (numero di caratteri dovuti = tempo di focus trascorso ÷ 2s) ogni volta che il contesto si risveglia, esattamente come già previsto per il countdown secondo-per-secondo in Sezione 1.4.
 
@@ -114,6 +115,9 @@ timer-focus/
 │       └── alarm-adapter.ts     # interfaccia + implementazione browser.alarms
 ├── assets/
 │   └── ascii/                   # frame/moduli ASCII statici (basi, piani, cime, decorazioni)
+├── locales/                     # file di traduzione @wxt-dev/i18n (en.yml default, it.yml), vedi M3.T9
+│   ├── en.yml
+│   └── it.yml
 ├── utils/                       # helper generici, stateless, senza logica di dominio
 ├── tests/
 │   ├── unit/
@@ -209,20 +213,26 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 | M2.T17 | `ScoreBadge` (UI Excellent/Good/Bad) | 2 | M2.T9 |
 | M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | 2 | M2.T11c |
 | M2.T19 | `session-history.slice.ts` — storico ultime 5 sessioni | 2 | M2.T9 |
-| M2.T20 | Validazione mutua esclusione allowlist/blocklist | 2 | M2.T4 |
+| M2.T20 | Validazione mutua esclusione allowlist/blocklist (allowlist prevale) | 2 | M2.T4 |
+| M2.T21 | Normalizzazione difensiva input blocklist (inserimento + verifica navigazione) | 2 | M1.T2, M2.T4, M2.T6 |
 | M3.T1 | `PresetPicker` (UI selezione preset) | 3 | M2.T5, M2.T4 |
 | M3.T2 | `TagEditor` — categorie custom via tag | 3 | M2.T4 |
-| M3.T3 | `SiteList` — CRUD siti in allow/blocklist | 3 | M2.T4, M1.T2, M2.T20 |
+| M3.T3 | `SiteList` — CRUD siti in allow/blocklist | 3 | M2.T4, M1.T2, M2.T20, M2.T21 |
 | M3.T4 | Popup `App.tsx` — composizione UI completa | 3 | M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1–M3.T3 |
 | M3.T5 | Animazioni `framer-motion` su crescita/cancellazione edifici | 3 | M2.T14 |
 | M3.T6 | Persistenza multi-browser: verifica Firefox/Chrome build | 3 | M3.T4 |
 | M3.T7 | `SessionHistory` (UI storico 5 sessioni) | 3 | M2.T19 |
 | M3.T8 | `ExportCityButton` — export città come JPEG/PNG a fine focus | 3 | M2.T14 |
+| M3.T9 | Internazionalizzazione (i18n) — setup modulo WXT `@wxt-dev/i18n` (EN di default) | 3 | M3.T4 |
+| M3.T10 | Traduzione IT (lingua auto dal browser) | 3 | M3.T9 |
 | M4.T1 | *(Nice to have)* Malus proporzionale al tempo sul sito bloccato | 4 | M2.T10 |
 | M4.T2 | *(Nice to have)* Integrazione TexturePacker / sprite sheet edifici | 4 | M2.T14 |
 | M4.T3 | Hardening errori e logging centralizzato | 4 | M3.T4 |
 | M4.T4 | Rifinitura accessibilità popup | 4 | M3.T4 |
 | M4.T5 | Suite e2e completa multi-scenario | 4 | M3.T6 |
+| M5.T1 | Hardening message bus: validazione runtime + provenienza mittente | 5 | M1.T6 |
+| M5.T2 | Hardening `lib/url/domain.ts`: restrizione schema + canonicalizzazione + IDN | 5 | M1.T2 |
+| M5.T3 | Escaping/validazione di `urlFilter` nella generazione regole DNR | 5 | M2.T6 |
 
 ### 2.3 Milestone 0 — Setup progetto
 
@@ -283,10 +293,12 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Obiettivo**: funzione pura `getRegistrableDomain(url: string): Result<string>` che usa `tldts` per estrarre il dominio registrabile normalizzato (es. `m.facebook.com` → `facebook.com`).
 * **File**: `lib/url/domain.ts`
 * **Dipendenze**: M1.T1
+* **Decisione di design — la normalizzazione *rimuove* i sottodomini, non li aggiunge**: la funzione collassa sempre verso il dominio registrabile canonico (`eTLD+1`), così `m.facebook.com`, `www.facebook.com` e `facebook.com` convergono tutti su `facebook.com`. Non si conserva mai la variante con sottodominio, né si "costruisce" un sottodominio a partire da un input parziale. Questa forma canonica è l'unica rappresentazione ammessa di un dominio in tutto il sistema (blocklist/allowlist, match di navigazione, palette): è il presupposto che rende possibili la deduplicazione delle voci (M2.T4), la mutua esclusione allowlist/blocklist (M2.T20) e la precedenza dell'allowlist (M2.T6). Eventuali sottodomini necessari a logiche future andranno gestiti esplicitamente altrove, mai come effetto collaterale di questa funzione.
 * **Criteri di accettazione**:
   - Per `https://m.facebook.com/foo`, `https://www.facebook.com`, `https://facebook.com` → stesso risultato `facebook.com`.
   - Per URL malformato → ritorna variante `{ ok: false, error }`, non lancia eccezione.
   - Gestisce correttamente domini con ccSLD (es. `facebook.co.uk` se applicabile) grazie a `tldts`.
+  - Un suffisso pubblico "nudo" (es. `co.uk`, `com`, `github.io`) non è un dominio registrabile valido → ritorna `{ ok: false, error }` (il messaggio utente "Inserisci un URL valido" è responsabilità dei chiamanti, vedi M2.T21 e M3.T3).
 
 #### M1.T3 — Adapter storage per `persist` su `browser.storage.local`
 * **Obiettivo**: implementare uno storage adapter compatibile con l'interfaccia richiesta dal middleware `persist` di Zustand, che scriva su `browser.storage.local` invece che su `localStorage` (non disponibile/adeguato in service worker).
@@ -363,6 +375,8 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Dipendenze**: M1.T4, M1.T2
 * **Criteri di accettazione**:
   - Aggiungere un sito normalizza il dominio tramite `getRegistrableDomain` prima di salvarlo (niente duplicati tipo `facebook.com` e `www.facebook.com`).
+  - L'input dell'utente è **non fidato**: l'inserimento passa sempre da `getRegistrableDomain` (mai salvare la stringa così com'è). Se la funzione ritorna `{ ok: false }` — ad esempio per un suffisso pubblico "nudo" come `co.uk`/`com`, o un URL malformato — la voce viene rifiutata e la UI mostra l'errore **"Inserisci un URL valido"** (vedi M2.T21); nessuna eccezione propagata.
+  - Lo slice conserva le voci solo nella loro forma canonica (dominio registrabile), coerente con la decisione di design di M1.T2.
   - Azioni CRUD coperte da test unitari (add/remove/update tag).
 
 #### M2.T5 — Preset predefiniti (dati)
@@ -379,7 +393,7 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Dipendenze**: M1.T2, M2.T4
 * **Criteri di accettazione**:
   - Un dominio in blocklist genera una regola di blocco corretta (`urlFilter` normalizzato).
-  - Un dominio presente sia in allowlist sia in blocklist → allowlist vince esplicitamente (regola con priorità maggiore), comportamento testato esplicitamente.
+  - **Ordine di precedenza (decisione di design)**: la **allowlist prevale sempre** sulla blocklist. Un dominio presente sia in allowlist sia in blocklist non viene bloccato: la regola di allowlist ha priorità maggiore e annulla il blocco. Comportamento testato esplicitamente come caso di prima classe (non come edge case).
   - Nessuna chiamata reale a `browser.declarativeNetRequest` in questo modulo (puro, testabile senza browser).
 
 #### M2.T7 — Applicazione regole DNR dal background
@@ -503,6 +517,24 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Criteri di accettazione**:
   - Rende correttamente le tre varianti in base al valore dello store (test con i tre stati forzati).
 
+#### M2.T20 — Validazione mutua esclusione allowlist/blocklist
+* **Obiettivo**: impedire che lo stesso dominio canonico finisca contemporaneamente in allowlist e blocklist, e stabilire in modo esplicito la regola di risoluzione per quando il conflitto esiste comunque (import, preset, stato pregresso).
+* **File**: `store/blocklist.slice.ts`, `components/blocklist/SiteList.tsx` (feedback UI).
+* **Dipendenze**: M2.T4
+* **Criteri di accettazione**:
+  - Aggiungere alla blocklist un dominio già presente in allowlist (o viceversa) non crea un doppio inserimento: la UI offre di spostarlo o mostra un feedback esplicito. Il confronto avviene su domini già normalizzati (M1.T2/M2.T4).
+  - **Ordine di precedenza (decisione di design)**: in caso di conflitto residuo, l'**allowlist prevale sempre** sulla blocklist — nessun dominio presente in allowlist viene mai bloccato (coerente con M2.T6).
+
+#### M2.T21 — Normalizzazione difensiva dell'input blocklist (inserimento + verifica navigazione)
+* **Obiettivo**: garantire che i domini siano sempre in forma registrabile canonica in **due momenti distinti**, riusando l'unica funzione `getRegistrableDomain` (DRY, Sezione 1.1): (1) **all'inserimento della voce** (input utente/preset, non fidato) e (2) **al momento della verifica di navigazione** (URL della tab, non fidato). Non ci si fida mai di una voce già salvata né di un URL ricevuto dal content/browser.
+* **File**: `lib/blocking/normalize-entry.ts` (funzione pura di normalizzazione/validazione di una voce), `store/blocklist.slice.ts` (inserimento), `entrypoints/background.ts` (verifica navigazione), `lib/blocking/rules.ts` (consumo della forma canonica).
+* **Dipendenze**: M1.T2, M2.T4, M2.T6
+* **Criteri di accettazione**:
+  - **Inserimento**: ogni voce (anche da preset, M2.T5/M3.T1) passa da `getRegistrableDomain`; se l'input non è un dominio registrabile valido — suffisso pubblico "nudo" (`co.uk`, `com`, `github.io`) o URL malformato — la voce viene rifiutata e la UI mostra l'errore **"Inserisci un URL valido"** (vedi M3.T3).
+  - **Verifica navigazione**: l'URL della tab viene normalizzato con la stessa funzione prima del match contro blocklist/allowlist; un URL non normalizzabile non causa crash e non attiva un blocco erroneo (si applica la precedenza allowlist > blocklist, M2.T6).
+  - Test: gli stessi input (con/senza sottodominio, con/senza protocollo) producono sempre la stessa forma canonica indipendentemente dal punto di ingresso; un input di pari contenuto inserito a mano o arrivato come URL di navigazione normalizza allo stesso dominio.
+  - **Note/decisioni**: la normalizzazione **rimuove** i sottodomini (collassa verso `eTLD+1`), non li aggiunge — decisione di design esplicitata in M1.T2.
+
 ### 2.6 Milestone 3 — Funzionalità secondarie
 
 #### M3.T1 — `PresetPicker` (UI selezione preset)
@@ -522,10 +554,12 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 #### M3.T3 — `SiteList` — CRUD siti in allow/blocklist
 * **Obiettivo**: UI di gestione manuale (aggiungi/rimuovi singolo dominio), con normalizzazione via `tldts` in tempo reale nell'input.
 * **File**: `components/blocklist/SiteList.tsx`
-* **Dipendenze**: M2.T4, M1.T2
+* **Dipendenze**: M2.T4, M1.T2, M2.T20, M2.T21
 * **Criteri di accettazione**:
   - Inserire un URL completo (`https://m.facebook.com/qualcosa`) risulta in un'unica entry normalizzata `facebook.com`.
   - Tentare di aggiungere un dominio già presente non crea un duplicato (feedback UI esplicito).
+  - Se l'input non è un dominio registrabile valido — ad esempio un suffisso pubblico "nudo" (`co.uk`, `com`, `github.io`) o un URL malformato — appare il messaggio di errore **"Inserisci un URL valido"** e la voce non viene aggiunta (nessuna eccezione, vedi M2.T21 e M1.T2).
+  - La precedenza **allowlist > blocklist** (M2.T6, M2.T20) è rispettata anche nel feedback: aggiungere in allowlist un dominio già in blocklist (o viceversa) non genera mai un doppio inserimento.
 
 #### M3.T4 — Popup `App.tsx` — composizione UI completa
 * **Obiettivo**: comporre tutti i componenti (timer, città, score, blocklist) nel popup principale, con routing/tab se necessario.
@@ -549,6 +583,30 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Dipendenze**: M3.T4
 * **Criteri di accettazione**:
   - `wxt build -b chrome` e `wxt build -b firefox` producono estensioni funzionanti (verificato almeno manualmente per il primo giro, poi coperto da M4.T5).
+
+#### M3.T9 — Internazionalizzazione (i18n) — setup modulo WXT `@wxt-dev/i18n` (EN di default)
+* **Obiettivo**: configurare il modulo ufficiale WXT `@wxt-dev/i18n` (wrapper type-safe e sincrono su `browser.i18n`) per tutte le stringhe visibili del popup e dei messaggi del content script, con **inglese come lingua di default** (e come fallback per le chiavi mancanti). La lingua effettiva è determinata **automaticamente da quella del browser**: se il browser è impostato su italiano l'estensione mostra l'italiano, in ogni altro caso mostra l'inglese. **Non esiste alcun selettore di lingua manuale** né preferenza utente persistita: cambiare lingua richiede di cambiare la lingua del browser (limite intrinseco dell'API `browser.i18n`, accettato in fase di design in cambio della leggerezza, del caricamento sincrono e del caching nativo). Le traduzioni vivono in file `locales/<lang>.yml` in formato a chiavi annidate, compilate a build time negli `_locales/<lang>/messages.json` attesi dal browser: nessun fetch asincrono, nessun bundle delle traduzioni duplicato per entrypoint.
+* **File**: `wxt.config.ts` (registrazione del modulo `'@wxt-dev/i18n/module'` + `manifest.default_locale: 'en'`), `locales/en.yml` (stringhe EN di default, raggruppate per area: `timer`, `city`, `score`, `blocklist`, `overlay`, `common`), componenti `components/**` e `entrypoints/popup/App.tsx` (uso di `i18n.t(...)`), `entrypoints/content/blocked-overlay.content.ts` (uso di `i18n.t(...)` per i messaggi dell'overlay).
+* **Dipendenze**: M3.T4
+* **Dipendenze runtime aggiunte**: `@wxt-dev/i18n` (`^0.2.7`).
+* **Criteri di accettazione**:
+  - `wxt.config.ts` registra il modulo `'@wxt-dev/i18n/module'` e imposta `manifest.default_locale: 'en'`.
+  - Tutte le stringhe visibili nel popup e nell'overlay passano da `i18n.t(...)` (auto-importato da `#i18n`): nessuna stringa letterale cablata nei componenti.
+  - Non esiste alcun selettore di lingua manuale né campo `language` in uno slice utente: la lingua è letta automaticamente da quella del browser tramite l'API nativa.
+  - Le traduzioni sono caricate in modo sincrono (nessun `await`, nessun fetch) per evitare flicker al primo render.
+  - L'istanza `i18n` è unica e condivisa da tutti i contesti (popup e content script): il content script non inizializza una propria istanza separata e non dipende dal popup.
+  - Aggiungere una nuova lingua richiede solo creare `locales/<lang>.yml` con le stesse chiavi di `locales/en.yml` — nessuna modifica ai componenti né al config.
+  - Test: un componente che usa `i18n.t(key)` renderizza la stringa EN attesa; con locale IT forzato (M3.T10) renderizza la stringa IT.
+
+#### M3.T10 — Traduzione IT (lingua auto dal browser)
+* **Obiettivo**: aggiungere la traduzione italiana completa, con lo **stesso albero di chiavi** di `locales/en.yml`. L'italiano viene mostrato **automaticamente** quando il browser dell'utente è impostato su italiano; in ogni altro caso resta l'inglese. Non c'è alcun controllo UI né preferenza di lingua persistita lato estensione: la lingua segue quella del browser.
+* **File**: `locales/it.yml` (traduzione IT di tutte le chiavi presenti in `locales/en.yml`).
+* **Dipendenze**: M3.T9
+* **Criteri di accettazione**:
+  - Tutte le chiavi presenti in `locales/en.yml` hanno una controparte in `locales/it.yml` con lo stesso albero (nessuna chiave mancante; per le eventuali mancanti varrebbe comunque il fallback sulla lingua di default EN).
+  - La selezione della lingua è **solo automatica** (browser in italiano → italiano, altrimenti inglese): nessun selettore, nessuna preferenza persistita, nessuna azione di store dedicata.
+  - Il content script riceve l'italiano quando il browser è in italiano (stessa istanza `i18n` condivisa, nessuna logica aggiuntiva).
+  - Test: la copertura delle chiavi EN/IT è verificata da un test che confronta gli alberi dei due file e fallisce se una chiave IT manca (drift detection).
 
 ### 2.7 Milestone 4 — Rifiniture e Nice-to-have
 
@@ -589,6 +647,57 @@ Ogni task è scheda a sé stante, con questo formato fisso:
 * **Criteri di accettazione**:
   - Ciascuno dei tre scenario sopra ha almeno un test e2e verde su Chromium.
 
+### 2.8 Milestone 5 — Hardening di sicurezza
+
+> **Threat model / fuori scope.** L'estensione è *client-only* (nessun backend): l'utente è l'operatore del browser stesso. Da questo deriva cosa vale davvero la pena difendere e cosa no.
+>
+> **Fuori scope (self-pwn).** Chi apre i DevTools e modifica codice, store o messaggi nel *proprio* browser controlla già l'estensione: non esiste difesa sensata e non ne costruiremo. Idem per disinstallazione, modifica manuale dei file buildati o patch dell'estensione. "Un attaccante può modificare il mio codice" è vero per qualunque frontend (web, desktop, binari nativi) e non è nel threat model: il security model esclude sempre l'operatore della macchina.
+>
+> **In scope.** Ogni dato/codice *non fidato* che **attraversa** l'estensione verso un contesto più privilegiato, anche con operatore legittimo. I confini di fiducia che un'estensione senza backend **non** elimina:
+> 1. **Pagina web → content script** — la pagina è arbitraria e ostile (DOM, `postMessage`, navigazioni craftate). Un sito malevolo non è l'utente.
+> 2. **Content script → background (message bus)** — `runtime.onMessage` può ricevere messaggi ben-formati ma forgiati da altro codice; da qui validazione runtime dell'union discriminata, verifica `sender.id === browser.runtime.id`, `tabId` derivato da `sender.tab.id` e mai dal payload (M5.T1).
+> 3. **URL/dominio non fidato → regole DNR / controlli dominio** — injection tramite *dati* (schemi non-http, `userinfo` trick `https://facebook.com@evil.com`, IDN/homograph, caratteri sintattici `*`/`|`/`^`/`||` in `urlFilter`), esattamente come una SQL injection (M5.T2, M5.T3).
+>
+> **Conseguenza pratica.** Queste hardening difendono dai confini *dato/codice non fidato*, non dall'operatore. Restano comunque giustificate come pura **correttezza** — evitare over/under-blocking, doppie normalizzazioni, crash da input inattesi — a prescindere dall'esistenza di un attaccante. Non sono un framework di sicurezza speculativo: ogni task mappa su un gap concreto e testabile.
+
+> Questa milestone traduce in task le misure emerse da un security audit dell'architettura (§2 del documento di audit, "Part 2 — Could your project expose users to attacks?"). Non aggiunge funzionalità: rende sicure e difensive le logiche già pianificate in Milestone 1–2. I tre rischi classificati **High** riguardano il message bus (M1.T6), la normalizzazione dei domini (M1.T2/M2.T21) e la generazione delle regole DNR (M2.T6).
+>
+> **Nota di sequenziamento**: questi task sono prerequisiti di sicurezza delle logiche critiche di §3.4 e dovrebbero idealmente atterrare **prima** dei task che consumano i rispettivi moduli (M5.T1 prima di M2.T8/M2.T10/M2.T16; M5.T2 prima di M2.T4/M2.T6/M2.T21; M5.T3 prima di M2.T7). Le rispettive schede di M2 restano valide; l'hardening è additivo e non le sostituisce.
+
+#### M5.T1 — Hardening del message bus: validazione runtime e provenienza del mittente
+* **Obiettivo**: rendere il bus messaggi (M1.T6) robusto contro messaggi malformati o forgiati — validare a runtime ogni `RuntimeMessage` con guardie (mai cast) e non fidarsi mai di `tabId`/identificatori provenienti dal payload, derivandoli sempre da `sender`.
+* **File**: `lib/messaging/messages.types.ts` (guardie di validazione runtime; rimozione di `tabId` dal payload), `lib/messaging/bus.ts` (validazione in ingresso + controllo origine), `entrypoints/background.ts`, `entrypoints/content.ts`.
+* **Dipendenze**: M1.T6
+* **Riferimenti audit**: rischio "🔴 High — Message bus has no runtime validation and trusts caller-supplied tabId" (coinvolge M1.T6, M2.T10, M2.T16).
+* **Criteri di accettazione**:
+  - `onMessage` valida l'input con guardie runtime su union discriminata: `type` sconosciuto, campi mancanti o tipi errati → messaggio scartato senza eccezioni e senza mutare lo store (mai `as RuntimeMessage`).
+  - Il background rifiuta i messaggi in cui `sender.id !== browser.runtime.id` e richiede `sender.tab` dove il payload lo presuppone.
+  - `tabId` non è più letto dal payload: le varianti che lo richiedono lo ricavano da `sender.tab.id`; il payload di `SITE_BLOCKED_ATTEMPT` (e le varianti equivalenti) non contiene più `tabId`.
+  - Test (integrazione `fakeBrowser`): messaggio malformato/forgiato → nessun crash, nessuna mutazione; `tabId` iniettato nel payload ignorato; sender con id diverso da `browser.runtime.id` rifiutato; `type` non riconosciuto ignorato.
+
+#### M5.T2 — Hardening di `lib/url/domain.ts`: restrizione schema, canonicalizzazione e IDN
+* **Obiettivo**: rendere la normalizzazione dei domini (M1.T2, "core di sicurezza del blocco", §3.4) robusta contro bypass e impersonificazione — accettare solo URL `http`/`https`, canonicalizzare l'host e gestire gli IDN/homograph, con una forma canonica unica condivisa da inserimento e verifica di navigazione.
+* **File**: `lib/url/domain.ts`, `lib/blocking/normalize-entry.ts` (M2.T21), `entrypoints/background.ts` (verifica navigazione).
+* **Dipendenze**: M1.T2
+* **Riferimenti audit**: rischio "🔴 High — lib/url/domain.ts is the blocklist/allowlist security core, and it validates too little" (coinvolge M1.T2, M2.T6, M2.T21).
+* **Criteri di accettazione**:
+  - Solo `http`/`https`: schemi `ftp://`, `file://`, `javascript:`, `data:` (e ogni altro) → `{ ok: false }`.
+  - Canonicalizzazione: punto finale (`facebook.com.`) e maiuscole (`FACEBOOK.COM`) → `facebook.com`; userinfo trick (`https://facebook.com@evil.com`) → host reale `evil.com`, non lo userinfo.
+  - IDN/homograph: gli host Unicode sono convertiti in punycode ASCII per la comparazione, così un homograph (es. `раypal.com` in cirillico) non collide con il dominio latino legittimo.
+  - Test con **corpus ostile** (non solo happy-path): schemi non-http, punto finale, maiuscole, userinfo, IDN, URL malformato → esiti deterministici e sicuri, nessuna eccezione.
+  - La forma canonica è la stessa all'inserimento (M2.T4/M2.T21) e alla verifica di navigazione (M2.T6): nessuna divergenza tra i due punti di ingresso.
+
+#### M5.T3 — Escaping/validazione di `urlFilter` nella generazione regole DNR
+* **Obiettivo**: garantire che la generazione delle regole `declarativeNetRequest` (M2.T6) usi solo domini canonici e non interpoli mai input grezzo in `urlFilter`, dove `*`, `|`, `^` e `||` hanno semantica speciale.
+* **File**: `lib/blocking/rules.ts`, `lib/blocking/normalize-entry.ts`.
+* **Dipendenze**: M2.T6
+* **Riferimenti audit**: rischio "🔴 High — DNR rule generation must escape urlFilter" (coinvolge M2.T6).
+* **Criteri di accettazione**:
+  - Nessuna voce grezza è interpolata in `urlFilter`: vengono accettate solo forme canoniche `[a-z0-9.-]`; voci contenenti `*`, `|`, `^`, `||` sono neutralizzate (escaping) o rifiutate.
+  - Una voce con `*` non produce un wildcard (nessun over-blocking); un prefisso `||` non altera l'ancoraggio in modo inatteso.
+  - La precedenza "allowlist prevale sempre" è applicata nella stessa fase di generazione (coerente con M2.T6/M2.T20).
+  - Test: voce con `*`/`||` → regola sicura o rifiutata; conflitto allow/block → allowlist prevale; nessuna chiamata reale a `browser.declarativeNetRequest` (modulo puro).
+
 ---
 
 ## 3. Strategia di testing (TDD)
@@ -618,7 +727,7 @@ Nota: `@testing-library/jest-dom` estende i matcher di `vitest`/`expect` per ass
 
 | Task | Tipo test | Strumenti | Casi limite da coprire |
 |---|---|---|---|
-| M1.T2 (`domain.ts`) | Unit | vitest | Sottodomini multipli, protocolli diversi (http/https), URL senza protocollo, URL malformato, IP al posto di dominio, dominio con porta esplicita. |
+| M1.T2 (`domain.ts`) | Unit | vitest | Sottodomini multipli (verifica che vengano rimossi, non aggiunti), protocolli diversi (http/https), URL senza protocollo, URL malformato, IP al posto di dominio, dominio con porta esplicita, suffisso pubblico "nudo" (`co.uk`, `com`) → `{ ok: false }`. |
 | M1.T3 (storage adapter) | Integrazione | vitest + `wxt/testing` | Scrittura/lettura valore grande vicino ai limiti di `storage.local`; `getItem` su chiave inesistente. |
 | M1.T4 (store skeleton) | Unit + Integrazione | vitest | Campi volatili non sopravvivono a "riavvio" simulato; campi persistiti sì; `partialize` non esclude per errore un campo che dovrebbe persistere. |
 | M1.T5 (alarm adapter) | Unit (via Fake) + Integrazione (via `wxt/testing`) | vitest | Chiamata `schedule` con tempo nel passato; `clear` su alarm non esistente; tick minimo 60s rispettato anche se viene richiesto un intervallo minore. |
@@ -629,7 +738,8 @@ Nota: `@testing-library/jest-dom` estende i matcher di `vitest`/`expect` per ass
 | M2.T3 (Timer UI) | Component | Testing Library | Rendering con `remainingSeconds` a 0; rendering con valori > 3600s (formattazione oltre i 60 minuti, comportamento da chiarire). |
 | M2.T4 (`blocklistSlice`) | Unit | vitest | Aggiunta dominio già presente in allowlist mentre lo si aggiunge a blocklist (o viceversa); rimozione di un dominio non esistente. |
 | M2.T5 (presets data) | Unit | vitest | Validazione struttura dati (ogni preset ha almeno un dominio, tag non vuoto). |
-| M2.T6 (DNR rules) | Unit | vitest | Blocklist vuota → nessuna regola; stesso dominio duplicato in blocklist → una sola regola; conflitto allow/block sullo stesso dominio (vedi criterio di accettazione). |
+| M2.T6 (DNR rules) | Unit | vitest | Blocklist vuota → nessuna regola; stesso dominio duplicato in blocklist → una sola regola; conflitto allow/block sullo stesso dominio → allowlist prevale (criterio di accettazione). |
+| M2.T21 (normalizzazione input) | Unit + Integrazione | vitest (+ `wxt/testing`) | Suffisso pubblico "nudo" (`co.uk`, `com`) rifiutato con "Inserisci un URL valido"; stesso input → stessa forma canonica da inserimento e da verifica navigazione; URL malformato in verifica non crasha e non blocca erroneamente. |
 | M2.T7 (apply DNR rules) | Integrazione | vitest + `wxt/testing` | Cambio blocklist mentre `status !== 'running'` → nessuna chiamata a `updateDynamicRules` (o comportamento concordato, vedi §4). |
 | M2.T8 (overlay content script) | Component (per `BlockedOverlay.tsx`) + Integrazione (per il content script) | Testing Library, vitest + `wxt/testing` | Overlay montato due volte sulla stessa pagina (idempotenza); messaggio inviato al background quando il background non risponde (timeout). |
 | M2.T9 (calculate score) | Unit | vitest | Valori esattamente sui confini (0, 0.2, 0.5, 1.0); valori fuori range [0,1] (input difensivo). |
@@ -643,9 +753,11 @@ Nota: `@testing-library/jest-dom` estende i matcher di `vitest`/`expect` per ass
 | M2.T17 (ScoreBadge) | Component | Testing Library | Transizione di stato da `excellent` a `bad` tra due render successivi. |
 | M3.T1 (PresetPicker) | Component | Testing Library | Applicare due preset con domini sovrapposti (nessun duplicato risultante, riusa la logica di M2.T4). |
 | M3.T2 (TagEditor) | Component | Testing Library | Tag con nome duplicato (case-insensitive?); rimozione di un tag ancora assegnato a siti. |
-| M3.T3 (SiteList) | Component | Testing Library | Input vuoto/whitespace; input che `tldts` non riesce a parsare (feedback errore visibile). |
+| M3.T3 (SiteList) | Component | Testing Library | Input vuoto/whitespace; input che `tldts` non riesce a parsare o suffisso pubblico "nudo" (`co.uk`) → messaggio "Inserisci un URL valido" (feedback errore visibile). |
 | M3.T4 (App.tsx) | Integrazione (component-level) | Testing Library | Flusso completo: apri popup → applica preset → avvia timer → simula tick → verifica aggiornamento sia timer sia città nello stesso render tree. |
 | M3.T5 (animazioni) | Component | Testing Library (con `framer-motion` mockato/disabilitato se necessario per determinismo) | Nessuna asserzione sui tempi di animazione reali in unit/component test (fragile); solo che lo stato finale sia corretto. |
+| M3.T9 (i18n setup `@wxt-dev/i18n`) | Component (+ Integrazione) | Testing Library, vitest + `wxt/testing` | Componente che usa `i18n.t(key)` renderizza la stringa EN attesa; con il locale del browser forzato a IT renderizza la stringa IT. |
+| M3.T10 (traduzione IT, auto dal browser) | Component + Unit (drift detection) | Testing Library, vitest | Tutte le chiavi EN hanno controparte IT (confronto alberi `en.yml`/`it.yml`, fallisce se chiave IT manca); nessun selettore manuale né preferenza persistita presente. |
 | M3.T6 (multi-browser) | Manuale + preparazione per M4.T5 | — | — |
 | M3.T7 (mobile layout) | Component (snapshot/viewport) | Testing Library con viewport forzato, o verifica manuale | — |
 | M4.T1 (malus proporzionale) | Unit | vitest | Proprietà monotona testata con più valori crescenti di tempo (property-based semplice o tabella di casi). |
@@ -653,6 +765,9 @@ Nota: `@testing-library/jest-dom` estende i matcher di `vitest`/`expect` per ass
 | M4.T3 (logging) | Unit + Integrazione | vitest | Un errore lanciato in un punto noto viene effettivamente loggato (spy sul logger) e non propaga fino a crashare il listener. |
 | M4.T4 (accessibilità) | Component (a11y) | Testing Library + eventuale `jest-axe` (da valutare se aggiungerla, vedi Sezione 1.4 su dipendenze minime) | — |
 | M4.T5 (e2e) | E2E | Playwright | I tre scenari elencati nel criterio di accettazione del task, più un quarto scenario di regressione: build Firefox con stesso scenario del timer (se Playwright + Firefox è disponibile, altrimenti solo Chromium come da vincolo del documento). |
+| M5.T1 (message bus hardening) | Integrazione | vitest + `wxt/testing` | Messaggio malformato/forgiato (type sconosciuto, campi mancanti, tipi errati) → nessun crash e nessuna mutazione; `tabId` nel payload ignorato e derivato da `sender.tab.id`; sender con `id !== browser.runtime.id` rifiutato. |
+| M5.T2 (domain hardening) | Unit + Integrazione | vitest | Schemi non-http (`ftp://`, `file://`, `javascript:`, `data:`) → `{ ok: false }`; punto finale e maiuscole canonicalizzati; userinfo trick (`https://facebook.com@evil.com`) → host reale; IDN/homograph → punycode; corpus ostile senza eccezioni. |
+| M5.T3 (DNR urlFilter) | Unit | vitest | Voce con `*` non diventa wildcard (no over-blocking); prefisso `||` non altera l'ancoraggio; voce non canonica rifiutata/neutralizzata; conflitto allow/block → allowlist prevale. |
 
 ### 3.4 Priorità sulle logiche critiche
 
@@ -660,10 +775,12 @@ In ordine di priorità assoluta (da testare più a fondo, con più casi limite, 
 
 1. **Persistenza del timer tramite `browser.alarms`** (M1.T5, M2.T1, M2.T2) — è la logica con più superficie per bug "silenziosi" (timer che si azzera, duplica, o non riprende dopo il riavvio del service worker). Priorità massima perché un bug qui rompe la fiducia dell'utente nell'intero concetto di "sessione di focus".
 2. **Parsing URL con `tldts`** (M1.T2) — è la base di sicurezza/correttezza di tutto il sistema di blocco: un bug qui può far passare siti che dovrebbero essere bloccati (o viceversa, bloccare siti legittimi). Va testato con un set ampio di URL reali eterogenei, non solo i casi "felici".
-3. **Logica di blocco dei siti** (M2.T6, M2.T7) — direttamente dipendente dal punto precedente; il conflitto allowlist/blocklist va testato esplicitamente come caso di prima classe, non come edge case marginale.
+3. **Logica di blocco dei siti** (M2.T6, M2.T7, M2.T21) — direttamente dipendente dal punto precedente; il conflitto allowlist/blocklist va testato esplicitamente come caso di prima classe, non come edge case marginale, con regola di risoluzione fissa: **l'allowlist prevale sempre** (M2.T6, M2.T20). Anche la normalizzazione difensiva dell'input (inserimento + verifica navigazione, M2.T21) va trattata come logica critica.
 4. **Calcolo dello score e dei malus** (M2.T9, M2.T10, M4.T1) — è il cuore della "gamification" e della percezione di equità da parte dell'utente: i confini tra Excellent/Good/Bad devono essere esatti e coperti da test parametrici su tutti i valori soglia.
 5. **Determinismo della palette degli edifici** (M2.T13) — priorità minore rispetto alle precedenti (un colore "sbagliato" non rompe la funzionalità), ma va comunque garantito il determinismo con test di ripetizione, perché è un requisito esplicito del documento sorgente ("lo stesso edificio ha sempre lo stesso colore").
 
 Questi cinque punti vanno inoltre ri-verificati (regressione) ogni volta che si tocca un modulo da cui dipendono, anche se il task che si sta completando è nominalmente un altro (es. modificare `growth-engine.ts` per M4.T1 richiede di rieseguire anche i test di M2.T12).
+
+A queste si aggiunge, con priorità **trasversale**, l'**hardening di sicurezza** (M5.T1–M5.T3): validazione runtime dei messaggi e provenienza del mittente (`sender`), restrizione schema + canonicalizzazione in `lib/url/domain.ts`, escaping di `urlFilter` nella generazione DNR. Sono prerequisiti di sicurezza delle logiche critiche 1–3 e vanno verificati con un **corpus di input ostili** (non solo happy-path). Le misure sono additive rispetto ai task M1.T2/M1.T6/M2.T6 e non ne modificano i criteri di accettazione.
 
 ---

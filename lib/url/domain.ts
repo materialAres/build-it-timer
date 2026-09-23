@@ -1,4 +1,4 @@
-import { parse, getDomain } from 'tldts';
+import { parse } from 'tldts';
 import type { Result } from '@/utils/result';
 import { ok, err } from '@/utils/result';
 
@@ -13,7 +13,7 @@ export function getRegistrableDomain(url: string): Result<string> {
   }
 
   const parsed = parse(url);
-  const domain = getDomain(url);
+  const domain = parsed?.domain || null;
 
   if (!domain || !parsed.publicSuffix) {
     return err(new Error(`Could not extract registrable domain from "${url}"`));

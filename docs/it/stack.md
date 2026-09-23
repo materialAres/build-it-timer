@@ -1,7 +1,7 @@
 # Memoria di progetto — Timer Focus (BuildIt)
 
 > Riferimento rapido per agenti AI: stack tecnologico, versioni delle dipendenze e convenzioni del progetto.
-> Fonte di verità: `docs/roadmap.md` e `package.json`. In caso di discordanza, fa fede il `package.json`.
+> Fonte di verità: `docs/roadmap-en.md` e `package.json`. In caso di discordanza, fa fede il `package.json`.
 
 ## Descrizione del progetto
 
