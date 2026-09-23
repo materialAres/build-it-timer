@@ -6,14 +6,14 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T3** (Milestone 1 in progress, nearing completion).
+> Updated to: **M1.T4** (Milestone 1 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3 completed; M1.T4–M1.T7 to do.
-- Tests: `bun run test` → **23 passing tests** across 5 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4 completed; M1.T5–M1.T7 to do.
+- Tests: `bun run test` → **29 passing tests** across 6 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 
 ## Completed tasks summary
@@ -28,6 +28,7 @@ description: Rules for updating the changelog
 | M1.T1 | Shared domain type definitions | completed | `c1fa995` |
 | M1.T2 | `lib/url/domain.ts` module (`tldts` wrapper) | completed | `c1fa995` |
 | M1.T3 | Storage adapter for `persist` on `browser.storage.local` | completed | `5793128` |
+| M1.T4 | Zustand store — skeleton + slice combination | completed | — (to be committed) |
 
 ---
 
@@ -81,6 +82,17 @@ description: Rules for updating the changelog
 - Non-string values are treated as absent (`null`) instead of throwing, so as not to break rehydration.
 - Runtime dependency added: `zustand` `5.0.15` (required by the `StateStorage` type and for the upcoming M1.T4).
 - Tests: `tests/integration/store/storage-adapter.test.ts` (9 tests, integration with `fakeBrowser`) — non-existent key, set/get round-trip, overwrite, remove, remove on absent key, large value (~500k characters), non-string value, simulated restart (new instance), shared instance.
+
+### M1.T4 — Zustand store — skeleton + slice combination
+- `store/index.ts` combines the stub slices (`timer`, `city`, `blocklist`, `score`) into a single `AppState` and applies the `persist` middleware with the M1.T3 `browserStorage` adapter (`createJSONStorage`), keyed by `STORE_NAME = 'timer-focus-store'`, `version: 1`.
+- Volatile state isolated in a dedicated `UiSlice` (`activeTab`, `liveRemainingSeconds`, `malusAlertVisible`) per roadmap §1.3; `partialize` persists only `timer`/`city`/`blocklist`/`score` and drops `ui` (`PersistedState = Omit<AppState, keyof UiSlice>`).
+- Exports a single `useAppStore` hook plus granular per-slice selectors (`selectTimerStatus`, `selectRemainingSeconds`, `selectSessionId`, `selectCityLayers`, `selectAllowlist`, `selectBlocklist`, `selectCustomTags`, `selectScoreLevel`, `selectDistractionRatio`, `selectActiveTab`, …). `createAppStore(storage?)` allows injecting a storage for tests.
+- Stub slices: `store/timer.slice.ts` (`idle`, 25 min default, null `sessionStartedAt`/`sessionId`), `store/city.slice.ts` (three empty 40×12 layers + `themeId`/`sessionId`), `store/blocklist.slice.ts` (empty allowlist/blocklist/customTags), `store/score.slice.ts` (`excellent`, ratio 0). No actions yet (deferred to M2).
+- Files created/modified: `store/index.ts`, `store/timer.slice.ts`, `store/city.slice.ts`, `store/blocklist.slice.ts`, `store/score.slice.ts`, `tests/integration/store/store.test.ts`.
+- Dependencies added: none (`zustand` already introduced in M1.T3).
+- Tests: `tests/integration/store/store.test.ts` (6 tests, integration with `fakeBrowser`) — default state of every slice; `partialize` keeps the persisted slices and drops `ui`; a persisted field (custom tag) survives a simulated "restart" (new store instance on the same fake storage); a volatile field resets to its default after "restart"; the persisted payload is written under the store key without `ui`; granular selectors return the expected values.
+- Notes: the persisted/volatile split is enforced at the type level (`PersistedState`) and verified in the payload test, so a future volatile field cannot leak into storage by accident.
+- Acceptance criteria: verified.
 
 ---
 
