@@ -6,15 +6,16 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T5** (Milestone 1 in progress).
+> Updated to: **M1.T6** (Milestone 1 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5 completed; M1.T6–M1.T7 to do.
-- Tests: `bun run test` → **47 passing tests** across 8 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6 completed; M1.T7 to do.
+- Tests: `bun run test` → **57 passing tests** across 9 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
+- Lint: `bun run lint` → **clean**.
 
 ## Completed tasks summary
 
@@ -30,6 +31,7 @@ description: Rules for updating the changelog
 | M1.T3 | Storage adapter for `persist` on `browser.storage.local` | completed | `5793128` |
 | M1.T4 | Zustand store — skeleton + slice combination | completed | — (to be committed) |
 | M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | — (to be committed) |
+| M1.T6 | Typed message bus background↔content↔popup | completed | — (to be committed) |
 
 ---
 
@@ -106,6 +108,18 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/timer/fake-alarm-adapter.test.ts` (11 tests, unit) — fires on reaching the scheduled time, does not fire early, clamps a short interval and a past time to 60s, keeps a far-future time unchanged, clears (and clears a missing alarm as a no-op), unsubscribe stops notifications, multiple alarms fire in deterministic order, rejects advancing the clock backwards, lists scheduled alarms. `tests/integration/timer/alarm-adapter.test.ts` (7 tests, integration with `fakeBrowser`) — schedules an alarm at the requested absolute time, clamps a short interval and a past time to 60s (injected `now`, asserted on `alarms.get`), clears a scheduled alarm, clears a missing alarm as a no-op, notifies subscribers with the fired name, and stops after unsubscribe.
 - Notes: per principle D, `browser.alarms` is imported in exactly one place — `lib/timer/alarm-adapter.ts`; verified via `grep` that no other module under `lib/`, `store/`, `components/` or `entrypoints/` imports it. The 60s tick documented here is the countdown/persistence clock, distinct from the later 2s city-growth tick (roadmap §1 technical note).
 - Acceptance criteria: verified.
+
+### M1.T6 — Typed message bus background↔content↔popup
+- `lib/messaging/bus.ts` — thin typed wrapper over `browser.runtime.sendMessage` / `browser.runtime.onMessage`, built on the `RuntimeMessage` discriminated union (M1.T1):
+  - `sendMessage(message: RuntimeMessage): Promise<Result<undefined>>` — accepts only valid union variants at the type level; returns a `Result` (via `utils/result.ts`) because sending crosses an untrusted boundary and a browser with no listener rejects the send (expected failure mode, not a bug, §1.4).
+  - `onMessage<T extends MessageType>(type, handler): () => void` — subscribes to a single `type`; the handler receives the full variant so `message.payload` is narrowed to that type's payload. Returns an unsubscribe function.
+  - Exported helper types `MessageType`, `MessageOf<T>` (`Extract<RuntimeMessage, { type: T }>`), `MessageHandler<T>`.
+  - A minimal structural guard (`typeof === 'object'` + `type` string equality) prevents foreign/unknown messages from reaching a typed handler; full runtime validation and sender provenance are explicitly deferred to M5.T1 (additive hardening).
+- Files created/modified: `lib/messaging/bus.ts`, `tests/integration/messaging/bus.test.ts`.
+- Dependencies added: none (`browser.runtime` is a platform API; reuses the existing `Result` helper).
+- Tests: `tests/integration/messaging/bus.test.ts` (10 tests, integration with `fakeBrowser`) — typed payload delivered to the matching listener; payload narrowed to the registered type; a listener for another type is not invoked; multiple listeners for the same `type` all fire; unrecognized `type` ignored without throwing (and without invoking handlers); non-object message ignored; no listener → `{ ok: false }`; unsubscribe stops notifications; async handler awaited; compile-time assertion that `sendMessage` rejects an invalid variant (`@ts-expect-error`, enforced by `bun run compile`) plus `expectTypeOf` on the payload shape and return type.
+- Relevant notes/decisions: the bus is deliberately transport-only — no business logic, no store access, no DNR. `sendMessage` uses `browser.runtime.sendMessage` (broadcast to the extension's listeners); targeted delivery to a content script (`tabs.sendMessage`) is not needed by the M1.T6 acceptance criteria and is left to the task that requires it (M2.T8). The `Result` return value is an addition beyond the literal acceptance criteria, aligned with §1.4 (untrusted-boundary error handling) and with the M1.T10 mutation path that will consume it.
+- Acceptance criteria: verified — (1) `sendMessage` accepts only valid `RuntimeMessage` variants, enforced at the type level by a `@ts-expect-error` compile assertion; (2) a listener registered with `onMessage('SITE_BLOCKED_ATTEMPT', handler)` receives the typed payload in a `fakeBrowser` test.
 
 ---
 
