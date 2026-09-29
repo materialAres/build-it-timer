@@ -18,7 +18,8 @@ export interface UiSlice {
   };
 }
 
-export type AppState = TimerSlice &
+export type AppState = 
+  TimerSlice &
   CitySlice &
   BlocklistSlice &
   ScoreSlice &

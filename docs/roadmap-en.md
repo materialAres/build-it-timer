@@ -190,6 +190,9 @@ Each task is a standalone card, with this fixed format:
 | M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | 1 | M1.T1 |
 | M1.T6 | Typed message bus background↔content↔popup | 1 | M1.T1 |
 | M1.T7 | Background entrypoint — orchestrator skeleton | 1 | M1.T4, M1.T5, M1.T6 |
+| M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | 1 | M1.T4 |
+| M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | 1 | M1.T4, M1.T8 |
+| M1.T10 | Cross-context mutation path (popup → background) | 1 | M1.T6, M1.T9 |
 | M2.T1 | `timerSlice` — timer state and actions | 2 | M1.T4, M1.T5 |
 | M2.T2 | Timer persistence/restore logic via alarms | 2 | M2.T1, M1.T7 |
 | M2.T3 | `TimerDisplay` + `TimerControls` (UI) | 2 | M2.T1 |
@@ -341,6 +344,50 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - The background starts without errors in a test with `wxt/testing`.
   - The listeners for the messages defined in M1.T1 are registered (verifiable via spy).
+
+> **Cross-context synchronization (CI-1).** `zustand/persist` hydrates a context's store only once,
+> at creation, and there is no listener for `browser.storage.onChanged`. Because the popup and the
+> background service worker are separate JS realms, importing the same store module gives each its own
+> in-memory copy of the same persisted key; writes from one context can silently clobber the other.
+> The three tasks below fix this additively (see CI-1 in `docs/store-analysis.md`): **M1.T8** makes contexts converge on the persisted state, **M1.T9** makes the
+> background the single writer, and **M1.T10** routes popup mutations through the background so the
+> single-writer rule does not remove the popup's ability to edit configuration.
+
+#### M1.T8 — Cross-context store synchronization via `browser.storage.onChanged`
+* **Objective**: make every context that creates a store converge on the persisted state by rehydrating whenever another context writes the store key, instead of hydrating only once at creation (the "diverge" half of CI-1).
+* **Files**: `store/sync-storage.ts` (new: `attachStoreSync(store): () => void`), `store/index.ts` (re-export the helper), `entrypoints/background.ts` (attach), `entrypoints/popup/main.tsx` (attach), `tests/integration/store/sync-storage.test.ts`.
+* **Dependencies**: M1.T4.
+* **Acceptance criteria**:
+  - `attachStoreSync(store)` subscribes to `browser.storage.onChanged` and, when `area === 'local'` and `changes[STORE_NAME]` is present, calls `store.persist.rehydrate()`.
+  - An external write to the store key (simulating another context) updates the in-memory store without recreating it; verified with `fakeBrowser` (context A writes directly to `storage.local`; context B's store reflects the new value).
+  - No write echo/loop: a rehydrate triggered by `onChanged` does **not** re-persist (assert with a spy that `storage.local.set` is not called while handling an external change), because `zustand/persist` rehydrates through the raw `set`, not the persisting wrapper.
+  - The helper returns an unsubscribe function; after calling it, further external changes no longer rehydrate the store.
+* **Notes**: this supersedes the "hydrate once" default of `zustand/persist`. It synchronizes *state between contexts*, not time: the `browser.alarms` 60s tick (M1.T5) and the 2s UI tick remain separate clocks (Section 1, technical note). Consumed by M1.T7 (background wiring) and the popup bootstrap.
+* **Nice to have**: no.
+
+#### M1.T9 — Single-writer ownership: read-only stores for non-writer contexts
+* **Objective**: designate the background service worker as the **sole writer** of the persisted store and give every other context a read-only store, eliminating last-writer-wins clobbering between contexts (the "clobber" half of CI-1).
+* **Files**: `store/storage-adapter.ts` (add a read-only wrapper: `getItem` reads normally, `setItem`/`removeItem` become no-ops — or throw in dev — so reads still work), `store/index.ts` (extend `createAppStore` with a `{ readOnly?: boolean }` option, or add `createReadOnlyAppStore`), `entrypoints/background.ts` (writable store), `entrypoints/popup/main.tsx` (read-only store), `tests/integration/store/read-only-store.test.ts`.
+* **Dependencies**: M1.T4, M1.T8.
+* **Acceptance criteria**:
+  - A store created read-only still hydrates from storage and still receives external updates via `attachStoreSync` (M1.T8), but calling `setState` never writes to `browser.storage.local` (spy: `storage.local.set` is not called) — verified with `fakeBrowser`.
+  - A writable store (the background's) persists exactly as before.
+  - The popup's `useAppStore` is read-only; the background uses the writable instance.
+  - The ownership rule is documented (a "why" comment plus a short table): the background owns `timer`/`city`/`score`; `blocklist` configuration is changed only through M1.T10.
+* **Notes**: consistent with Section 1.1 ("background — timer, alarms, DNR, score/malus"; "popup/UI — presentation only") and Section 1.3 (a store action "sends a message to the background"). Read-only contexts do not lose the ability to change state; that path is M1.T10.
+* **Nice to have**: no.
+
+#### M1.T10 — Cross-context mutation path: popup mutations routed to the background
+* **Objective**: let a read-only context (the popup) change persisted state by sending typed mutation messages that the background applies to its single writable store, with the change propagating back to the popup through M1.T8 — completing the CI-1 fix so the single-writer rule does not break the popup's ability to edit configuration.
+* **Files**: `lib/messaging/messages.types.ts` (add mutation variants to `RuntimeMessage`, e.g. `BLOCKLIST_ADD_SITE` / `BLOCKLIST_REMOVE_SITE` / `BLOCKLIST_APPLY_PRESET` / `TAG_UPSERT` / `TAG_REMOVE`), `lib/messaging/bus.ts` (M1.T6; typed send helper), `entrypoints/background.ts` (a mutation handler that applies the change to the writable store and persists it), `store/blocklist.slice.ts` (pure mutation helpers shared by both sides), `tests/integration/messaging/mutation-bus.test.ts`.
+* **Dependencies**: M1.T6, M1.T9.
+* **Acceptance criteria**:
+  - Sending a mutation message (at least one, e.g. `BLOCKLIST_ADD_SITE`) from a popup-like context results in the background store being updated and persisted exactly once (integration test with `fakeBrowser`).
+  - After the background persists, the popup's read-only store converges to the new value via the M1.T8 sync bridge, with no manual rehydrate call in the test.
+  - Invalid/unknown payloads are ignored without throwing and without mutating the store (forward-compatible with M5.T1 hardening).
+  - Mutation helpers are pure, so blocklist normalization (M1.T2, M2.T4) runs on the background side and the popup only requests the change.
+* **Notes**: this task defines only the **transport + background application**; the concrete CRUD semantics (normalization, dedup, allowlist/blocklist precedence, "Enter a valid URL") remain owned by M2.T4/M2.T20/M2.T21, and the DNR side-effect by M2.T7.
+* **Nice to have**: no.
 
 ### 2.5 Milestone 2 — Core features
 
@@ -733,6 +780,9 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M1.T5 (alarm adapter) | Unit (via Fake) + Integration (via `wxt/testing`) | vitest | Calling `schedule` with a time in the past; `clear` on a nonexistent alarm; 60s minimum tick respected even when a shorter interval is requested. |
 | M1.T6 (message bus) | Integration | vitest + `wxt/testing` | Message with unrecognized `type`; multiple listeners on the same `type`; no listener registered (no crash). |
 | M1.T7 (background skeleton) | Integration | vitest + `wxt/testing` | Startup with no prior storage state (first install) vs. startup with existing state. |
+| M1.T8 (store sync) | Integration | vitest + `wxt/testing` | An external write to the store key updates another context's store; no write echo/loop; unsubscribe stops syncing. |
+| M1.T9 (read-only store) | Integration | vitest + `wxt/testing` | `setState` on a read-only store never calls `storage.local.set`; the read-only store still hydrates and still receives `onChanged` updates; the writable store persists. |
+| M1.T10 (mutation path) | Integration | vitest + `wxt/testing` | A mutation message updates the background store exactly once; the popup store converges via sync; invalid payload → no mutation, no throw. |
 | M2.T1 (`timerSlice`) | Unit | vitest | `pauseTimer()` when already `idle` (safe no-op, not an inconsistent state); `startTimer()` when already `running` (idempotence or explicit error, to be defined). |
 | M2.T2 (restore timer) | Integration | vitest + `wxt/testing` (fake alarms) | Alarm firing exactly during the simulated "restart" (race condition); corrupted/partial persisted state. |
 | M2.T3 (Timer UI) | Component | Testing Library | Rendering with `remainingSeconds` at 0; rendering with values > 3600s (formatting beyond 60 minutes, behavior to be clarified). |
