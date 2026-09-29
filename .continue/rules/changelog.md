@@ -6,14 +6,14 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T4** (Milestone 1 in progress).
+> Updated to: **M1.T5** (Milestone 1 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4 completed; M1.T5–M1.T7 to do.
-- Tests: `bun run test` → **29 passing tests** across 6 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5 completed; M1.T6–M1.T7 to do.
+- Tests: `bun run test` → **47 passing tests** across 8 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 
 ## Completed tasks summary
@@ -29,6 +29,7 @@ description: Rules for updating the changelog
 | M1.T2 | `lib/url/domain.ts` module (`tldts` wrapper) | completed | `c1fa995` |
 | M1.T3 | Storage adapter for `persist` on `browser.storage.local` | completed | `5793128` |
 | M1.T4 | Zustand store — skeleton + slice combination | completed | — (to be committed) |
+| M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | — (to be committed) |
 
 ---
 
@@ -92,6 +93,17 @@ description: Rules for updating the changelog
 - Dependencies added: none (`zustand` already introduced in M1.T3).
 - Tests: `tests/integration/store/store.test.ts` (6 tests, integration with `fakeBrowser`) — default state of every slice; `partialize` keeps the persisted slices and drops `ui`; a persisted field (custom tag) survives a simulated "restart" (new store instance on the same fake storage); a volatile field resets to its default after "restart"; the persisted payload is written under the store key without `ui`; granular selectors return the expected values.
 - Notes: the persisted/volatile split is enforced at the type level (`PersistedState`) and verified in the payload test, so a future volatile field cannot leak into storage by accident.
+- Acceptance criteria: verified.
+
+### M1.T5 — `browser.alarms` adapter (`AlarmProvider`)
+- `lib/timer/alarm-adapter.ts` defines the `AlarmProvider` port — `schedule(name, whenMs)`, `clear(name)`, `onFire(listener)` — plus `createBrowserAlarmProvider(now = Date.now)`, the real implementation backed by `browser.alarms` (`alarms.create({ when })`, `alarms.clear`, `alarms.onAlarm` add/remove listener via a single shared handler). `onFire` returns an unsubscribe function; the underlying `browser.alarms.onAlarm` listener is attached only while at least one subscriber is registered.
+- `whenMs` is the **absolute** epoch time of the one-shot alarm. `clampAlarmWhen(whenMs, nowMs) = Math.max(whenMs, nowMs + ALARM_MIN_TICK_MS)` enforces the **60s minimum tick** platform constraint (documented with a why-comment): a request for a shorter interval, or a time already in the past, is pushed forward to `now + 60s`.
+- `ALARM_MIN_TICK_MS = 60_000` is exported; `now` is injectable for deterministic testing of the clamp without touching the wall clock.
+- `tests/helpers/fake-alarm-adapter.ts` provides `FakeAlarmProvider` (test double for principle L), reusing the same `clampAlarmWhen` helper so it honors the identical contract. It owns a controllable clock (`advanceBy(ms)` / `fireDue()`) and deterministically fires due alarms in FIFO order with the fired name; places it under `tests/` keeps it out of the production bundle.
+- Files created/modified: `lib/timer/alarm-adapter.ts`, `tests/helpers/fake-alarm-adapter.ts`, `tests/unit/lib/timer/fake-alarm-adapter.test.ts`, `tests/integration/timer/alarm-adapter.test.ts`.
+- Dependencies added: none (`browser.alarms` is a platform API; no new package).
+- Tests: `tests/unit/lib/timer/fake-alarm-adapter.test.ts` (11 tests, unit) — fires on reaching the scheduled time, does not fire early, clamps a short interval and a past time to 60s, keeps a far-future time unchanged, clears (and clears a missing alarm as a no-op), unsubscribe stops notifications, multiple alarms fire in deterministic order, rejects advancing the clock backwards, lists scheduled alarms. `tests/integration/timer/alarm-adapter.test.ts` (7 tests, integration with `fakeBrowser`) — schedules an alarm at the requested absolute time, clamps a short interval and a past time to 60s (injected `now`, asserted on `alarms.get`), clears a scheduled alarm, clears a missing alarm as a no-op, notifies subscribers with the fired name, and stops after unsubscribe.
+- Notes: per principle D, `browser.alarms` is imported in exactly one place — `lib/timer/alarm-adapter.ts`; verified via `grep` that no other module under `lib/`, `store/`, `components/` or `entrypoints/` imports it. The 60s tick documented here is the countdown/persistence clock, distinct from the later 2s city-growth tick (roadmap §1 technical note).
 - Acceptance criteria: verified.
 
 ---
