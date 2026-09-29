@@ -36,7 +36,7 @@ const initialUiState: UiSlice['ui'] = {
   malusAlertVisible: false,
 };
 
-const createAppState: StateCreator<AppState, [], []> = (...args) => ({
+const createAppState: StateCreator<AppState> = (...args) => ({
   ...createTimerSlice(...args),
   ...createCitySlice(...args),
   ...createBlocklistSlice(...args),

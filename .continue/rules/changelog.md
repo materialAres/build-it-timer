@@ -21,7 +21,7 @@ description: Rules for updating the changelog
 | ID | Title | Status | Commit |
 |---|---|---|---|
 | M0.T1 | WXT + React + TS project scaffolding | completed | `c3eebdc` |
-| M0.T2 | Linting/formatting configuration and strict tsconfig | completed (with known issue) | `27d6b1e` |
+| M0.T2 | Linting/formatting configuration and strict tsconfig | completed | `27d6b1e` |
 | M0.T3 | Test runner setup (vitest + wxt/testing + happy-dom + Testing Library) | completed | `27d6b1e` |
 | M0.T4 | Playwright setup for e2e (Chromium) | completed | `73f5c3a` |
 | M0.T5 | Folder structure and initial barrel files | completed | `0b32002` |
@@ -44,6 +44,7 @@ description: Rules for updating the changelog
 - Added `eslint.config.js` (flat config with `typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks`), `.prettierrc`, `.prettierignore`.
 - `tsconfig.json` extends `.wxt/tsconfig.json` with `strict: true`, `noImplicitAny: true`, `noUncheckedIndexedAccess: true` (+ `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `forceConsistentCasingInFileNames`, `verbatimModuleSyntax`).
 - ⚠️ **Known issue** (see the Open Issues section): the `lint` script is currently broken at config-load time — `tseslint.defineConfig` is `undefined` in the installed version of `typescript-eslint`.
+- **Resolved (lint fix)**: `tseslint.defineConfig` was replaced with `tseslint.config` — the function actually exported by the installed `typescript-eslint` 8.70.0 (`defineConfig` does not exist there). This surfaced six latent lint errors in the existing code, all fixed: `no-confusing-void-expression` in `entrypoints/popup/App.tsx`, `no-non-null-assertion` in `entrypoints/popup/main.tsx`, `no-unnecessary-condition` in `lib/url/domain.ts`, `no-unnecessary-type-arguments` in `store/index.ts`, and `require-await` in `tests/helpers/fake-alarm-adapter.ts`. `bun run lint` is now clean, and the M0.T2 acceptance criterion is re-verified: a deliberately introduced explicit `any` fails the lint, and removing it makes the lint pass.
 
 ### M0.T3 — Test runner setup (vitest + wxt/testing + happy-dom + Testing Library)
 - `vitest.config.ts` with the `WxtVitest()` plugin, `happy-dom` environment, `tests/setup.ts`, `@` → root alias, `v8` coverage.
@@ -122,9 +123,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 
 ## Open issues and points to clarify
 
-1. **Broken lint (M0.T2)** — `bun run lint` fails before analyzing any files: `TypeError: Function.prototype.apply was called on undefined` in `eslint.config.js` line 6, because `tseslint.defineConfig` doesn't exist in the installed version of `typescript-eslint` (`config` exists, `defineConfig` doesn't). Proposed fix: replace `tseslint.defineConfig(...)` with `tseslint.config(...)` (or update `typescript-eslint`). Not yet resolved as it's out of scope for the current tasks.
-2. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
-3. **`framer-motion`** not yet installed (will be needed from M3.T5).
+1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
+2. **`framer-motion`** not yet installed (will be needed from M3.T5).
 
 ---
 
@@ -133,7 +133,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 ```bash
 bun run test        # vitest (unit + integration + component)
 bun run compile     # tsc --noEmit
-bun run lint        # ⚠️ currently broken (see Issue #1)
+bun run lint        # clean (M0.T2 issue resolved)
 bun run build       # Chrome build (WXT)
 bun run build:firefox
 ```

@@ -41,12 +41,14 @@ export class FakeAlarmProvider implements AlarmProvider {
     return this.alarms.get(name);
   }
 
-  async schedule(name: string, whenMs: number): Promise<void> {
+  schedule(name: string, whenMs: number): Promise<void> {
     this.alarms.set(name, clampAlarmWhen(whenMs, this.nowMs));
+    return Promise.resolve();
   }
 
-  async clear(name: string): Promise<void> {
+  clear(name: string): Promise<void> {
     this.alarms.delete(name);
+    return Promise.resolve();
   }
 
   onFire(listener: AlarmFiredListener): () => void {
