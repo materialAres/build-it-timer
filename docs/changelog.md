@@ -6,14 +6,14 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T6** (Milestone 1 in progress).
+> Updated to: **M1.T7** (Milestone 1 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6 completed; M1.T7 to do.
-- Tests: `bun run test` → **57 passing tests** across 9 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6, M1.T7 completed; M1.T8 to do.
+- Tests: `bun run test` → **63 passing tests** across 10 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 
@@ -32,6 +32,7 @@ description: Rules for updating the changelog
 | M1.T4 | Zustand store — skeleton + slice combination | completed | — (to be committed) |
 | M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | — (to be committed) |
 | M1.T6 | Typed message bus background↔content↔popup | completed | — (to be committed) |
+| M1.T7 | Background entrypoint — orchestrator skeleton | completed | — (to be committed) |
 
 ---
 
@@ -120,6 +121,20 @@ description: Rules for updating the changelog
 - Tests: `tests/integration/messaging/bus.test.ts` (10 tests, integration with `fakeBrowser`) — typed payload delivered to the matching listener; payload narrowed to the registered type; a listener for another type is not invoked; multiple listeners for the same `type` all fire; unrecognized `type` ignored without throwing (and without invoking handlers); non-object message ignored; no listener → `{ ok: false }`; unsubscribe stops notifications; async handler awaited; compile-time assertion that `sendMessage` rejects an invalid variant (`@ts-expect-error`, enforced by `bun run compile`) plus `expectTypeOf` on the payload shape and return type.
 - Relevant notes/decisions: the bus is deliberately transport-only — no business logic, no store access, no DNR. `sendMessage` uses `browser.runtime.sendMessage` (broadcast to the extension's listeners); targeted delivery to a content script (`tabs.sendMessage`) is not needed by the M1.T6 acceptance criteria and is left to the task that requires it (M2.T8). The `Result` return value is an addition beyond the literal acceptance criteria, aligned with §1.4 (untrusted-boundary error handling) and with the M1.T10 mutation path that will consume it.
 - Acceptance criteria: verified — (1) `sendMessage` accepts only valid `RuntimeMessage` variants, enforced at the type level by a `@ts-expect-error` compile assertion; (2) a listener registered with `onMessage('SITE_BLOCKED_ATTEMPT', handler)` receives the typed payload in a `fakeBrowser` test.
+
+### M1.T7 — Background entrypoint — orchestrator skeleton
+- `entrypoints/background.ts` is now a wiring-only orchestrator instead of the WXT stub:
+  - `MESSAGE_TYPES` — the six `RuntimeMessage` variants from M1.T1 (`TIMER_TICK`, `TIMER_STARTED`, `TIMER_PAUSED`, `SITE_BLOCKED_ATTEMPT`, `MALUS_APPLIED`, `SESSION_ENDED`), typed as `as const satisfies ReadonlyArray<MessageType>` so a new union variant is a compile error until it is wired.
+  - `startBackground(dependencies?)` — creates the background's writable store (`createAppStore()`, M1.T4) and the real alarm provider (`createBrowserAlarmProvider()`, M1.T5), then registers one `onMessage(type, handler)` listener per message type (M1.T6) plus a single `alarmProvider.onFire(...)` subscription. Returns a `BackgroundHandle` (`store`, `alarmProvider`, `dispose()`).
+  - `BackgroundDependencies` (`store`, `alarmProvider`, `now`) makes the store, the alarm provider, and the clock injectable, so the orchestrator is testable without touching the real browser APIs (principle D/L).
+  - `dispose()` detaches every registered listener (message + alarm), keeping tests isolated.
+  - The default export calls `startBackground()` inside `defineBackground`, so the real service worker starts the same wiring.
+- No business logic: each listener is a shared placeholder (`handlePlaceholder`) whose concrete behavior is owned by M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth, M2.T16 malus). The alarm provider is instantiated now so the background owns a single instance for the whole session.
+- Files created/modified: `entrypoints/background.ts`, `tests/integration/background/background.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/background/background.test.ts` (6 tests, integration with `fakeBrowser`) — starts without errors and exposes the wired store/alarm provider; registers exactly one `runtime.onMessage` listener per `RuntimeMessage` type (spy on `addListener`, asserted against `MESSAGE_TYPES.length`); registers an alarm listener on the injected provider (spy on `onFire`); every M1.T1 message is accepted without throwing; the injected store is reused instead of a new one; `dispose()` detaches all listeners (a subsequent `sendMessage` reports `{ ok: false }`).
+- Relevant notes/decisions: the orchestrator is exported as a named function (not only as the `defineBackground` default export) so it can be invoked directly in tests; `defineBackground` is a WXT auto-import available in the test environment via the `WxtVitest` plugin. Cross-context store synchronization (M1.T8) and single-writer ownership (M1.T9) are deliberately **not** attached here yet — they are the next tasks and will extend this same entrypoint.
+- Acceptance criteria: verified — (1) the background starts without errors in a `wxt/testing` test; (2) the listeners for the M1.T1 messages are registered, verified via a spy on `browser.runtime.onMessage.addListener`.
 
 ---
 
