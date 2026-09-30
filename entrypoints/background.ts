@@ -1,4 +1,4 @@
-import { createAppStore, type AppStore } from '@/store';
+import { createAppStore, attachStoreSync, type AppStore } from '@/store';
 import {
   createBrowserAlarmProvider,
   type AlarmProvider,
@@ -56,6 +56,10 @@ export function startBackground(
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
 
   const disposers: Array<() => void> = [];
+
+  // Converge on writes made by other contexts (popup, content script): the
+  // background's store rehydrates whenever the persisted key changes (M1.T8).
+  disposers.push(attachStoreSync(store));
 
   for (const type of MESSAGE_TYPES) {
     disposers.push(onMessage(type, handlePlaceholder));

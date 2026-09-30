@@ -26,6 +26,8 @@ This section defines the binding rules for all code written in the project, rega
 
 > **Operative note - roadmap file**: the tasks mentioned in this document are defined in `docs/roadmap-en.md`. The roadmap contains the development plan of the project: it defines the milestones, tasks, and acceptance criteria. The agent doesn't need to read the roadmap alongside this document, it will only read it when the user requests it.
 
+> **Operative note - context**: the agent must read only the relevant files for the task at hand, not the entire codebase. The roadmap and the changelog are the only two documents that are always read in full, because they contain the global context of the project.
+
 > **Technical note — two distinct clocks.** The document requires that city characters be inserted one at a time every 2 seconds, while `browser.alarms` (used for timer persistence, see M1.T5) has a minimum tick of 60 seconds due to a platform constraint. The two mechanisms **must not be confused**: `browser.alarms` remains the sole source of truth for persisting the countdown across service worker restarts; the 2s character-insertion tick is instead a fine-grained timer (`setInterval`/`requestAnimationFrame`-based) that lives on the popup/background side only while the context is active, and is deterministically recalculated (number of characters due = elapsed focus time ÷ 2s) every time the context wakes up, exactly as already planned for the second-by-second countdown in Section 1.4.
 
 ### 1.2 Code organization

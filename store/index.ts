@@ -97,3 +97,6 @@ export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';
 export type { BlocklistSlice } from './blocklist.slice';
 export type { ScoreSlice } from './score.slice';
+// Cross-context convergence helper (M1.T8): re-exported here so a context only
+// needs to import from `@/store` to both create and sync its store.
+export { attachStoreSync, type SyncableStore } from './sync-storage';

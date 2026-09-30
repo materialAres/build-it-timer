@@ -5,7 +5,8 @@ import { startBackground, MESSAGE_TYPES } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
-import { createAppStore } from '@/store';
+import { createAppStore, STORE_NAME } from '@/store';
+import type { Tag } from '@/store/store.types';
 
 describe('background orchestrator skeleton (M1.T7)', () => {
   beforeEach(() => {
@@ -88,5 +89,23 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     // No listeners left: the bus reports the expected "no listener" failure.
     const result = await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
     expect(result.ok).toBe(false);
+  });
+
+  it('syncs the background store on external writes (M1.T8 wired in)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    const tag: Tag = { id: 'focus', label: 'Focus' };
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: { blocklist: { ...store.getState().blocklist, customTags: [tag] } },
+        version: 1,
+      }),
+    });
+
+    expect(store.getState().blocklist.customTags).toEqual([tag]);
+
+    handle.dispose();
   });
 });

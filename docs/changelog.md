@@ -6,14 +6,14 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T7** (Milestone 1 in progress).
+> Updated to: **M1.T8** (Milestone 1 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6, M1.T7 completed; M1.T8 to do.
-- Tests: `bun run test` → **63 passing tests** across 10 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6, M1.T7, M1.T8 completed; M1.T9 to do.
+- Tests: `bun run test` → **70 passing tests** across 11 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 
@@ -33,6 +33,7 @@ description: Rules for updating the changelog
 | M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | — (to be committed) |
 | M1.T6 | Typed message bus background↔content↔popup | completed | — (to be committed) |
 | M1.T7 | Background entrypoint — orchestrator skeleton | completed | — (to be committed) |
+| M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | completed | — (to be committed) |
 
 ---
 
@@ -135,6 +136,22 @@ description: Rules for updating the changelog
 - Tests: `tests/integration/background/background.test.ts` (6 tests, integration with `fakeBrowser`) — starts without errors and exposes the wired store/alarm provider; registers exactly one `runtime.onMessage` listener per `RuntimeMessage` type (spy on `addListener`, asserted against `MESSAGE_TYPES.length`); registers an alarm listener on the injected provider (spy on `onFire`); every M1.T1 message is accepted without throwing; the injected store is reused instead of a new one; `dispose()` detaches all listeners (a subsequent `sendMessage` reports `{ ok: false }`).
 - Relevant notes/decisions: the orchestrator is exported as a named function (not only as the `defineBackground` default export) so it can be invoked directly in tests; `defineBackground` is a WXT auto-import available in the test environment via the `WxtVitest` plugin. Cross-context store synchronization (M1.T8) and single-writer ownership (M1.T9) are deliberately **not** attached here yet — they are the next tasks and will extend this same entrypoint.
 - Acceptance criteria: verified — (1) the background starts without errors in a `wxt/testing` test; (2) the listeners for the M1.T1 messages are registered, verified via a spy on `browser.runtime.onMessage.addListener`.
+
+### M1.T8 — Cross-context store synchronization via `browser.storage.onChanged`
+- `store/sync-storage.ts` — new `attachStoreSync(store): () => void` helper (the "diverge" half of CI-1): it subscribes to `browser.storage.onChanged` and, when `area === 'local'` and the changed keys include `STORE_NAME`, calls `store.persist.rehydrate()`.
+  - `SyncableStore` is declared structurally (`{ persist: { rehydrate() } }`) instead of importing `AppStore`, so the helper does not depend on the concrete store shape and creates no runtime import cycle with `store/index.ts` (principle D).
+  - No write echo/loop: `zustand/persist` rehydrates through the raw store `set`, not the persisting wrapper, so handling an external change never writes back to storage.
+  - Returns an unsubscribe function that detaches the `onChanged` listener.
+- `store/index.ts` re-exports `attachStoreSync` (and the `SyncableStore` type), so a context only needs `@/store` to both create and sync its store.
+- `entrypoints/background.ts` attaches the sync to the background's writable store inside `startBackground`, with the disposer pushed onto the existing `disposers` list (so `dispose()` detaches it too).
+- `entrypoints/popup/main.tsx` attaches the sync to the popup's shared `useAppStore` at bootstrap, so an open popup converges on writes made by the background.
+- Files created/modified: `store/sync-storage.ts`, `store/index.ts`, `entrypoints/background.ts`, `entrypoints/popup/main.tsx`, `tests/integration/store/sync-storage.test.ts`, `tests/integration/background/background.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/store/sync-storage.test.ts` (6 tests, integration with `fakeBrowser`) — an external write to the store key rehydrates the in-memory store (context A writes `storage.local`, context B's store reflects it); the store object is not recreated; no echo/loop (spy: `storage.local.set` is called exactly once — the test's own write — during rehydration); unrelated keys are ignored; the unsubscribe function stops syncing; the helper is exported from the store barrel. `tests/integration/background/background.test.ts` (+1 test) — `startBackground` wires the sync, so an external write converges the background store.
+- Relevant notes/decisions: this supersedes the "hydrate once" default of `zustand/persist`. It synchronizes *state between contexts*, not time: the `browser.alarms` 60s tick (M1.T5) and the 2s UI tick remain separate clocks (§1 technical note). The persisted payload is written by `createJSONStorage`, i.e. as `JSON.stringify({ state, version })`; the test serializes the same shape. `STORE_NAME` is imported by `sync-storage.ts` from `./index` — this is a type-level-safe cycle because `STORE_NAME` is only read inside the listener, after both modules have evaluated.
+- Acceptance criteria: verified.
+
+> **Note on `docs/store-analysis.md` CI-1.** The roadmap's M1.T8/M1.T9/M1.T10 were added after that analysis document was written; its "Roadmap coverage map" therefore still reports CI-1 as "not covered by any scheduled task". The mechanism it recommends (an `onChanged` → `rehydrate` listener) is exactly what M1.T8 implements.
 
 ---
 
