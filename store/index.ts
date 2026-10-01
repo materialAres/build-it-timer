@@ -1,6 +1,6 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { browserStorage, type BrowserStateStorage } from './storage-adapter';
+import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerSlice } from './timer.slice';
 import { createCitySlice, type CitySlice } from './city.slice';
 import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
@@ -53,14 +53,40 @@ export const partialize = (state: AppState): PersistedState => ({
 
 export type AppStore = ReturnType<typeof buildStore>;
 
+/**
+ * Single-writer ownership (M1.T9). The background service worker is the **only**
+ * context allowed to write the persisted store; every other context gets a
+ * read-only store.
+ *
+ * | Slice | Owner | How a non-owner changes it |
+ * |---|---|---|
+ * | `timer` | background | n/a (driven by alarms in the background) |
+ * | `city` | background | n/a (grown/destroyed in the background) |
+ * | `score` | background | n/a (computed in the background) |
+ * | `blocklist` | background | mutation message (M1.T10) |
+ * | `ui` | each context | volatile, never persisted |
+ *
+ * Without this, two contexts each holding their own in-memory copy of the same
+ * persisted key can overwrite each other's changes (last-writer-wins, CI-1).
+ * M1.T8 makes them converge; M1.T9 removes the clobbering itself. Read-only
+ * contexts keep full read access and still converge through `attachStoreSync`.
+ */
+export interface CreateAppStoreOptions {
+  /** Storage backend; defaults to the writable `browserStorage` (M1.T3). */
+  readonly storage?: BrowserStateStorage;
+  /** When true, `setState` is never persisted (non-owner context). */
+  readonly readOnly?: boolean;
+}
+
 export function createAppStore(
-  storage: BrowserStateStorage = browserStorage,
+  options: CreateAppStoreOptions = {},
 ): AppStore {
-  return buildStore(storage);
+  const { storage = browserStorage, readOnly = false } = options;
+  return buildStore(readOnly ? createReadOnlyStorage(storage) : storage);
 }
 
 function buildStore(storage: BrowserStateStorage) {
-  return create<AppState>()(
+  const store = create<AppState>()(
     persist(createAppState, {
       name: STORE_NAME,
       storage: createJSONStorage<PersistedState>(() => storage),
@@ -68,10 +94,16 @@ function buildStore(storage: BrowserStateStorage) {
       version: 1,
     }),
   );
+  // Expose the raw adapter so `attachStoreSync` can consult its self-write
+  // tracker: `persist.getOptions().storage` only yields the JSON wrapper.
+  return Object.assign(store, { rawStorage: storage });
 }
 
-// Single shared hook used by the popup and the background.
-export const useAppStore = createAppStore();
+// Popup-facing store: read-only, because the background is the single writer
+// (M1.T9). The popup reads persisted state and receives updates via
+// `attachStoreSync` (M1.T8); it changes configuration by sending mutation
+// messages (M1.T10), not by writing the store directly.
+export const useAppStore = createAppStore({ readOnly: true });
 
 export const selectUi = (state: UiSlice): UiSlice['ui'] => state.ui;
 export const selectActiveTab = (state: UiSlice): PopupTab => state.ui.activeTab;
@@ -88,10 +120,15 @@ export {
 export { createCitySlice, selectCityLayers, selectCityThemeId } from './city.slice';
 export {
   createBlocklistSlice,
+  addSiteToList,
+  removeSiteFromList,
+  upsertTag,
+  removeTag,
   selectAllowlist,
   selectBlocklist,
   selectCustomTags,
 } from './blocklist.slice';
+export type { BlocklistListName, BlocklistState } from './blocklist.slice';
 export { createScoreSlice, selectScoreLevel, selectDistractionRatio } from './score.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';

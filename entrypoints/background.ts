@@ -1,14 +1,30 @@
-import { createAppStore, attachStoreSync, type AppStore } from '@/store';
+import {
+  createAppStore,
+  attachStoreSync,
+  addSiteToList,
+  removeSiteFromList,
+  upsertTag,
+  removeTag,
+  type AppStore,
+  type BlocklistListName,
+  type BlocklistState,
+} from '@/store';
 import {
   createBrowserAlarmProvider,
   type AlarmProvider,
 } from '@/lib/timer/alarm-adapter';
 import { onMessage, type MessageType } from '@/lib/messaging/bus';
+import {
+  MUTATION_TYPES,
+  type MutationMessage,
+} from '@/lib/messaging/messages.types';
+import type { Tag } from '@/store/store.types';
 
 /**
- * Every `RuntimeMessage` variant defined in M1.T1. The background registers one
- * listener per type, so the wiring is complete before the business logic lands
- * in M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth, M2.T16 malus).
+ * The passive `RuntimeMessage` variants defined in M1.T1. The background
+ * registers one listener per type, so the wiring is complete before the
+ * business logic lands in M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth,
+ * M2.T16 malus).
  */
 export const MESSAGE_TYPES = [
   'TIMER_TICK',
@@ -42,6 +58,71 @@ function handlePlaceholder(): void {
   // Intentionally empty: the background skeleton only wires the listeners.
 }
 
+function isListName(value: unknown): value is BlocklistListName {
+  return value === 'allowlist' || value === 'blocklist';
+}
+
+function isTag(value: unknown): value is Tag {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as { id?: unknown; label?: unknown };
+  return typeof candidate.id === 'string' && typeof candidate.label === 'string';
+}
+
+/**
+ * Apply one mutation to the blocklist state. Returns the *same* reference when
+ * the payload is malformed or unknown, so an invalid message neither mutates the
+ * store nor triggers a persist (forward-compatible with M5.T1 hardening).
+ *
+ * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
+ * dedup and allowlist precedence (M2.T20), preset expansion (M2.T5) and the DNR
+ * side-effect (M2.T7) are owned by those tasks.
+ */
+function applyMutation(state: BlocklistState, message: MutationMessage): BlocklistState {
+  switch (message.type) {
+    case 'BLOCKLIST_ADD_SITE': {
+      const { list, site } = message.payload;
+      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
+      return addSiteToList(state, list, site);
+    }
+    case 'BLOCKLIST_REMOVE_SITE': {
+      const { list, site } = message.payload;
+      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
+      return removeSiteFromList(state, list, site);
+    }
+    case 'BLOCKLIST_APPLY_PRESET':
+      // Preset expansion needs the preset dataset (M2.T5); until then the
+      // message is accepted but has no effect on the state.
+      return state;
+    case 'TAG_UPSERT': {
+      if (!isTag(message.payload)) return state;
+      return upsertTag(state, message.payload);
+    }
+    case 'TAG_REMOVE': {
+      const { tagId } = message.payload;
+      if (typeof tagId !== 'string' || tagId.length === 0) return state;
+      return removeTag(state, tagId);
+    }
+    default:
+      return state;
+  }
+}
+
+/**
+ * Mutation handler for the cross-context path (M1.T10): the popup sends a typed
+ * mutation, the background applies it to its single writable store (M1.T9) and
+ * the change propagates back to the popup through the M1.T8 sync bridge.
+ */
+function handleMutation(store: AppStore) {
+  return (message: MutationMessage): void => {
+    const current = store.getState().blocklist;
+    const next = applyMutation(current, message);
+    // Identity check: an invalid or no-op payload must not persist (one write
+    // per accepted mutation, none for a rejected one).
+    if (next === current) return;
+    store.setState({ blocklist: next });
+  };
+}
+
 /**
  * Wiring-only orchestrator (M1.T7): it creates the background's writable store
  * and alarm provider and registers the typed message listeners. It deliberately
@@ -51,6 +132,8 @@ function handlePlaceholder(): void {
 export function startBackground(
   dependencies: BackgroundDependencies = {},
 ): BackgroundHandle {
+  // The background is the single writer of the persisted store (M1.T9): it owns
+  // the writable instance, while every other context gets a read-only one.
   const store = dependencies.store ?? createAppStore();
   const alarmProvider =
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
@@ -63,6 +146,11 @@ export function startBackground(
 
   for (const type of MESSAGE_TYPES) {
     disposers.push(onMessage(type, handlePlaceholder));
+  }
+
+  // Cross-context mutations (M1.T10): the popup requests, the background applies.
+  for (const type of MUTATION_TYPES) {
+    disposers.push(onMessage(type, handleMutation(store)));
   }
 
   // The alarm provider is wired now so the background owns a single instance for

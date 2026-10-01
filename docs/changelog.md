@@ -6,16 +6,17 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T8** (Milestone 1 in progress).
+> Updated to: **M1.T10** (Milestone 1 complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
-- Milestone 1 (base infrastructure) — **in progress**: M1.T1, M1.T2, M1.T3, M1.T4, M1.T5, M1.T6, M1.T7, M1.T8 completed; M1.T9 to do.
-- Tests: `bun run test` → **70 passing tests** across 11 files (unit + integration + component placeholder).
+- Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
+- Tests: `bun run test` → **96 passing tests** across 14 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
+- Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
 
 ## Completed tasks summary
 
@@ -34,6 +35,8 @@ description: Rules for updating the changelog
 | M1.T6 | Typed message bus background↔content↔popup | completed | — (to be committed) |
 | M1.T7 | Background entrypoint — orchestrator skeleton | completed | — (to be committed) |
 | M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | completed | — (to be committed) |
+| M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | completed | — (to be committed) |
+| M1.T10 | Cross-context mutation path (popup → background) | completed | — (to be committed) |
 
 ---
 
@@ -153,6 +156,32 @@ description: Rules for updating the changelog
 
 > **Note on `docs/store-analysis.md` CI-1.** The roadmap's M1.T8/M1.T9/M1.T10 were added after that analysis document was written; its "Roadmap coverage map" therefore still reports CI-1 as "not covered by any scheduled task". The mechanism it recommends (an `onChanged` → `rehydrate` listener) is exactly what M1.T8 implements.
 
+### M1.T9 — Single-writer ownership: read-only stores for non-writer contexts
+- `store/storage-adapter.ts` — new `createReadOnlyStorage(inner = browserStorage): BrowserStateStorage`: `getItem` reads through unchanged, while `setItem`/`removeItem` are no-ops that resolve without writing. Writes are deliberately silent rather than throwing: a non-owner context may legitimately call `setState` for its own volatile `ui` state, and that must neither crash the context nor be persisted on top of the owner's copy.
+- `store/index.ts`:
+  - `createAppStore` now takes a `CreateAppStoreOptions` object (`{ storage?, readOnly? }`) instead of a bare storage argument; `readOnly: true` wraps the (injected or default) storage in `createReadOnlyStorage`.
+  - `useAppStore` — the popup-facing instance — is now created with `{ readOnly: true }`, replacing the old comment claiming it was a "single shared hook used by the popup and the background" (which assumed shared memory that does not exist across extension contexts).
+  - The ownership rule is documented with a why-comment plus a table: the background owns `timer`/`city`/`score`; `blocklist` configuration is changed only through M1.T10; `ui` is per-context and never persisted.
+- `entrypoints/background.ts` — the background keeps the writable instance (`createAppStore()`), documented as the single writer.
+- Files created/modified: `store/storage-adapter.ts`, `store/index.ts`, `entrypoints/background.ts`, `tests/integration/store/read-only-store.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/store/read-only-store.test.ts` (10 tests, integration with `fakeBrowser`) — `setState` on a read-only store never calls `storage.local.set` (spy) while still updating in-memory state; a read-only store still hydrates from storage; it still converges on external writes via `attachStoreSync` (M1.T8); a writable store persists exactly as before; the popup-facing `useAppStore` is read-only (its `ui` change applies in memory but is not persisted); `createReadOnlyStorage` reads through, makes writes/removals no-ops, and never throws; `partialize` still excludes the volatile `ui` slice under read-only ownership.
+- Relevant notes/decisions: the read-only wrapper suppresses persistence only — it does not stop in-memory updates, which is what keeps a non-owner context usable for volatile UI state. No `AppStore`/store call sites needed migration: `createAppStore()` with no arguments keeps the previous behaviour. This completes the "clobber" half of CI-1; M1.T8 already handled the "diverge" half, and M1.T10 restores the popup's ability to edit configuration through the background.
+- Acceptance criteria: verified.
+
+### M1.T10 — Cross-context mutation path: popup mutations routed to the background
+- `lib/messaging/messages.types.ts` — five mutation variants added to `RuntimeMessage` (all in the `payload`, discriminated on `type`): `BLOCKLIST_ADD_SITE` / `BLOCKLIST_REMOVE_SITE` (`{ list: 'allowlist' | 'blocklist'; site: string }`), `BLOCKLIST_APPLY_PRESET` (`{ presetId }`), `TAG_UPSERT` (`Tag`), `TAG_REMOVE` (`{ tagId }`). Also exports `MutationMessage` (`Extract<RuntimeMessage, { type: 'BLOCKLIST_*' | 'TAG_*' }>`) and the runtime list `MUTATION_TYPES` (`as const satisfies ReadonlyArray<MutationMessage['type']>`), so a new mutation variant is a compile error until it is wired.
+- `store/blocklist.slice.ts` — pure mutation helpers shared by both sides: `addSiteToList`, `removeSiteFromList`, `upsertTag`, `removeTag` (which also detaches the tag from every entry, so no dangling `tagIds` survive). They return the *same* reference on a no-op, which the background uses to skip persisting. Also exports the `BlocklistState` / `BlocklistListName` types. No store or browser dependency (principle D), so they are unit-testable in isolation.
+- `entrypoints/background.ts` — `applyMutation(state, message)` maps a mutation to a new state with runtime guards (`isListName`, `isTag`, string checks): a malformed or unknown payload returns the same state. `handleMutation(store)` applies it to the writable store only when the state actually changed (`next === current` → no `setState`, hence no persist). `startBackground` registers one listener per `MUTATION_TYPES` entry.
+- `store/storage-adapter.ts` — `BrowserStateStorage` now carries a `SELF_WRITE` self-write tracker (symbol-keyed, so the storage API is not widened): `createBrowserStorage` records what this context last wrote, `createReadOnlyStorage` reports nothing as a self-write.
+- `store/sync-storage.ts` — `attachStoreSync` **skips self-writes** by consulting that tracker. This fixes a real race found while implementing this task: because the background is the single writer (M1.T9), its own write triggered an `onChanged`, whose asynchronous rehydrate could land *after* a newer in-memory mutation and resurrect the older value (observed as a lost `TAG_REMOVE` / `BLOCKLIST_REMOVE_SITE`).
+- `store/index.ts` — `buildStore` exposes the raw adapter as `store.rawStorage` (via `Object.assign`), because `persist.getOptions().storage` only yields the `createJSONStorage` JSON wrapper; re-exports the new helpers and types.
+- Files created/modified: `lib/messaging/messages.types.ts`, `store/blocklist.slice.ts`, `store/storage-adapter.ts`, `store/sync-storage.ts`, `store/index.ts`, `entrypoints/background.ts`, `tests/unit/store/blocklist-mutations.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/background.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/unit/store/blocklist-mutations.test.ts` (9 tests, unit) — add to the addressed list only, add to the allowlist, no duplicate, remove, remove non-existent, tag upsert (new + update in place), tag removal detaching it from sites, purity (input not mutated). `tests/integration/messaging/mutation-bus.test.ts` (8 tests, integration with `fakeBrowser`) — `BLOCKLIST_ADD_SITE` updates the background store and persists exactly once (spy + read-back of the stored payload); a read-only popup store converges via the M1.T8 bridge with no manual rehydrate; `TAG_UPSERT`/`TAG_REMOVE`; `BLOCKLIST_REMOVE_SITE`; an invalid payload is ignored without throwing, mutating, or persisting; an unknown `type` is ignored; `BLOCKLIST_APPLY_PRESET` is an accepted no-op until M2.T5; a duplicate add does not duplicate. `tests/integration/background/background.test.ts` — the listener-count assertion now expects `MESSAGE_TYPES.length + MUTATION_TYPES.length`.
+- Relevant notes/decisions: this task owns **transport + background application only**. Normalization (M2.T4/M2.T21), dedup/allowlist precedence (M2.T20), preset expansion (M2.T5) and the DNR side-effect (M2.T7) are explicitly left to those tasks — the helpers therefore store the site string as-is, which is safe because nothing consumes it yet. `BLOCKLIST_APPLY_PRESET` is deliberately accepted-but-inert rather than unimplemented, so the popup can adopt the protocol without a later breaking change.
+- Acceptance criteria: verified — (1) a mutation message from a popup-like context updates and persists the background store exactly once; (2) the read-only popup store converges through the M1.T8 sync bridge with no manual rehydrate in the test; (3) invalid/unknown payloads are ignored without throwing or mutating (forward-compatible with M5.T1); (4) the mutation helpers are pure, so normalization stays on the background side.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -176,10 +205,12 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 
 ## How to re-run the checks
 
+**Important**: execute `bun run build` for Firefox as well as for Chrome
+
 ```bash
-bun run test        # vitest (unit + integration + component)
-bun run compile     # tsc --noEmit
-bun run lint        # clean (M0.T2 issue resolved)
-bun run build       # Chrome build (WXT)
-bun run build:firefox
+bun run test          # vitest (unit + integration + component)
+bun run compile       # tsc --noEmit
+bun run lint          # clean (M0.T2 issue resolved)
+bun run build:firefox # Firefox build (WXT)
+bun run build         # Chrome build (WXT)
 ```

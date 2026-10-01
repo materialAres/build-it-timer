@@ -4,6 +4,7 @@ import { browser } from 'wxt/browser';
 import { startBackground, MESSAGE_TYPES } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
+import { MUTATION_TYPES } from '@/lib/messaging/messages.types';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, STORE_NAME } from '@/store';
 import type { Tag } from '@/store/store.types';
@@ -29,7 +30,8 @@ describe('background orchestrator skeleton (M1.T7)', () => {
 
     const handle = startBackground();
 
-    expect(addListener).toHaveBeenCalledTimes(MESSAGE_TYPES.length);
+    // Passive M1.T1 variants plus the M1.T10 mutation variants.
+    expect(addListener).toHaveBeenCalledTimes(MESSAGE_TYPES.length + MUTATION_TYPES.length);
     expect(MESSAGE_TYPES).toHaveLength(6);
 
     handle.dispose();
