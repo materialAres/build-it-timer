@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T4** (Milestone 2 in progress).
+> Updated to: **M2.T5** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T4 done; M2.T5 … M2.T21 remaining.
-- Tests: `bun run test` → **146 passing tests** across 18 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T5 done; M2.T6 … M2.T21 remaining.
+- Tests: `bun run test` → **154 passing tests** across 19 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -42,6 +42,7 @@ description: Rules for updating the changelog
 | M2.T2 | Timer persistence/restore logic via alarms | completed | — (to be committed) |
 | M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | — (to be committed) |
 | M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | — (to be committed) |
+| M2.T5 | Predefined presets (data) | completed | — (to be committed) |
 
 ---
 
@@ -248,6 +249,17 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/store/blocklist-mutations.test.ts` (17 tests, unit) — the 9 M1.T10 cases plus 8 new M2.T4 cases: full URL → registrable domain; subdomain variants collapse to one entry; ccSLD (`facebook.co.uk`) kept intact; bare public suffix (`co.uk`, `com`) rejected with the same reference; malformed URL rejected without throwing; empty/whitespace rejected; removal by full URL removes the canonical entry; invalid removal input is a no-op. `tests/integration/messaging/mutation-bus.test.ts` (+2 tests, integration with `fakeBrowser`) — a raw URL sent from the popup is normalized before being stored; an invalid site (`co.uk`) is rejected without persisting.
 - Relevant notes/decisions: normalization lives in the pure helpers (not in the background handler), so both the popup-requested path and any future direct caller share the exact same rule (DRY). The helpers stay pure and browser-free (principle D). Allowlist/blocklist mutual exclusion (M2.T20) and the DNR side-effect (M2.T7) remain owned by those tasks — this task only guarantees the canonical form. The Chrome/Firefox bundle grew (~273 kB → ~701 kB) because `tldts` is now reachable from the background through the slice; acceptable for a local extension and revisitable if it matters.
 - Acceptance criteria: verified — (1) adding a site normalizes via `getRegistrableDomain` before saving (no `facebook.com`/`www.facebook.com` duplicates); (2) untrusted input always goes through `getRegistrableDomain`, invalid input is rejected with the same reference and no exception; (3) entries are kept only in canonical form; (4) CRUD actions covered by unit tests (add/remove/update tag).
+
+### M2.T5 — Predefined presets (data)
+- `lib/blocking/presets.ts` (new) — static `PRESETS: ReadonlyArray<Preset>` with three ready-made presets: **Social** (`instagram.com`, `facebook.com`, `x.com`, `tiktok.com`), **Video** (`youtube.com`, `netflix.com`, `twitch.tv`, `vimeo.com`) and **News** (`reddit.com`, `ycombinator.com`, `cnn.com`). Plus `getPresetById(id): Preset | undefined`.
+  - Data only — no application logic (Open/Closed, §1.1): adding a preset is adding an array element, never touching the code that applies (M3.T1) or expands (background) presets.
+  - Every domain is stored already in canonical registrable form (`eTLD+1`, subdomains removed — the M1.T2 decision), so applying a preset needs no second normalization pass and can never introduce a `www.`/`m.` duplicate.
+- `store/store.types.ts` — `Preset` gains a required `tag: Tag` field (the roadmap's "associated tag"). The type was defined in M1.T1 but not yet consumed anywhere, so extending it is non-breaking; the tag is what the preset expansion will attach to each domain so a preset's sites can be filtered like any other tagged entry (M3.T2).
+- Files created/modified: `lib/blocking/presets.ts` (new), `store/store.types.ts`, `tests/unit/lib/blocking/presets.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/blocking/presets.test.ts` (8 tests, unit) — the Social preset exists with the expected domains; a Video preset exists; unknown id → `undefined`; every preset has a non-empty id/name/tag; every preset has ≥1 domain; preset ids are unique; every domain is already canonical (re-normalizing it is a no-op); no duplicate domain within a preset.
+- Relevant notes/decisions: the roadmap names only the Social preset explicitly and the source document is not in the repo, so Video/News are reasonable additions that keep the dataset useful without inventing a large catalogue (YAGNI). The canonical-form test caught a real mistake during development: `news.ycombinator.com` normalizes to `ycombinator.com` (subdomains are removed), so the entry was corrected to `ycombinator.com` — exactly the class of bug the test exists to prevent. The `tag` field was added to `Preset` rather than left out, because the roadmap explicitly requires "a domain list and associated tag".
+- Acceptance criteria: verified — (1) the Social preset with `instagram.com`/`facebook.com`/`x.com`/`tiktok.com` is present; (2) the data conforms to the `Preset` type with no application logic (data only).
 
 ---
 

@@ -36,6 +36,11 @@ export interface Preset {
   readonly id: string;
   readonly name: string;
   readonly domains: ReadonlyArray<Domain>;
+  /**
+   * Tag applied to every domain when the preset is expanded (M2.T5). It lets a
+   * preset's sites be grouped/filtered like any other tagged entry (M3.T2).
+   */
+  readonly tag: Tag;
 }
 
 // history session
