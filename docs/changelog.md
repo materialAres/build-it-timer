@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T5** (Milestone 2 in progress).
+> Updated to: **M2.T6** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T5 done; M2.T6 … M2.T21 remaining.
-- Tests: `bun run test` → **154 passing tests** across 19 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T6 done; M2.T7 … M2.T21 remaining.
+- Tests: `bun run test` → **164 passing tests** across 20 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -43,6 +43,7 @@ description: Rules for updating the changelog
 | M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | — (to be committed) |
 | M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | — (to be committed) |
 | M2.T5 | Predefined presets (data) | completed | — (to be committed) |
+| M2.T6 | `declarativeNetRequest` rule generator | completed | — (to be committed) |
 
 ---
 
@@ -261,6 +262,19 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the roadmap names only the Social preset explicitly and the source document is not in the repo, so Video/News are reasonable additions that keep the dataset useful without inventing a large catalogue (YAGNI). The canonical-form test caught a real mistake during development: `news.ycombinator.com` normalizes to `ycombinator.com` (subdomains are removed), so the entry was corrected to `ycombinator.com` — exactly the class of bug the test exists to prevent. The `tag` field was added to `Preset` rather than left out, because the roadmap explicitly requires "a domain list and associated tag".
 - Acceptance criteria: verified — (1) the Social preset with `instagram.com`/`facebook.com`/`x.com`/`tiktok.com` is present; (2) the data conforms to the `Preset` type with no application logic (data only).
 
+### M2.T6 — `declarativeNetRequest` rule generator
+- `lib/blocking/rules.ts` (new) — pure `buildDnrRules(blocklist, allowlist): DnrRule[]` that translates the allow/block state into valid DNR rules. Each blocklisted domain becomes `{ id, action: { type: 'block' }, condition: { urlFilter: '||<domain>^', resourceTypes: ['main_frame', 'sub_frame'] } }`.
+  - **Precedence (design decision)**: the **allowlist always wins**. A domain present in both lists is not blocked — its block rule is *omitted* (the allowlist is turned into a `Set` and used to filter the blocklist) rather than cancelled by a higher-priority `allow` rule. This satisfies the acceptance criterion with a minimal rule set and no reliance on DNR priority semantics. It deviates from the roadmap's literal wording ("the allowlist rule has higher priority"), which is recorded here as the deliberate choice.
+  - **`urlFilter`**: `||<domain>^` — the `||` domain anchor matches the domain and its subdomains, `^` is the separator that also matches the end of the URL. Entries are assumed already canonical (M2.T4); escaping/validation of `*`/`|`/`^` is M5.T3's job.
+  - **`resourceTypes`**: `main_frame` + `sub_frame` (top-level navigation and embedded frames). Sub-resources are intentionally not blocked so a blocked page fails cleanly instead of half-loading.
+  - **Purity**: no `browser.declarativeNetRequest` call and no I/O; the rule type is a type-only alias of `Browser.declarativeNetRequest.Rule` (from `wxt/browser`), so the module is testable without a browser. Applying the rules is M2.T7.
+  - **Determinism**: ids are sequential from 1 in input order; the blocklist is de-duplicated defensively (a duplicate domain yields a single rule).
+- Files created/modified: `lib/blocking/rules.ts` (new), `tests/unit/lib/blocking/rules.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/blocking/rules.test.ts` (10 tests, unit) — empty blocklist → `[]`; one domain → one block rule with the expected `urlFilter`/`resourceTypes`; the `||…^` anchoring; a duplicated blocklist domain → a single rule; **a domain in both lists → not blocked (first-class case)**; only the non-allowlisted domain is blocked when one of two is allowlisted; an allowlist-only domain → no rule; unique sequential ids; determinism (same input → deep-equal output); inputs are not mutated.
+- Relevant notes/decisions: the module is pure and browser-free (principle D), so it runs in the plain vitest environment with no `fakeBrowser`. The `declarativeNetRequest` manifest permission is **not** added here — it belongs to M2.T7, which is the task that actually calls `updateDynamicRules` (see Open issues).
+- Acceptance criteria: verified — (1) a blocklisted domain generates a correct blocking rule with a normalized `urlFilter`; (2) the allowlist always wins, tested as a first-class case; (3) no real `browser.declarativeNetRequest` calls (pure module).
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -281,6 +295,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 2. **`framer-motion`** not yet installed (will be needed from M3.T5).
 3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
 4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix). `tabs` and `declarativeNetRequest` still need to be added by M2.T7/M2.T10. The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
+5. **`urlFilter` escaping (M5.T3)** — `buildDnrRules` (M2.T6) interpolates the domain into `urlFilter` as-is, trusting the canonical form produced by M2.T4. A domain containing `*`/`|`/`^`/`||` would be interpreted as DNR syntax; M5.T3 adds the escaping/validation. Tracked as a follow-up, not a defect of M2.T6 (entries are canonical by construction).
 
 ---
 
