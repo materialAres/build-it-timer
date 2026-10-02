@@ -51,6 +51,10 @@ export class FakeAlarmProvider implements AlarmProvider {
     return Promise.resolve();
   }
 
+  getScheduledTime(name: string): Promise<number | undefined> {
+    return Promise.resolve(this.alarms.get(name));
+  }
+
   onFire(listener: AlarmFiredListener): () => void {
     this.listeners.add(listener);
     return () => {

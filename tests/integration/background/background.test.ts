@@ -6,7 +6,8 @@ import { sendMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 import { MUTATION_TYPES } from '@/lib/messaging/messages.types';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
-import { createAppStore, STORE_NAME } from '@/store';
+import { createAppStore, DEFAULT_FOCUS_SECONDS, STORE_NAME } from '@/store';
+import { timerAlarmName } from '@/lib/timer/session';
 import type { Tag } from '@/store/store.types';
 
 describe('background orchestrator skeleton (M1.T7)', () => {
@@ -107,6 +108,75 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     });
 
     expect(store.getState().blocklist.customTags).toEqual([tag]);
+
+    handle.dispose();
+  });
+});
+
+describe('background timer restore (M2.T2)', () => {
+  const T0 = 1_700_000_000_000;
+  const SESSION_ID = 'session-1';
+
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  /** Persist a `running` timer as a previous background instance would have. */
+  async function persistRunningTimer(remainingSeconds: number): Promise<void> {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          timer: {
+            status: 'running',
+            remainingSeconds,
+            sessionStartedAt: T0,
+            sessionId: SESSION_ID,
+          },
+        },
+        version: 1,
+      }),
+    });
+  }
+
+  it('resumes the countdown from the pending alarm after a restart', async () => {
+    await persistRunningTimer(DEFAULT_FOCUS_SECONDS);
+    const alarmProvider = new FakeAlarmProvider(T0);
+    // The alarm survived the restart; 5 minutes of wall-clock time elapsed.
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + DEFAULT_FOCUS_SECONDS * 1000);
+    const now = T0 + 300 * 1000;
+
+    const handle = startBackground({ alarmProvider, now: () => now });
+    await handle.ready;
+
+    const { timer } = handle.store.getState();
+    expect(timer.status).toBe('running');
+    expect(timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS - 300);
+    expect(timer.sessionId).toBe(SESSION_ID);
+
+    handle.dispose();
+  });
+
+  it('reverts a running timer to paused when no alarm is pending', async () => {
+    await persistRunningTimer(DEFAULT_FOCUS_SECONDS);
+    const alarmProvider = new FakeAlarmProvider(T0);
+
+    const handle = startBackground({ alarmProvider, now: () => T0 });
+    await handle.ready;
+
+    const { timer } = handle.store.getState();
+    expect(timer.status).toBe('paused');
+    expect(timer.sessionId).toBe(SESSION_ID);
+
+    handle.dispose();
+  });
+
+  it('leaves an idle timer untouched on startup', async () => {
+    const alarmProvider = new FakeAlarmProvider(T0);
+
+    const handle = startBackground({ alarmProvider, now: () => T0 });
+    await handle.ready;
+
+    expect(handle.store.getState().timer.status).toBe('idle');
 
     handle.dispose();
   });

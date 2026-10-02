@@ -13,6 +13,7 @@ import {
   createBrowserAlarmProvider,
   type AlarmProvider,
 } from '@/lib/timer/alarm-adapter';
+import { restoreTimer } from '@/lib/timer/restore-timer';
 import { onMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
@@ -47,6 +48,11 @@ export interface BackgroundDependencies {
 export interface BackgroundHandle {
   readonly store: AppStore;
   readonly alarmProvider: AlarmProvider;
+  /**
+   * Resolves once the startup reconciliation (M2.T2) has been applied to the
+   * store. Tests await it to observe the restored state deterministically.
+   */
+  readonly ready: Promise<void>;
   /** Detach every listener registered by `startBackground` (used by tests). */
   dispose(): void;
 }
@@ -163,9 +169,30 @@ export function startBackground(
   // persisted state when that happens is M2.T2.
   disposers.push(alarmProvider.onFire(handlePlaceholder));
 
+  // Startup reconciliation (M2.T2): the persisted store may say `running` while
+  // the worker was asleep, so the countdown is rebuilt from the still-pending
+  // alarm (or the timer is reverted to `paused` if that alarm is gone). The
+  // store must be hydrated first, otherwise the persisted timer is not in memory
+  // yet and the reconciliation would see the default idle state.
+  const ready = (async (): Promise<void> => {
+    await store.persist.rehydrate();
+    const { timer } = store.getState();
+    const restored = await restoreTimer(timer, {
+      alarmProvider,
+      now: dependencies.now ?? Date.now,
+    });
+    if (restored.changed) store.setState({ timer: restored.timer });
+  })().catch((error: unknown) => {
+    // The startup path is a known boundary (§1.4): a failure here must not
+    // become an unhandled rejection that kills the service worker. Logged with
+    // context; centralized logging replaces this in M4.T3.
+    console.error('[background] timer restore failed', error);
+  });
+
   return {
     store,
     alarmProvider,
+    ready,
     dispose(): void {
       for (const dispose of disposers) dispose();
       disposers.length = 0;

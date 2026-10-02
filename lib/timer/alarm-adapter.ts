@@ -24,6 +24,12 @@ export interface AlarmProvider {
   schedule(name: string, whenMs: number): Promise<void>;
   /** Cancel a scheduled alarm. A missing alarm is a safe no-op. */
   clear(name: string): Promise<void>;
+  /**
+   * Absolute epoch time at which `name` is currently scheduled, or `undefined`
+   * if no such alarm exists. Used by the restore logic (M2.T2) to rebuild the
+   * countdown after a service worker restart.
+   */
+  getScheduledTime(name: string): Promise<number | undefined>;
   /** Subscribe to alarm firings. Returns an unsubscribe function. */
   onFire(listener: AlarmFiredListener): () => void;
 }
@@ -53,6 +59,10 @@ export function createBrowserAlarmProvider(
     },
     async clear(name: string): Promise<void> {
       await browser.alarms.clear(name);
+    },
+    async getScheduledTime(name: string): Promise<number | undefined> {
+      const alarm = await browser.alarms.get(name);
+      return alarm?.scheduledTime;
     },
     onFire(listener: AlarmFiredListener): () => void {
       if (listeners.size === 0) {

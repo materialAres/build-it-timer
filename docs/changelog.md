@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T1** (Milestone 2 in progress).
+> Updated to: **M2.T2** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 done; M2.T2 … M2.T21 remaining.
-- Tests: `bun run test` → **109 passing tests** across 15 files (unit + integration + component placeholder).
+- Milestone 2 (core features) — **in progress**: M2.T1, M2.T2 done; M2.T3 … M2.T21 remaining.
+- Tests: `bun run test` → **119 passing tests** across 16 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -39,6 +39,7 @@ description: Rules for updating the changelog
 | M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | completed | — (to be committed) |
 | M1.T10 | Cross-context mutation path (popup → background) | completed | — (to be committed) |
 | M2.T1 | `timerSlice` — timer state and actions | completed | — (to be committed) |
+| M2.T2 | Timer persistence/restore logic via alarms | completed | — (to be committed) |
 
 ---
 
@@ -211,6 +212,18 @@ description: Rules for updating the changelog
 - Tests: none (config-only change; the existing 109 tests, type-check, lint and both builds remain green).
 - Relevant notes/decisions: this was a latent bug from M1.T3/M1.T8 that only surfaced at runtime in a real browser — the vitest suite uses `fakeBrowser`, which provides `browser.storage` regardless of the manifest, so it could not catch it. `tabs`/`declarativeNetRequest` permissions are intentionally **not** added yet: they belong to the tasks that consume them (M2.T7/M2.T10).
 - Acceptance criteria: verified — the popup renders the placeholder UI under `bun run dev:firefox`.
+
+### M2.T2 — Timer persistence/restore logic via alarms
+- `lib/timer/restore-timer.ts` (new) — pure `restoreTimer(timer, { alarmProvider, now })` returning `{ timer, changed }`. Only a `running` timer is reconciled: the remaining time is recomputed from the **still-pending alarm** (`Math.max(0, Math.round((dueAt - now()) / 1000))`) rather than trusted from the stale persisted value, because the countdown kept running in wall-clock terms while the worker was asleep. `idle`/`paused` are returned untouched (same reference, `changed: false`).
+  - **Inconsistency handling (explicit, not silent)**: a `running` timer with no pending alarm — or with a `null` session id, which makes the alarm name underivable — is reverted to `paused`, so the user restarts deliberately instead of seeing a countdown with no backing alarm.
+  - Returns the *same* state reference when nothing changed, so the caller can skip the write (same identity-check pattern as M1.T10).
+- `lib/timer/alarm-adapter.ts` — `AlarmProvider` gains `getScheduledTime(name): Promise<number | undefined>` (the restore logic needs to read the pending alarm's due time, which the port previously could not express). Real implementation reads `browser.alarms.get(name)?.scheduledTime`; `FakeAlarmProvider` (`tests/helpers/fake-alarm-adapter.ts`) implements it from its in-memory map.
+- `entrypoints/background.ts` — `startBackground` now performs the startup reconciliation: it awaits `store.persist.rehydrate()` (the persisted timer must be in memory first, otherwise the reconciliation would see the default idle state), runs `restoreTimer`, and writes the result back only when `changed`. The work is exposed as `BackgroundHandle.ready: Promise<void>` so tests can await it deterministically; the promise is `.catch`-guarded (logged with context) so a failure cannot become an unhandled rejection that kills the service worker (§1.4; centralized logging replaces this in M4.T3).
+- Files created/modified: `lib/timer/restore-timer.ts` (new), `lib/timer/alarm-adapter.ts`, `tests/helpers/fake-alarm-adapter.ts`, `entrypoints/background.ts`, `tests/unit/lib/timer/restore-timer.test.ts` (new), `tests/integration/background/background.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/unit/lib/timer/restore-timer.test.ts` (7 tests, unit with `FakeAlarmProvider`) — idle/paused untouched (identity + `changed: false`); recompute from the pending alarm after a restart (1500s persisted, 300s elapsed → 1200s); no change when the recomputed value already matches (identity); clamp to zero when the alarm is already due; revert to `paused` when running with no pending alarm; revert to `paused` when the session id is missing. `tests/integration/background/background.test.ts` (+3 tests, integration with `fakeBrowser`) — a persisted `running` timer resumes from the surviving alarm after a simulated restart (new background instance, same fake storage); a `running` timer with no alarm is reverted to `paused`; an idle timer is left untouched.
+- Relevant notes/decisions: the alarm is the source of truth for *when the session ends*, the persisted store for *what the session is* — the two are reconciled at startup rather than one being trusted blindly. `getScheduledTime` was added to the port instead of reaching into `browser.alarms` from `restore-timer.ts`, preserving principle D (the module stays browser-free and unit-testable). The `ready` promise is an addition beyond the literal acceptance criteria, needed to make the async startup observable in tests without arbitrary waits.
+- Acceptance criteria: verified — (1) simulating a restart (new background instance, same fake storage) with a `running` timer resumes the countdown from a consistent value (not zero, not duplicated); (2) a `running` timer with no pending alarm is detected as an inconsistency and reverted to `paused` (explicit behavior, not silent).
 
 ---
 
