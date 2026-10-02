@@ -84,3 +84,57 @@ describe('blocklist mutation helpers (M1.T10)', () => {
     expect(empty).toEqual(before);
   });
 });
+
+describe('blocklist entry normalization (M2.T4)', () => {
+  it('normalizes a full URL to its registrable domain', () => {
+    const next = addSiteToList(empty, 'blocklist', 'https://m.facebook.com/something');
+
+    expect(next.blocklist).toEqual([{ domain: { value: 'facebook.com' }, tagIds: [] }]);
+  });
+
+  it('collapses subdomain variants to a single entry (no duplicates)', () => {
+    const withWww = addSiteToList(empty, 'blocklist', 'https://www.facebook.com');
+    const withMobile = addSiteToList(withWww, 'blocklist', 'https://m.facebook.com/foo');
+    const withBare = addSiteToList(withMobile, 'blocklist', 'facebook.com');
+
+    expect(withBare.blocklist).toHaveLength(1);
+    expect(withBare.blocklist[0]?.domain.value).toBe('facebook.com');
+  });
+
+  it('keeps ccSLD domains intact', () => {
+    const next = addSiteToList(empty, 'blocklist', 'https://m.facebook.co.uk/x');
+
+    expect(next.blocklist[0]?.domain.value).toBe('facebook.co.uk');
+  });
+
+  it('rejects a bare public suffix without mutating the state', () => {
+    for (const input of ['co.uk', 'com']) {
+      const next = addSiteToList(empty, 'blocklist', input);
+      expect(next).toBe(empty);
+    }
+  });
+
+  it('rejects a malformed URL without throwing', () => {
+    expect(() => addSiteToList(empty, 'blocklist', 'not a url')).not.toThrow();
+    expect(addSiteToList(empty, 'blocklist', 'not a url')).toBe(empty);
+  });
+
+  it('rejects an empty or whitespace-only input', () => {
+    expect(addSiteToList(empty, 'blocklist', '')).toBe(empty);
+    expect(addSiteToList(empty, 'blocklist', '   ')).toBe(empty);
+  });
+
+  it('normalizes on removal so a full URL removes the canonical entry', () => {
+    const withSite = addSiteToList(empty, 'blocklist', 'facebook.com');
+    const next = removeSiteFromList(withSite, 'blocklist', 'https://m.facebook.com/x');
+
+    expect(next.blocklist).toEqual([]);
+  });
+
+  it('rejects an invalid input on removal without mutating the state', () => {
+    const withSite = addSiteToList(empty, 'blocklist', 'facebook.com');
+    const next = removeSiteFromList(withSite, 'blocklist', 'co.uk');
+
+    expect(next).toBe(withSite);
+  });
+});

@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T3** (Milestone 2 in progress).
+> Updated to: **M2.T4** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1, M2.T2, M2.T3 done; M2.T4 … M2.T21 remaining.
-- Tests: `bun run test` → **136 passing tests** across 18 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T4 done; M2.T5 … M2.T21 remaining.
+- Tests: `bun run test` → **146 passing tests** across 18 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -41,6 +41,7 @@ description: Rules for updating the changelog
 | M2.T1 | `timerSlice` — timer state and actions | completed | — (to be committed) |
 | M2.T2 | Timer persistence/restore logic via alarms | completed | — (to be committed) |
 | M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | — (to be committed) |
+| M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | — (to be committed) |
 
 ---
 
@@ -235,6 +236,18 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/utils/format-duration.test.ts` (9 tests, unit) — zero, seconds with zero-padded minutes/hours, a full 25-minute session, exactly one hour, values beyond one hour, fractional truncation, negative clamp, non-finite (`NaN`/`±Infinity`) → `00:00:00`, `null`/`undefined` → `00:00:00`. `tests/unit/components/timer/TimerControls.test.tsx` (8 tests, component with Testing Library + `user-event`) — `TimerDisplay` renders `00:01:05` / `00:00:00` / `01:01:01`; clicking Start/Pause/Reset invokes the corresponding store action (spy on `useAppStore.getState()`); the disabled-state matrix for idle and running.
 - Relevant notes/decisions: the components read the store through the popup-facing `useAppStore` (read-only, M1.T9) — they only *read* state and *invoke* actions, consistent with the coupling rule in §1.3. The action spies are installed on `useAppStore.getState()` (the same object the component calls through), so the assertion is on the real call path rather than a mocked module. `unbound-method` lint forced calling the actions via `useAppStore.getState().startTimer()` instead of destructuring them (destructuring detaches the method from its object).
 - Acceptance criteria: verified — (1) `TimerDisplay` renders `remainingSeconds` formatted as `hh:mm:ss` via the separate pure `formatDuration` function, tested in isolation; (2) clicking Start invokes the store action, not local logic; (3) the Testing Library test renders, clicks, and asserts on the action call via a spy on the store.
+
+### M2.T4 — `blocklistSlice` — allowlist/blocklist state
+- `store/blocklist.slice.ts` — `addSiteToList` and `removeSiteFromList` now normalize every site through `getRegistrableDomain` (M1.T2) before touching the state, so only the canonical registrable form (`eTLD+1`, subdomains removed) is ever stored. This is the untrusted-input boundary: the raw string is never saved as-is.
+  - **Rejection**: a malformed URL or a "bare" public suffix (`co.uk`, `com`) makes `getRegistrableDomain` return `{ ok: false }`; the helper then returns the **same state reference** (no mutation, no throw). The background's identity check (M1.T10) turns that into "no persist", and the UI can surface "Enter a valid URL" (M2.T21/M3.T3).
+  - **Dedup**: because both `https://www.facebook.com` and `https://m.facebook.com/foo` normalize to `facebook.com`, adding them produces a single entry — the acceptance criterion's "no duplicates" falls out of normalization rather than a separate check.
+  - `removeSiteFromList` normalizes too, so removing by a full URL (`https://m.facebook.com/x`) removes the canonical `facebook.com` entry instead of silently matching nothing; an invalid input is a no-op (same reference).
+  - `upsertTag`/`removeTag` are unchanged (they already covered the tag CRUD acceptance criterion).
+- Files created/modified: `store/blocklist.slice.ts`, `tests/unit/store/blocklist-mutations.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`.
+- Dependencies added: none (`tldts` was already a runtime dependency from M1.T2).
+- Tests: `tests/unit/store/blocklist-mutations.test.ts` (17 tests, unit) — the 9 M1.T10 cases plus 8 new M2.T4 cases: full URL → registrable domain; subdomain variants collapse to one entry; ccSLD (`facebook.co.uk`) kept intact; bare public suffix (`co.uk`, `com`) rejected with the same reference; malformed URL rejected without throwing; empty/whitespace rejected; removal by full URL removes the canonical entry; invalid removal input is a no-op. `tests/integration/messaging/mutation-bus.test.ts` (+2 tests, integration with `fakeBrowser`) — a raw URL sent from the popup is normalized before being stored; an invalid site (`co.uk`) is rejected without persisting.
+- Relevant notes/decisions: normalization lives in the pure helpers (not in the background handler), so both the popup-requested path and any future direct caller share the exact same rule (DRY). The helpers stay pure and browser-free (principle D). Allowlist/blocklist mutual exclusion (M2.T20) and the DNR side-effect (M2.T7) remain owned by those tasks — this task only guarantees the canonical form. The Chrome/Firefox bundle grew (~273 kB → ~701 kB) because `tldts` is now reachable from the background through the slice; acceptable for a local extension and revisitable if it matters.
+- Acceptance criteria: verified — (1) adding a site normalizes via `getRegistrableDomain` before saving (no `facebook.com`/`www.facebook.com` duplicates); (2) untrusted input always goes through `getRegistrableDomain`, invalid input is rejected with the same reference and no exception; (3) entries are kept only in canonical form; (4) CRUD actions covered by unit tests (add/remove/update tag).
 
 ---
 

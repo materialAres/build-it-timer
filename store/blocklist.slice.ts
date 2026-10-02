@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { getRegistrableDomain } from '@/lib/url/domain';
 import type { BlocklistEntry, Tag } from './store.types';
 import type { AppState } from '.';
 
@@ -19,27 +20,37 @@ export const createBlocklistSlice: StateCreator<AppState, [], [], BlocklistSlice
     blocklist: { allowlist: [], blocklist: [], customTags: [] },
   });
 
-// --- Pure mutation helpers (M1.T10) ---------------------------------------
+// --- Pure mutation helpers (M1.T10, normalization M2.T4) -------------------
 // The background is the single writer (M1.T9); the popup only *requests* a
 // change. These helpers are pure and side-effect-free so they can run on the
 // background side and be unit-tested without a store or a browser.
 //
-// The transport layer (M1.T10) deliberately keeps them minimal: they do not
-// normalize the domain (that is M2.T4/M2.T21) and do not enforce allowlist
-// precedence (M2.T20). They are the shared vocabulary the two sides agree on.
+// User input is untrusted (M2.T4): every site goes through
+// `getRegistrableDomain` before it is stored, so only the canonical registrable
+// form (`eTLD+1`, subdomains removed — the M1.T2 design decision) ever reaches
+// the state. A malformed URL or a "bare" public suffix (`co.uk`, `com`) is
+// rejected: the helper returns the *same* state reference, which the background
+// uses to skip persisting and the UI to show "Enter a valid URL" (M2.T21/M3.T3).
+//
+// Allowlist/blocklist mutual exclusion (M2.T20) and the DNR side-effect (M2.T7)
+// are owned by those tasks.
 
-const toEntry = (site: string): BlocklistEntry => ({ domain: { value: site }, tagIds: [] });
+const toEntry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
 
-const hasSite = (entries: ReadonlyArray<BlocklistEntry>, site: string): boolean =>
-  entries.some((entry) => entry.domain.value === site);
+const hasSite = (entries: ReadonlyArray<BlocklistEntry>, domain: string): boolean =>
+  entries.some((entry) => entry.domain.value === domain);
 
 export function addSiteToList(
   state: BlocklistState,
   list: BlocklistListName,
   site: string,
 ): BlocklistState {
-  if (hasSite(state[list], site)) return state;
-  return { ...state, [list]: [...state[list], toEntry(site)] };
+  const normalized = getRegistrableDomain(site);
+  if (!normalized.ok) return state;
+
+  const domain = normalized.value;
+  if (hasSite(state[list], domain)) return state;
+  return { ...state, [list]: [...state[list], toEntry(domain)] };
 }
 
 export function removeSiteFromList(
@@ -47,7 +58,13 @@ export function removeSiteFromList(
   list: BlocklistListName,
   site: string,
 ): BlocklistState {
-  return { ...state, [list]: state[list].filter((entry) => entry.domain.value !== site) };
+  // Normalize on removal too, so a full URL (`https://m.facebook.com/x`) removes
+  // the canonical `facebook.com` entry instead of silently matching nothing.
+  const normalized = getRegistrableDomain(site);
+  if (!normalized.ok) return state;
+
+  const domain = normalized.value;
+  return { ...state, [list]: state[list].filter((entry) => entry.domain.value !== domain) };
 }
 
 export function upsertTag(state: BlocklistState, tag: Tag): BlocklistState {

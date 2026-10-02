@@ -174,4 +174,39 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     handle.dispose();
   });
+
+  it('normalizes a raw URL sent from the popup before storing it (M2.T4)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'https://m.facebook.com/something' },
+    });
+
+    expect(store.getState().blocklist.blocklist).toEqual([
+      { domain: { value: 'facebook.com' }, tagIds: [] },
+    ]);
+
+    handle.dispose();
+  });
+
+  it('rejects an invalid site sent from the popup without persisting (M2.T4)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'co.uk' },
+    });
+
+    expect(store.getState().blocklist.blocklist).toEqual([]);
+    expect(setSpy).not.toHaveBeenCalled();
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
 });
