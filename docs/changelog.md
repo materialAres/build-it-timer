@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T2** (Milestone 2 in progress).
+> Updated to: **M2.T3** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1, M2.T2 done; M2.T3 … M2.T21 remaining.
-- Tests: `bun run test` → **119 passing tests** across 16 files (unit + integration + component placeholder).
+- Milestone 2 (core features) — **in progress**: M2.T1, M2.T2, M2.T3 done; M2.T4 … M2.T21 remaining.
+- Tests: `bun run test` → **136 passing tests** across 18 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -40,6 +40,7 @@ description: Rules for updating the changelog
 | M1.T10 | Cross-context mutation path (popup → background) | completed | — (to be committed) |
 | M2.T1 | `timerSlice` — timer state and actions | completed | — (to be committed) |
 | M2.T2 | Timer persistence/restore logic via alarms | completed | — (to be committed) |
+| M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | — (to be committed) |
 
 ---
 
@@ -224,6 +225,16 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/timer/restore-timer.test.ts` (7 tests, unit with `FakeAlarmProvider`) — idle/paused untouched (identity + `changed: false`); recompute from the pending alarm after a restart (1500s persisted, 300s elapsed → 1200s); no change when the recomputed value already matches (identity); clamp to zero when the alarm is already due; revert to `paused` when running with no pending alarm; revert to `paused` when the session id is missing. `tests/integration/background/background.test.ts` (+3 tests, integration with `fakeBrowser`) — a persisted `running` timer resumes from the surviving alarm after a simulated restart (new background instance, same fake storage); a `running` timer with no alarm is reverted to `paused`; an idle timer is left untouched.
 - Relevant notes/decisions: the alarm is the source of truth for *when the session ends*, the persisted store for *what the session is* — the two are reconciled at startup rather than one being trusted blindly. `getScheduledTime` was added to the port instead of reaching into `browser.alarms` from `restore-timer.ts`, preserving principle D (the module stays browser-free and unit-testable). The `ready` promise is an addition beyond the literal acceptance criteria, needed to make the async startup observable in tests without arbitrary waits.
 - Acceptance criteria: verified — (1) simulating a restart (new background instance, same fake storage) with a `running` timer resumes the countdown from a consistent value (not zero, not duplicated); (2) a `running` timer with no pending alarm is detected as an inconsistency and reverted to `paused` (explicit behavior, not silent).
+
+### M2.T3 — `TimerDisplay` + `TimerControls` (UI)
+- `utils/format-duration.ts` (new) — pure `formatDuration(totalSeconds): string` rendering `hh:mm:ss`. The function is **total**: non-finite input (`NaN`, `±Infinity`, and the `null`/`undefined` that can slip in from untyped callers) renders as `00:00:00` instead of leaking `NaN:NaN:NaN` into the UI (`Number.isFinite` guard — `Math.max`/`Math.floor` alone let `NaN` through). Fractional seconds are truncated and negative values clamped to zero, so a transient out-of-range value can never render as `-1:-1:-1`. This is the only place that turns the store's `remainingSeconds` into the hour/minute/second representation (the store keeps no separate h/m/s fields, per M2.T1).
+- `components/timer/TimerDisplay.tsx` (new) — presentational countdown: reads `remainingSeconds` via `useAppStore(selectRemainingSeconds)` and renders `formatDuration(...)` inside an `<output aria-label="Time remaining">`. No timer logic of its own.
+- `components/timer/TimerControls.tsx` (new) — Start / Pause / Reset buttons. Each `onClick` invokes a store action through `useAppStore.getState()` (never local logic, never `browser.*`). Buttons are disabled according to `status` so the UI cannot request a transition the slice would treat as a no-op (Start disabled while running; Pause disabled unless running; Reset disabled while idle).
+- Files created/modified: `utils/format-duration.ts` (new), `components/timer/TimerDisplay.tsx` (new), `components/timer/TimerControls.tsx` (new), `tests/unit/utils/format-duration.test.ts` (new), `tests/unit/components/timer/TimerControls.test.tsx` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/utils/format-duration.test.ts` (9 tests, unit) — zero, seconds with zero-padded minutes/hours, a full 25-minute session, exactly one hour, values beyond one hour, fractional truncation, negative clamp, non-finite (`NaN`/`±Infinity`) → `00:00:00`, `null`/`undefined` → `00:00:00`. `tests/unit/components/timer/TimerControls.test.tsx` (8 tests, component with Testing Library + `user-event`) — `TimerDisplay` renders `00:01:05` / `00:00:00` / `01:01:01`; clicking Start/Pause/Reset invokes the corresponding store action (spy on `useAppStore.getState()`); the disabled-state matrix for idle and running.
+- Relevant notes/decisions: the components read the store through the popup-facing `useAppStore` (read-only, M1.T9) — they only *read* state and *invoke* actions, consistent with the coupling rule in §1.3. The action spies are installed on `useAppStore.getState()` (the same object the component calls through), so the assertion is on the real call path rather than a mocked module. `unbound-method` lint forced calling the actions via `useAppStore.getState().startTimer()` instead of destructuring them (destructuring detaches the method from its object).
+- Acceptance criteria: verified — (1) `TimerDisplay` renders `remainingSeconds` formatted as `hh:mm:ss` via the separate pure `formatDuration` function, tested in isolation; (2) clicking Start invokes the store action, not local logic; (3) the Testing Library test renders, clicks, and asserts on the action call via a spy on the store.
 
 ---
 
