@@ -28,6 +28,14 @@ const chromeBinary = resolveChromeBinary();
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  manifest: {
+    // WXT does not infer permissions from the APIs a module imports, so they
+    // must be declared explicitly. Without `storage` the popup's
+    // `attachStoreSync` throws (`browser.storage` is undefined) before React
+    // renders, leaving the popup blank; without `alarms` the background's
+    // `createBrowserAlarmProvider` fails the same way.
+    permissions: ['storage', 'alarms'],
+  },
   webExt: {
     // `binaries` is keyed by browser name; an empty map keeps web-ext's own
     // auto-detection as the fallback.

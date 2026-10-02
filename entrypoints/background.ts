@@ -134,9 +134,13 @@ export function startBackground(
 ): BackgroundHandle {
   // The background is the single writer of the persisted store (M1.T9): it owns
   // the writable instance, while every other context gets a read-only one.
-  const store = dependencies.store ?? createAppStore();
+  //
+  // The alarm provider is created first and injected into the store (M2.T1), so
+  // the slice schedules the session alarm on the same instance the orchestrator
+  // subscribes to: two providers would mean the alarm fires into a void.
   const alarmProvider =
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
+  const store = dependencies.store ?? createAppStore({ dependencies: { alarmProvider } });
 
   const disposers: Array<() => void> = [];
 
@@ -154,7 +158,9 @@ export function startBackground(
   }
 
   // The alarm provider is wired now so the background owns a single instance for
-  // the whole session; the countdown logic itself lands in M2.T2.
+  // the whole session: the timer slice (M2.T1) schedules the session alarm on it
+  // and this subscription receives the firing. Rebuilding the countdown from the
+  // persisted state when that happens is M2.T2.
   disposers.push(alarmProvider.onFire(handlePlaceholder));
 
   return {

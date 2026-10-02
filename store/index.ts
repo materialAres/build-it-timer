@@ -1,11 +1,12 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
-import { createTimerSlice, type TimerSlice } from './timer.slice';
+import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
+import type { TimerState } from './store.types';
 import { createCitySlice, type CitySlice } from './city.slice';
 import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
-
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
@@ -25,8 +26,16 @@ export type AppState =
   ScoreSlice &
   UiSlice;
 
-// Everything except the volatile `ui` slice survives a browser restart.
-export type PersistedState = Omit<AppState, keyof UiSlice>;
+// The persisted payload: the data of the persisted slices only. The action
+// functions are excluded (they are recreated on every store creation and have
+// nothing to persist) and so is the volatile `ui` slice. Declared explicitly so
+// adding an action to a slice never widens what ends up in storage.
+export interface PersistedState {
+  readonly timer: TimerState;
+  readonly city: CitySlice['city'];
+  readonly blocklist: BlocklistSlice['blocklist'];
+  readonly score: ScoreSlice['score'];
+}
 
 export const STORE_NAME = 'timer-focus-store';
 
@@ -36,13 +45,27 @@ const initialUiState: UiSlice['ui'] = {
   malusAlertVisible: false,
 };
 
-const createAppState: StateCreator<AppState> = (...args) => ({
-  ...createTimerSlice(...args),
-  ...createCitySlice(...args),
-  ...createBlocklistSlice(...args),
-  ...createScoreSlice(...args),
-  ui: initialUiState,
+// Collaborators the slices need to act (principle D). Injected through
+// `createAppStore` so a test can substitute a fake alarm provider and a
+// deterministic clock/entropy source without touching the browser APIs. For now
+// only the timer slice (M2.T1) consumes them; later slices extend this type.
+export type StoreDependencies = TimerDependencies;
+
+const defaultDependencies = (): StoreDependencies => ({
+  alarmProvider: createBrowserAlarmProvider(),
+  now: Date.now,
+  random: Math.random,
 });
+
+const createAppState =
+  (dependencies: StoreDependencies): StateCreator<AppState> =>
+  (...args) => ({
+    ...createTimerSlice(dependencies)(...args),
+    ...createCitySlice(...args),
+    ...createBlocklistSlice(...args),
+    ...createScoreSlice(...args),
+    ui: initialUiState,
+  });
 
 export const partialize = (state: AppState): PersistedState => ({
   timer: state.timer,
@@ -76,18 +99,24 @@ export interface CreateAppStoreOptions {
   readonly storage?: BrowserStateStorage;
   /** When true, `setState` is never persisted (non-owner context). */
   readonly readOnly?: boolean;
+  /**
+   * Slice collaborators (M2.T1). Defaults to the real `browser.alarms` provider
+   * with the system clock and `Math.random`; tests inject fakes instead.
+   */
+  readonly dependencies?: Partial<StoreDependencies>;
 }
 
 export function createAppStore(
   options: CreateAppStoreOptions = {},
 ): AppStore {
-  const { storage = browserStorage, readOnly = false } = options;
-  return buildStore(readOnly ? createReadOnlyStorage(storage) : storage);
+  const { storage = browserStorage, readOnly = false, dependencies } = options;
+  const resolved = { ...defaultDependencies(), ...dependencies };
+  return buildStore(readOnly ? createReadOnlyStorage(storage) : storage, resolved);
 }
 
-function buildStore(storage: BrowserStateStorage) {
+function buildStore(storage: BrowserStateStorage, dependencies: StoreDependencies) {
   const store = create<AppState>()(
-    persist(createAppState, {
+    persist(createAppState(dependencies), {
       name: STORE_NAME,
       storage: createJSONStorage<PersistedState>(() => storage),
       partialize,
@@ -112,11 +141,13 @@ export const selectLiveRemainingSeconds = (state: UiSlice): number =>
 
 export {
   createTimerSlice,
+  DEFAULT_FOCUS_SECONDS,
   selectTimer,
   selectTimerStatus,
   selectRemainingSeconds,
   selectSessionId,
 } from './timer.slice';
+export type { TimerDependencies } from './timer.slice';
 export { createCitySlice, selectCityLayers, selectCityThemeId } from './city.slice';
 export {
   createBlocklistSlice,

@@ -6,14 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M1.T10** (Milestone 1 complete).
+> Updated to: **M2.T1** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Tests: `bun run test` → **96 passing tests** across 14 files (unit + integration + component placeholder).
+- Milestone 2 (core features) — **in progress**: M2.T1 done; M2.T2 … M2.T21 remaining.
+- Tests: `bun run test` → **109 passing tests** across 15 files (unit + integration + component placeholder).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -37,6 +38,7 @@ description: Rules for updating the changelog
 | M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | completed | — (to be committed) |
 | M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | completed | — (to be committed) |
 | M1.T10 | Cross-context mutation path (popup → background) | completed | — (to be committed) |
+| M2.T1 | `timerSlice` — timer state and actions | completed | — (to be committed) |
 
 ---
 
@@ -184,6 +186,34 @@ description: Rules for updating the changelog
 
 ---
 
+## Milestone 2 — Core features
+
+### M2.T1 — `timerSlice` — timer state and actions
+- `store/timer.slice.ts` — the slice now owns the countdown: `startTimer()`, `pauseTimer()`, `resetTimer()` on top of `{ status, remainingSeconds, sessionStartedAt, sessionId }`. `remainingSeconds` stays the single source of truth (no hour/minute/second fields); the UI derives them in M2.T3.
+  - `startTimer()` from `idle` stamps `sessionStartedAt`, mints a fresh `sessionId` and schedules the alarm at the absolute due time `startedAt + remainingSeconds * 1000`; from `paused` it resumes the *same* session and re-arms the alarm from `now` (the 60s platform minimum is applied by the provider, not here); while `running` it is an idempotent no-op, so the alarm's due time can never drift from the countdown it represents.
+  - `pauseTimer()` only acts on a `running` timer (`idle`/`paused` are safe no-ops) and cancels the pending alarm; `resetTimer()` returns to the initial idle state and cancels the previous session's alarm.
+  - `TimerDependencies` (`alarmProvider`, `now`, `random`) are injected: the slice imports no `browser.*` API and never reads the wall clock or `Math.random()` internally (principle D, §1.4), so it is unit-testable with `FakeAlarmProvider` and a fixed clock.
+- `lib/timer/session.ts` (new) — pure `generateSessionId(now, random)` (`<epochMs>-<entropy>`, sortable and unique within the same millisecond) and `timerAlarmName(sessionId)` (`timer:<sessionId>`), the single place the alarm-name convention lives so the background (M2.T2) can tell a live session's alarm from a leftover one.
+- `store/index.ts` — `createAppStore` accepts `dependencies?: Partial<StoreDependencies>` (defaults: real `createBrowserAlarmProvider()`, `Date.now`, `Math.random`) and threads them into `createTimerSlice`; `PersistedState` is now declared explicitly (`timer`/`city`/`blocklist`/`score` data only) because the slices finally carry action functions that must never reach storage. Re-exports `DEFAULT_FOCUS_SECONDS` and the `TimerDependencies` type.
+- `entrypoints/background.ts` — the alarm provider is created **before** the store and injected into it, so the slice schedules on the very instance `startBackground` subscribes to (two providers would mean the alarm fires into a void).
+- Files created/modified: `store/timer.slice.ts`, `lib/timer/session.ts` (new), `store/index.ts`, `entrypoints/background.ts`, `tests/unit/store/timer-slice.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/store/timer-slice.test.ts` (13 tests, unit with `FakeAlarmProvider`) — initial idle state; `startTimer` → `running` + `sessionStartedAt` + one alarm named after the session and due at start + duration; idempotence while `running` (state identity, still a single alarm); resume from `paused` keeps the same `sessionId`/`sessionStartedAt` and re-arms from `now`; `startTimer` after `resetTimer` opens a new unique session; `pauseTimer` clears the alarm; `pauseTimer` while `idle` and while `paused` are no-ops that do not call `clear`; `resetTimer` restores the initial state and drops the alarm; delegation is proven by spying on `browser.alarms.create`/`clear` and asserting they are never called; plus `generateSessionId` determinism/difference and `timerAlarmName` namespacing.
+- Relevant notes/decisions: `startTimer()` while already `running` is defined as **idempotent** (roadmap §3.3 left the choice open) rather than an error, because the popup may legitimately re-trigger it; `remainingSeconds` is deliberately left untouched by the three actions — only `resetTimer` restores the default — since ticking it down is the background's job in M2.T2. Calling `resetCityForNewSession` from `startTimer()` (roadmap M2.T11) is deferred: that action does not exist yet.
+- Acceptance criteria: verified — (1) the actions are pure with respect to the store (no `browser.alarms` inside the slice: a spy proves `create`/`clear` are never called, all scheduling goes through the injected `AlarmProvider`); (2) `startTimer()` sets `status` to `running`, generates a new unique `sessionId` and calls `AlarmProvider.schedule`.
+
+### M2.T1 (fix) — Missing `storage`/`alarms` manifest permissions (blank popup)
+- **Symptom**: with `bun run dev:firefox` the popup rendered blank even though `App.tsx` still had the placeholder UI.
+- **Root cause**: `wxt.config.ts` never declared `permissions`, and WXT does **not** infer permissions from the APIs a module imports. The generated manifest therefore had no `storage` entry, so `browser.storage` was `undefined` in the popup and `attachStoreSync(useAppStore)` (M1.T8, called at the top of `entrypoints/popup/main.tsx`) threw `TypeError: can't access property "onChanged", (intermediate value).storage is undefined` **before** `ReactDOM.createRoot(...).render(...)` ran — hence a blank popup. The same gap would have broken the background's `createBrowserAlarmProvider` (`browser.alarms` undefined) once M2.T2 starts scheduling.
+- **Fix**: `wxt.config.ts` now declares `manifest.permissions: ['storage', 'alarms']` (with a why-comment). Verified in the dev output: the `[Unhandled error]` line is gone and the generated manifest lists both permissions.
+- Files modified: `wxt.config.ts`.
+- Dependencies added: none.
+- Tests: none (config-only change; the existing 109 tests, type-check, lint and both builds remain green).
+- Relevant notes/decisions: this was a latent bug from M1.T3/M1.T8 that only surfaced at runtime in a real browser — the vitest suite uses `fakeBrowser`, which provides `browser.storage` regardless of the manifest, so it could not catch it. `tabs`/`declarativeNetRequest` permissions are intentionally **not** added yet: they belong to the tasks that consume them (M2.T7/M2.T10).
+- Acceptance criteria: verified — the popup renders the placeholder UI under `bun run dev:firefox`.
+
+---
+
 ## Dependencies added over the course of the tasks
 
 | Package | Version | Introduced in | Reason |
@@ -200,6 +230,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 
 1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
 2. **`framer-motion`** not yet installed (will be needed from M3.T5).
+3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
+4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix). `tabs` and `declarativeNetRequest` still need to be added by M2.T7/M2.T10. The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
 
 ---
 
