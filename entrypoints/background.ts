@@ -14,6 +14,11 @@ import {
   type AlarmProvider,
 } from '@/lib/timer/alarm-adapter';
 import { restoreTimer } from '@/lib/timer/restore-timer';
+import {
+  createBlockingRulesSync,
+  createBrowserRuleApplier,
+  type RuleApplier,
+} from '@/lib/blocking/apply-rules';
 import { onMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
@@ -43,6 +48,8 @@ export interface BackgroundDependencies {
   readonly alarmProvider?: AlarmProvider;
   /** Clock used by the real alarm provider; injectable for determinism. */
   readonly now?: () => number;
+  /** Dynamic-rules applier (M2.T7). Injectable for tests. */
+  readonly ruleApplier?: RuleApplier;
 }
 
 export interface BackgroundHandle {
@@ -148,6 +155,21 @@ export function startBackground(
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
   const store = dependencies.store ?? createAppStore({ dependencies: { alarmProvider } });
 
+  // Dynamic DNR rules (M2.T7): the browser's ruleset is a projection of the
+  // store, so it is recomputed from *state* rather than patched at each call
+  // site. The sync itself is idempotent, so subscribing to every change is safe
+  // — a state change that does not alter the rules (a timer tick) is skipped.
+  const rulesSync = createBlockingRulesSync(
+    dependencies.ruleApplier ?? createBrowserRuleApplier(),
+  );
+
+  const syncRules = (): void => {
+    void rulesSync.sync(store.getState()).catch((error: unknown) => {
+      // Known boundary (§1.4): a failed rule update must not crash the worker.
+      console.error('[background] DNR rule sync failed', error);
+    });
+  };
+
   const disposers: Array<() => void> = [];
 
   // Converge on writes made by other contexts (popup, content script): the
@@ -162,6 +184,10 @@ export function startBackground(
   for (const type of MUTATION_TYPES) {
     disposers.push(onMessage(type, handleMutation(store)));
   }
+
+  // Any change to the blocklist/allowlist or to the timer status re-evaluates
+  // the active rules (M2.T7).
+  disposers.push(store.subscribe(syncRules));
 
   // The alarm provider is wired now so the background owns a single instance for
   // the whole session: the timer slice (M2.T1) schedules the session alarm on it
@@ -182,11 +208,15 @@ export function startBackground(
       now: dependencies.now ?? Date.now,
     });
     if (restored.changed) store.setState({ timer: restored.timer });
+    // Awaited so `ready` also means "the dynamic ruleset reflects the restored
+    // state": a session that did not survive the restart must not leave the
+    // previous session's blocking rules active.
+    await rulesSync.sync(store.getState());
   })().catch((error: unknown) => {
     // The startup path is a known boundary (§1.4): a failure here must not
     // become an unhandled rejection that kills the service worker. Logged with
     // context; centralized logging replaces this in M4.T3.
-    console.error('[background] timer restore failed', error);
+    console.error('[background] startup reconciliation failed', error);
   });
 
   return {

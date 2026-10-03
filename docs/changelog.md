@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T6** (Milestone 2 in progress).
+> Updated to: **M2.T7** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T6 done; M2.T7 … M2.T21 remaining.
-- Tests: `bun run test` → **164 passing tests** across 20 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T7 done; M2.T8 … M2.T21 remaining.
+- Tests: `bun run test` → **187 passing tests** across 22 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -44,6 +44,7 @@ description: Rules for updating the changelog
 | M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | — (to be committed) |
 | M2.T5 | Predefined presets (data) | completed | — (to be committed) |
 | M2.T6 | `declarativeNetRequest` rule generator | completed | — (to be committed) |
+| M2.T7 | Applying DNR rules from the background, active only in-session | completed | — (to be committed) |
 
 ---
 
@@ -275,6 +276,19 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the module is pure and browser-free (principle D), so it runs in the plain vitest environment with no `fakeBrowser`. The `declarativeNetRequest` manifest permission is **not** added here — it belongs to M2.T7, which is the task that actually calls `updateDynamicRules` (see Open issues).
 - Acceptance criteria: verified — (1) a blocklisted domain generates a correct blocking rule with a normalized `urlFilter`; (2) the allowlist always wins, tested as a first-class case; (3) no real `browser.declarativeNetRequest` calls (pure module).
 
+### M2.T7 — Applying DNR rules from the background, active only in-session
+- `lib/blocking/apply-rules.ts` (new) — three pieces:
+  - `selectActiveRules(state)`: the rules that must be active for a given state. **Blocking is on exclusively while `status === 'running'`**; `idle`/`paused` yield `[]`, so outside a focus session navigation is always free. Delegates rule construction to `buildDnrRules` (M2.T6), so the allowlist-wins precedence is inherited rather than reimplemented.
+  - `RuleApplier` port + `createBrowserRuleApplier()`: `replaceRules(rules)` reads the **live** dynamic ruleset with `getDynamicRules()` and calls `updateDynamicRules({ removeRuleIds, addRules })`. The live ruleset is read back on every update instead of trusting an in-memory "what we added" list, because dynamic rules survive both a service worker restart and a browser restart — after a cold start the browser is the only record of what is active. Empty `removeRuleIds`/`addRules` arrays are omitted (a no-op update stays a no-op).
+  - `createBlockingRulesSync(applier)`: `sync(state)` recomputes the rules from state, compares a signature (`id` + `urlFilter` per rule) against what it last applied and **skips the browser call when nothing changed** — a timer tick or an unrelated mutation must not rewrite the ruleset. `appliedSignature` starts as `null` (not as "empty rule set"), so the first sync of a cold start always writes, which is what clears leftovers from a previous session. Updates are **serialized** through a promise chain, because the popup's mutation path and a timer transition can trigger two syncs in the same tick and an interleaved pair could otherwise land out of order; a failed update is not cached as applied, so the next sync retries it.
+- `entrypoints/background.ts` — the sync is wired as a **store subscription** (`store.subscribe(syncRules)`) rather than patched at each call site: the browser's ruleset is a projection of the store, so "the blocklist/allowlist changed" and "the timer transitioned" are the same trigger (any state change), and idempotence makes subscribing to all of them safe. Failures are caught at this boundary and logged with context (`[background] DNR rule sync failed`), so a failing rule update cannot kill the service worker. The startup reconciliation (M2.T2) now `await`s a final `sync` after the timer is restored and exposed through `BackgroundHandle.ready`, so "ready" also means "the dynamic ruleset reflects the restored state" (a session that did not survive the restart must not leave the previous session's blocking rules active). `BackgroundDependencies` gains an injectable `ruleApplier`.
+- `wxt.config.ts` — `declarativeNetRequest` added to `manifest.permissions` (WXT does not infer permissions from the APIs a module imports). Verified in both generated manifests (Chrome MV3 + Firefox MV2). The permission is available in Firefox from 113 and Chrome from 84.
+- Files created/modified: `lib/blocking/apply-rules.ts` (new), `entrypoints/background.ts`, `wxt.config.ts`, `tests/helpers/fake-rule-applier.ts` (new), `tests/unit/lib/blocking/apply-rules.test.ts` (new), `tests/integration/background/dnr-rules.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/blocking/apply-rules.test.ts` (14 tests, unit with `FakeRuleApplier`) — `selectActiveRules`: no rules while `idle`/`paused`, the blocklist rules while `running`, allowlist-wins while running. `createBlockingRulesSync`: applies on the first sync while running; **removes every rule on `running → paused`** and on `running → idle`; reapplies on `paused → running`; reapplies when the blocklist changes mid-session; skips the browser call when the resulting rules are unchanged; writes on the first sync even when there is nothing to block (cold-start cleanup); serializes concurrent syncs so the last state wins; retries a failed update instead of caching it as applied. `tests/integration/background/dnr-rules.test.ts` (9 tests, integration with `fakeBrowser`) — `fakeBrowser` declares `declarativeNetRequest` but does not implement it (`MockNotImplementedError`), so the dynamic ruleset is modelled in the test and the **production** `createBrowserRuleApplier` runs against `browser.declarativeNetRequest`: starting a session + adding a site while `running` applies the expected rule (`addRules[0].condition.urlFilter === '||facebook.com^'`); pausing removes it (`removeRuleIds: [1]`, no `addRules`) leaving the live ruleset empty; navigation stays free outside a session (every update is removal-only); resuming reapplies; a blocklist change while running updates the live set; a cold start with a non-running timer clears the previous session's rules; a **running** session that survives a restart (persisted store + surviving alarm) keeps its rules; the injected applier is used instead of the browser API; a failing rule update is logged and leaves the store usable (`status` still becomes `running`); a state change that leaves the rules unchanged (idle blocklist edit, volatile `ui` change) does not call the browser.
+- Relevant notes/decisions: the rule set is derived from state, never mutated incrementally — this is what makes "removal on pause" and "reapplication on resume" the same code path as "blocklist changed". The subscription is on the whole store rather than on a selector, so no slice selector had to be widened for this task; the signature check absorbs the extra notifications. `BackgroundHandle.ready` was already the project's mechanism for making the async startup observable (M2.T2), and reusing it avoids arbitrary waits in tests.
+- Acceptance criteria: verified — (1) blocking rules are active exclusively during `status === 'running'`: `running → paused/idle` removes the dynamic rules via `updateDynamicRules`'s `removeRuleIds`, the transition to `running` reapplies them, and outside a focus session every update is removal-only; (2) with `fakeBrowser`, changing the blocklist during `running` triggers a call with the expected rules, and a transition to `paused` triggers a rule-removal call.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -294,8 +308,9 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
 2. **`framer-motion`** not yet installed (will be needed from M3.T5).
 3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
-4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix). `tabs` and `declarativeNetRequest` still need to be added by M2.T7/M2.T10. The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
+4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix, `declarativeNetRequest` in M2.T7). The `tabs` permission still needs to be added by M2.T10. The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
 5. **`urlFilter` escaping (M5.T3)** — `buildDnrRules` (M2.T6) interpolates the domain into `urlFilter` as-is, trusting the canonical form produced by M2.T4. A domain containing `*`/`|`/`^`/`||` would be interpreted as DNR syntax; M5.T3 adds the escaping/validation. Tracked as a follow-up, not a defect of M2.T6 (entries are canonical by construction).
+6. **Timer commands from the popup are not routed to the background yet (found during M2.T7)** — the popup's `useAppStore` is read-only (M1.T9), so `TimerControls` (M2.T3) calling `startTimer()`/`pauseTimer()`/`resetTimer()` mutates only the popup's in-memory state and schedules an alarm on the popup's own provider; the background — which is what owns the timer, the alarms and the DNR rules (M2.T7) — never learns about it. The mutation-message mechanism that fixes this already exists (M1.T10, `MutationMessage` + `applyMutation`), but no task explicitly assigns the timer transition to it: M1.T10 covers the blocklist/tag variants only, and the `TIMER_STARTED`/`TIMER_PAUSED` variants from M1.T1 are declared but not handled. This does **not** invalidate M2.T7 (whose acceptance criteria are met in the background), but it must be closed before the M3.T4 acceptance criterion ("starting a timer from the UI updates `TimerDisplay` and the city state after a simulated tick") can pass end-to-end.
 
 ---
 

@@ -33,8 +33,10 @@ export default defineConfig({
     // must be declared explicitly. Without `storage` the popup's
     // `attachStoreSync` throws (`browser.storage` is undefined) before React
     // renders, leaving the popup blank; without `alarms` the background's
-    // `createBrowserAlarmProvider` fails the same way.
-    permissions: ['storage', 'alarms'],
+    // `createBrowserAlarmProvider` fails the same way. `declarativeNetRequest`
+    // is what the background's rule sync (M2.T7) needs to install the
+    // blocklist rules; the `tabs` permission is not needed for that.
+    permissions: ['storage', 'alarms', 'declarativeNetRequest'],
   },
   webExt: {
     // `binaries` is keyed by browser name; an empty map keeps web-ext's own
