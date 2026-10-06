@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T13b** (Milestone 2 in progress).
+> Updated to: **M2.T14** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T13b done; M2.T14 … M2.T21 remaining.
-- Tests: `bun run test` → **329 passing tests** across 38 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T14 done; M2.T15 … M2.T21 remaining.
+- Tests: `bun run test` → **339 passing tests** across 39 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -55,6 +55,7 @@ description: Rules for updating the changelog
 | M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | — (to be committed) |
 | M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | — (to be committed) |
 | M2.T13b | `lib/city/theme-registry.ts` — color themes/biomes per session | completed | — (to be committed) |
+| M2.T14 | `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow) | completed | — (to be committed) |
 
 ---
 
@@ -439,6 +440,16 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/city/theme-registry.test.ts` (8 tests, unit) — ≥2 biomes with unique ids; every theme has non-empty id/name/backgroundColor/palette and hex colors; the documented default id is a real registry member; `getThemeById` returns the theme or `undefined`; `selectThemeId` is deterministic (50 repetitions); it always returns a registry id (including for empty/whitespace and Unicode session ids); it never throws; a 60-session sample spreads over more than one biome (no gross bias). `tests/integration/store/theme-registry-wiring.test.ts` (3 tests, integration with `fakeBrowser`) — the default store assigns a registry biome through `resetCityForNewSession`; different sessions get different biomes; the default id is in the registry.
 - Relevant notes/decisions: **the roadmap has no M2.T13b detail card** — only the summary-table row (`lib/city/theme-registry.ts` — color themes/biomes per session, dependency M1.T1) and, in the changelog, the M2.T11/M2.T13 notes that a theme registry was expected to supply `selectThemeId` and the active `Theme.palette`. The contract implemented here (a data registry + `getThemeById` + deterministic `selectThemeId(sessionId)`) was therefore derived from the existing `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the missing card is recorded as an open documentation issue. The palette remains a parameter to `getBuildingColor` (M2.T13), so a biome's palette is applied by the renderer (M2.T14) without changing the hash logic. The hash extraction is the only change to a module owned by another task and is behaviour-preserving.
 - Acceptance criteria: verified — (1) themes/biomes are defined as data and adding one requires no logic change; (2) the same session id deterministically maps to the same biome, and different sessions vary; (3) the default store wires the registry in (the M2.T11 `selectThemeId` port), with the unit and integration tests above.
+
+### M2.T14 — `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow)
+- `components/city/CityCell.tsx` (new) — the pure, single-character renderer. It receives `char` and an optional `color` **as props** and never reads the store (acceptance criterion 1): an occupied cell renders one `<span class="city-cell">` with `style={{ color }}` when a color is given; a `char: null`/`''` (destroyed) cell renders `<span class="city-cell city-cell--empty"> </span>` — a blank placeholder that keeps the monospace grid aligned while exposing neither the building's character nor its color (acceptance criterion 3). Because the CRT glow is `text-shadow: … currentColor`, an inline color also tints the halo.
+- `components/city/CityLayer.tsx` (new) — renders one parallax layer (`CityGrid`) as a monospace `<pre class="city-layer city-layer--{name}">`, mapping every row to a `<span class="city-layer__row">` and every cell to a `<CityCell>`. The grid and the layer's fallback color arrive as props, so the layer stays presentational. A cell's own `color` wins over the fallback; empty cells get no color.
+- `components/city/CityCanvas.tsx` (new) — the city view and the **only** component coupled to the store (acceptance criterion 1): it reads the city layers via `selectCityLayers` and the active biome via `selectCityThemeId`, resolves the `Theme` with `getThemeById` (M2.T13b; unknown/null ids fall back to a renderable module-constant `FALLBACK_THEME`), and composes the three `<CityLayer>`s in painter's order (background → middleground → foreground). It applies the theme's `backgroundColor` and palette: each layer receives a deterministic color from `getBuildingColor(layerName, theme.palette)` (M2.T13) — the layer name stands in as the hash key until M2.T16 attaches a domain (and therefore a per-building color) to each cell. The root is sized `width ch × height em` and the component carries its own stylesheet (`CITY_STYLES`) with the required `.city-cell { text-shadow: 0 0 4px currentColor; }` (acceptance criterion 2), absolute-stacked layers faded by depth for the parallax/CRT effect.
+- Files created/modified: `components/city/CityCell.tsx`, `components/city/CityLayer.tsx`, `components/city/CityCanvas.tsx` (all new), `tests/unit/components/city/CityCanvas.test.tsx` (new).
+- Dependencies added: none (reuses `getBuildingColor`/theme registry and the existing store selectors; React was already present).
+- Tests: `tests/unit/components/city/CityCanvas.test.tsx` (10 tests, component with Testing Library + `happy-dom`) — `CityCell` renders its character and color from props, and a destroyed cell carries neither character nor inline color; an empty grid renders exactly the three layers with every cell marked `city-cell--empty`; each layer renders its own characters; occupied cells receive the active theme's palette color (`getBuildingColor`) while an explicit cell color overrides it; **after one `applyMalus` tick the destroyed cell no longer shows the building's character or color** (acceptance criterion 3, first-class case); a grid with all cells destroyed renders no visible character; the stylesheet contains `text-shadow: 0 0 4px currentColor` (acceptance criterion 2); the root uses the active theme's `data-theme` id and `backgroundColor`.
+- Relevant notes/decisions: the container/presentational split is the acceptance criterion made concrete — `CityCanvas` is the only store reader, `CityLayer`/`CityCell` are prop-only. Per-cell **domain** colors are not derivable yet (nothing populates `city.buildings`, M2.T16) and the growth/malus engines write `{ char }` without a color, so the render path applies one deterministic palette color per layer via the M2.T13 hash and lets a future per-cell `color` override it; this is the "renderer applies the biome palette" integration anticipated by the M2.T13b note. `happy-dom` returns inline colors as the authored hex (not `rgb(...)`) and keeps `<style>` content in `textContent`, so the assertions read `element.style.*` and scope text checks to `.city-cell` rather than the whole container.
+- Acceptance criteria: verified — (1) the grid is passed down as a prop and `CityCell` does no store access (only `CityCanvas` reads the store); (2) the component's CSS applies `text-shadow: 0 0 4px currentColor`; (3) the rendering test proves that a destroyed cell shows neither the building's character nor its color.
 
 ---
 
