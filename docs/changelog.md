@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T12b** (Milestone 2 in progress).
+> Updated to: **M2.T13** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T12b done; M2.T13 … M2.T21 remaining.
-- Tests: `bun run test` → **310 passing tests** across 35 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T13 done; M2.T13b … M2.T21 remaining.
+- Tests: `bun run test` → **318 passing tests** across 36 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -53,6 +53,7 @@ description: Rules for updating the changelog
 | M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | — (to be committed) |
 | M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | — (to be committed) |
 | M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | — (to be committed) |
+| M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | — (to be committed) |
 
 ---
 
@@ -411,6 +412,17 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/city/decoration-engine.test.ts` (11 tests, unit) — disabled (direct + factory) returns the same reference; no eligible cell → same reference; determinism (same state + same seed → deep-equal); every non-window occupied glyph (`|`, `_`, `#`, `=`) is left untouched; at `windowLitChance: 1` the `[`/`]` panes become a brightness glyph and the set of occupied positions is unchanged; no building cell is ever emptied; at `decorationChance: 1` decorations land only on originally-empty background/foreground cells and never on the middleground; every glyph is a single non-whitespace character; purity (input JSON unchanged); decoupling from growth (`growCity` → `decorate` keeps every grown building cell occupied); the configured `createDecorator` adapter matches the direct call.
 - Relevant notes/decisions: the card's `decorate(cityState, rng)` is implemented over `CityLayers` (the grid state the growth engine and malus operate on), not the full `CityState` object, to stay consistent with `growCity`/`applyMalus` and browser-free. Because it draws into empty cells, decoration is explicitly a **rendering-only, subsequent step** — applied after growth (the UI step is M2.T14) and never persisted back as building structure, otherwise its overlay glyphs would be counted as buildings by `growth-engine` (M2.T12). The middleground intentionally has no decoration data. The module is standalone/not wired yet, like the M2.T12 engine.
 - Acceptance criteria: verified — (1) load-bearing structure is never altered: occupied cells are never removed and non-window glyphs are returned unchanged (unit tests); (2) same state + same seed → same decorated result (determinism test); (3) decoration is a separate, optional step, disableable via `enabled: false`/`createDecorator({ enabled: false })` without affecting structural growth (decoupling test).
+
+### M2.T13 — `lib/city/palette.ts` — deterministic domain hash → color
+- `lib/city/palette.ts` (new) — pure `getBuildingColor(domain, palette?): string`, the deterministic domain → color mapping (roadmap M2.T13).
+  - **Determinism**: the domain is hashed with FNV-1a (32-bit, dependency-free, well mixed) and the color is `palette[hash % palette.length]`, so the same normalized domain always yields the same color — "the same building always has the same color".
+  - **Normalization (DRY, M1.T2 dependency)**: the hash key is the canonical registrable form (`getRegistrableDomain`, subdomains removed) lowercased, so `m.facebook.com`, `www.facebook.com` and `https://www.facebook.com/x` share one color. When normalization fails (empty string, malformed URL, bare public suffix such as `co.uk`) the function falls back to the trimmed raw string instead of throwing, keeping it total at the untrusted boundary (§1.4). A bug risk noted at implementation time: `tldts` does **not** punycode-encode IDNs, so `ESPAÑA.com` and `xn--espaa-rta.com` are distinct keys; lowercasing makes the Unicode spelling case-stable.
+  - **Generic palette (Open/Closed, §1.1)**: the palette is a **parameter** (default `DEFAULT_BUILDING_PALETTE` = blue `#4dabf7`, orange `#ff9f43`, green `#51cf66`, yellow `#fcc419`), not hardwired, so the theme registry (M2.T13b) can pass the active `Theme.palette` without modifying the hash logic. An empty palette defensively returns the fallback blue.
+- Files created/modified: `lib/city/palette.ts` (new), `tests/unit/lib/city/palette.test.ts` (new).
+- Dependencies added: none (`tldts` already a runtime dependency from M1.T2).
+- Tests: `tests/unit/lib/city/palette.test.ts` (8 tests, unit) — result always belongs to the default palette; repeated calls for the same domain are identical (50 repetitions); URL/subdomain/protocol variants normalize to the same color; Unicode (IDN) domains are case-insensitive and deterministic; empty/whitespace/malformed/bare-suffix input never throws and is deterministic; a custom palette is honored; a degenerate empty palette returns a defined color; a 400-domain sample uses all four colors with no color above 50% (gross-bias guard, the "non-rigorous statistical test" the card asks for).
+- Relevant notes/decisions: the function is pure and browser-free (principle D) and has no internal `Date.now()`/`Math.random()`. It is standalone for now — nothing consumes it yet; the theme registry (M2.T13b) supplies the palette and `CityCanvas`/`CityCell` (M2.T14) apply the color to the cell — consistent with the "each layer complete at its own level" sequencing recorded in the open issues.
+- Acceptance criteria: verified — (1) same normalized domain → same color, proven with repeated calls; (2) reasonably uniform distribution over a 400-domain sample with a no-majority guard; (3) the color is drawn from a defined blue/orange/green/yellow palette.
 
 ---
 
