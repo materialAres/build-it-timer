@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T10** (Milestone 2 in progress).
+> Updated to: **M2.T11** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T10 done; M2.T11 … M2.T21 remaining.
-- Tests: `bun run test` → **252 passing tests** across 30 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11 done; M2.T11b … M2.T21 remaining.
+- Tests: `bun run test` → **266 passing tests** across 31 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -48,6 +48,7 @@ description: Rules for updating the changelog
 | M2.T8 | Overlay alert content script (Shadow DOM) | completed | — (to be committed) |
 | M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | — (to be committed) |
 | M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | — (to be committed) |
+| M2.T11 | `citySlice` — city grid/layer state, new every session | completed | — (to be committed) |
 
 ---
 
@@ -339,6 +340,22 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: this task owns the **pure deletion + the browser-API detection adapter only**. Wiring the `SITE_BLOCKED_ATTEMPT` ("proceed") message to `applyMalus`, and identifying the affected domain's building, is M2.T16; the tracker is likewise not yet attached to the background (same wiring). `MALUS_TICK_MS` is the single named 2s cadence constant (shared with M2.T15).
 - Acceptance criteria: verified — (1) `applyMalus` removes exactly one character per 2s tick (unit tests); (2) an already-empty building/city is an explicit no-op returning the same reference (no crash, no undefined intermediate state); (3) multi-tab detection lives in a dedicated browser-API adapter, with the first-choice rule documented by a why-comment and reported here; (4) `applyMalus` is pure and covered without a browser.
 
+### M2.T11 — `citySlice` — city grid/layer state, new every session
+- `store/city.slice.ts` — the stub is now the full city slice: `city: { layers, buildings, themeId, sessionId }` plus `resetCityForNewSession(sessionId, themeId?)`, `growCity(elapsedMs)` and `applyMalusToCity(ticks)`. The slice is a thin delegation layer and computes nothing itself (principle S/D):
+  - `resetCityForNewSession` builds three brand-new empty layers at the configured dimensions, drops `buildings` and assigns `themeId`/`sessionId`. When `themeId` is omitted it is picked through the injected `selectThemeId(sessionId)` (theme-registry port, M2.T13b).
+  - `growCity` delegates to an injected `CityGrowthEngine` port (`(layers, elapsedMs) => layers`, principle D) and writes only when the engine returns a different reference. The default `identityGrowthEngine` is the explicit placeholder for the concrete engine (`lib/city/growth-engine.ts`, **M2.T12**); until M2.T12 lands, growth is a safe no-op.
+  - `applyMalusToCity` delegates to `applyMalus` (M2.T10), replacing `city.layers` only when the pure function returns a new reference (already-empty city → no write).
+  - `CityDependencies` (`growthEngine`, `selectThemeId`, `width`, `height`) makes the layer dimensions configurable and both collaborators injectable; `CityState`, `CityGrowthEngine`, `identityGrowthEngine` and `DEFAULT_THEME_ID` are exported. New selectors: `selectCity`, `selectCityBuildings`, `selectCitySessionId` (and the existing `selectCityLayers`/`selectCityThemeId`).
+- `components/city/city.types.ts` — new `BuildingMeta` type (`domain`, `layer`, `topRow`, `leftCol`, `widthChars`): the locator of a domain's building, so `city.buildings` gives each building a domain identity for M2.T16 (roadmap M2.T11 objective).
+- `store/timer.slice.ts` — `startTimer()` now invokes `resetCityForNewSession(sessionId)` on the **idle → running** transition only (never on a resume), so every focus session starts from a brand-new city (roadmap M2.T11 acceptance criterion). This is the deferred call noted in the M2.T1 entry.
+- `store/index.ts` — `StoreDependencies` is now `TimerDependencies & CityDependencies`; `defaultDependencies()` supplies `identityGrowthEngine`, `selectThemeId: () => DEFAULT_THEME_ID` and the default layer dimensions; `createAppState` threads the dependencies into `createCitySlice`. The city constants/selectors/types are re-exported from the store barrel.
+- `store/storage-adapter.ts` — **regression fix surfaced by this task**: the self-write tracker held a single value per key. `startTimer` now writes twice in a row (city reset, then timer), and because `storage.onChanged` is delivered asynchronously only the *last* write was recognized as a self-write; the earlier one looked external and triggered a rehydrate that could resurrect a stale state (DNR rules/timer oscillated in `tests/integration/background/dnr-rules.test.ts`). The tracker now keeps a per-key **queue** of in-flight writes and consumes each once, so consecutive self-writes are all recognized. Single-write behaviour is unchanged.
+- Files created/modified: `store/city.slice.ts`, `store/timer.slice.ts`, `store/index.ts`, `store/storage-adapter.ts`, `components/city/city.types.ts`, `tests/unit/store/city-slice.test.ts` (new), `tests/integration/store/storage-adapter.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/unit/store/city-slice.test.ts` (12 tests, unit with `FakeAlarmProvider`) — initial state is three empty layers at the default dimensions, no buildings, no theme/session; configurable dimensions (`width`/`height`); `resetCityForNewSession` clears layers and buildings and assigns theme+session; the default theme comes from the injected `selectThemeId`; `growCity` delegates to the injected engine (spy: called with the current layers and the elapsed ms) and applies the returned layers; `growCity` skips the write when the engine returns the same reference; `applyMalusToCity` removes exactly one character per tick via `applyMalus`; malus on an empty city is a no-op returning the same reference; non-finite/negative ticks never crash; `startTimer` starts a brand-new city bound to the new session; resuming a paused session keeps the already-built city; granular city selectors. `tests/integration/store/storage-adapter.test.ts` (+2 tests) — consecutive `setItem` writes are both recognized as self-writes and each is consumed once; a value this context never wrote is not a self-write.
+- Relevant notes/decisions: the slice owns **state + delegation only**. The concrete growth engine (`lib/city/growth-engine.ts`, M2.T12), the theme registry (M2.T13b), the building composer (M2.T11c) and the malus wiring (M2.T16) are explicitly deferred to their tasks; the growth delegation is satisfied structurally through the `CityGrowthEngine` port but the default is an identity no-op until M2.T12, and no task currently populates `city.buildings` (reset sets it to `{}`). The roadmap's §3.3 testing table still lists a stale M2.T11 edge case (`destroyBuilding` on out-of-grid coordinates); the task card is authoritative and defines no `destroyBuilding` action — destruction is `applyMalusToCity`/`applyMalus` (M2.T10) — so the equivalent robustness (empty/invalid/oversized ticks) is covered instead. The self-write queue fix is a correctness fix in a module owned by M1.T10/M1.T3, required to keep the M2.T7 regression suite green after adding the second write; it is additive and changes no single-write behaviour.
+- Acceptance criteria: verified — (1) initial state is the three empty layers of configurable dimensions; (2) `resetCityForNewSession` fully resets the layers and assigns a new theme/session and is invoked by `startTimer()` on a new session; (3) `growCity`/`applyMalusToCity` delegate without computing internally — `applyMalusToCity` to `apply-malus.ts` (M2.T10, concrete) and `growCity` to the injected growth-engine port whose concrete implementation is M2.T12 (placeholder identity until then).
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -364,6 +381,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 7. **Overlay reachability is bounded by the content-script injection rules (M2.T8)** — with `main_frame` no longer blocked (see the M2.T8 entry), the top-level navigation gate is the overlay itself. Pages where content scripts cannot be injected (Chrome Web Store, the PDF viewer, other extensions' pages, and — in Firefox MV2 — some restricted URLs) therefore cannot be gated at all: the user reaches them with no overlay and no malus. This is inherent to the content-script approach (it is why M3.T6's manual cross-browser pass matters) and is accepted rather than worked around; a hard-block alternative would need an extension interstitial page with a one-time allow, which is a different design. Also inherent: at `document_idle` the page paints briefly before the overlay covers it.
 8. **`SITE_BLOCKED_ATTEMPT` no longer carries `tabId` (M2.T8)** — its M5.T1 payload criterion landed early, so what remains of M5.T1 is the runtime validation of the discriminated union, the `sender.id`/`sender.tab` check, and deriving `tabId` from `sender.tab.id` for the variants that need it. M2.T10 must read the tab id from `sender`, not from the payload.
 9. **M2.T10 leaves the malus unwired (by design)** — `applyMalus` and `createTabDistractionTracker` are pure/standalone: nothing calls them yet, and the tracker is not attached to the background. M2.T16 owns the wiring (route the `SITE_BLOCKED_ATTEMPT` "proceed" choice to `applyMalus`, identify the affected domain's building, and emit `MALUS_APPLIED`). The removal rule chosen here (topmost occupied cell first) may need revisiting at M2.T16 once `citySlice.buildings` (M2.T11) gives every building a domain identity, at which point the malus can target one building instead of the globally topmost cell.
+10. **M2.T11 leaves growth/theme/buildings deferred (by design)** — `citySlice.growCity` delegates to an injected `CityGrowthEngine` port whose default is `identityGrowthEngine`, a no-op until `lib/city/growth-engine.ts` (M2.T12) is plugged in; the theme id assigned on reset comes from the injected `selectThemeId` default (`DEFAULT_THEME_ID`) until the theme registry (M2.T13b) exists; and no task yet writes `city.buildings` (reset keeps it `{}`, for M2.T12/M2.T16 to populate). Consequently `growCity` is structurally complete but produces no visible growth today — expected, and the reason the task is complete at the slice level.
 
 ---
 

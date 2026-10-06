@@ -44,3 +44,18 @@ export interface ComposedBuilding {
 export interface SeededRandom {
   readonly next: () => number; // return a float [0,1), deterministic given the seed
 }
+
+/**
+ * Metadata of a building already present in the city, keyed by domain
+ * (`city.buildings: Record<domain, BuildingMeta>`, roadmap M2.T11). It records
+ * *where* a domain's building sits so a later task can target it (the malus,
+ * M2.T16, needs a domain → building identity). The ASCII characters themselves
+ * live in the layers; this is only the locator.
+ */
+export interface BuildingMeta {
+  readonly domain: string;
+  readonly layer: CityLayerName;
+  readonly topRow: number;
+  readonly leftCol: number;
+  readonly widthChars: number;
+}

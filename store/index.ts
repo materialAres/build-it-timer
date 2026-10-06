@@ -4,7 +4,15 @@ import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
-import { createCitySlice, type CitySlice } from './city.slice';
+import {
+  createCitySlice,
+  DEFAULT_CITY_HEIGHT,
+  DEFAULT_CITY_WIDTH,
+  DEFAULT_THEME_ID,
+  identityGrowthEngine,
+  type CityDependencies,
+  type CitySlice,
+} from './city.slice';
 import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
@@ -46,22 +54,27 @@ const initialUiState: UiSlice['ui'] = {
 };
 
 // Collaborators the slices need to act (principle D). Injected through
-// `createAppStore` so a test can substitute a fake alarm provider and a
-// deterministic clock/entropy source without touching the browser APIs. For now
-// only the timer slice (M2.T1) consumes them; later slices extend this type.
-export type StoreDependencies = TimerDependencies;
+// `createAppStore` so a test can substitute a fake alarm provider, growth
+// engine, theme picker and a deterministic clock/entropy source without
+// touching the browser APIs. The timer slice (M2.T1) and the city slice
+// (M2.T11) share this object; later slices extend it.
+export type StoreDependencies = TimerDependencies & CityDependencies;
 
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
+  growthEngine: identityGrowthEngine,
+  selectThemeId: () => DEFAULT_THEME_ID,
+  width: DEFAULT_CITY_WIDTH,
+  height: DEFAULT_CITY_HEIGHT,
 });
 
 const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
   (...args) => ({
     ...createTimerSlice(dependencies)(...args),
-    ...createCitySlice(...args),
+    ...createCitySlice(dependencies)(...args),
     ...createBlocklistSlice(...args),
     ...createScoreSlice(...args),
     ui: initialUiState,
@@ -148,7 +161,23 @@ export {
   selectSessionId,
 } from './timer.slice';
 export type { TimerDependencies } from './timer.slice';
-export { createCitySlice, selectCityLayers, selectCityThemeId } from './city.slice';
+export {
+  createCitySlice,
+  DEFAULT_CITY_HEIGHT,
+  DEFAULT_CITY_WIDTH,
+  DEFAULT_THEME_ID,
+  identityGrowthEngine,
+  selectCity,
+  selectCityBuildings,
+  selectCityLayers,
+  selectCitySessionId,
+  selectCityThemeId,
+} from './city.slice';
+export type {
+  CityDependencies,
+  CityGrowthEngine,
+  CityState,
+} from './city.slice';
 export {
   createBlocklistSlice,
   addSiteToList,

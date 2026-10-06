@@ -26,11 +26,16 @@ export interface SelfWriteTracker {
 export const SELF_WRITE: unique symbol = Symbol('self-write-tracker');
 
 export function createBrowserStorage(): BrowserStateStorage {
-  // Last value written per key by this context; consumed on the matching
-  // `onChanged`. A leftover entry is harmless: it only suppresses a rehydrate
-  // when an external write carries the identical value, i.e. when the store
-  // already holds that state.
-  const selfWrites = new Map<string, string | null>();
+  // Values written per key by this context, in write order; consumed on the
+  // matching `onChanged`. A queue (not a single slot) is needed because one
+  // action may write twice in a row (e.g. `startTimer` resets the city and then
+  // sets the timer, M2.T11): with `onChanged` delivered asynchronously, only the
+  // *last* value would match a single slot, so the earlier write would look like
+  // an external change and trigger a rehydrate that can resurrect a stale state.
+  // A leftover entry is harmless: it only suppresses a rehydrate when an
+  // external write carries an identical value, i.e. when the store already
+  // holds that state.
+  const selfWrites = new Map<string, Array<string | null>>();
 
   return {
     async getItem(name: string): Promise<string | null> {
@@ -41,20 +46,22 @@ export function createBrowserStorage(): BrowserStateStorage {
       return typeof value === 'string' ? value : null;
     },
     async setItem(name: string, value: string): Promise<void> {
-      selfWrites.set(name, value);
+      selfWrites.set(name, [...(selfWrites.get(name) ?? []), value]);
       await browser.storage.local.set({ [name]: value });
     },
     async removeItem(name: string): Promise<void> {
-      selfWrites.set(name, null);
+      selfWrites.set(name, [...(selfWrites.get(name) ?? []), null]);
       await browser.storage.local.remove(name);
     },
     [SELF_WRITE]: {
       isSelfWrite(name: string, newValue: unknown): boolean {
-        if (!selfWrites.has(name)) return false;
-        const expected = selfWrites.get(name);
+        const pending = selfWrites.get(name);
+        if (pending === undefined) return false;
         const actual = typeof newValue === 'string' ? newValue : null;
-        if (expected !== actual) return false;
-        selfWrites.delete(name);
+        const index = pending.indexOf(actual);
+        if (index === -1) return false;
+        pending.splice(index, 1);
+        if (pending.length === 0) selfWrites.delete(name);
         return true;
       },
     },
