@@ -15,6 +15,7 @@ import {
   type StoreDependencies,
 } from '@/store';
 import type { CityLayers } from '@/components/city/city.types';
+import { seedFromSession } from '@/lib/city/growth-engine';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 
 const START_MS = 1_700_000_000_000;
@@ -128,7 +129,7 @@ describe('citySlice (M2.T11)', () => {
 
     store.getState().growCity(2_000);
 
-    expect(growthEngine).toHaveBeenCalledWith(before, 2_000);
+    expect(growthEngine).toHaveBeenCalledWith(before, 2_000, seedFromSession(null));
     expect(store.getState().city.layers).not.toBe(before);
     expect(store.getState().city.layers.background.cells[0]?.[0]?.char).toBe('#');
   });
@@ -140,7 +141,7 @@ describe('citySlice (M2.T11)', () => {
 
     store.getState().growCity(0);
 
-    expect(growthEngine).toHaveBeenCalledWith(before.layers, 0);
+    expect(growthEngine).toHaveBeenCalledWith(before.layers, 0, seedFromSession(null));
     expect(setState).not.toHaveBeenCalled();
     expect(store.getState().city).toBe(before);
   });

@@ -2,6 +2,7 @@ import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
 import { selectThemeId } from '@/lib/city/theme-registry';
+import { growCity } from '@/lib/city/growth-engine';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
@@ -9,7 +10,6 @@ import {
   createCitySlice,
   DEFAULT_CITY_HEIGHT,
   DEFAULT_CITY_WIDTH,
-  identityGrowthEngine,
   type CityDependencies,
   type CitySlice,
 } from './city.slice';
@@ -64,7 +64,10 @@ const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
-  growthEngine: identityGrowthEngine,
+  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCity`
+  // receives the seed derived from the session id by the city slice, so the
+  // running app actually builds a city instead of the placeholder identity.
+  growthEngine: growCity,
   // Each session gets a deterministic biome from the theme registry (M2.T13b),
   // replacing the placeholder fixed default.
   selectThemeId,

@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { applyMalus } from '@/lib/score/apply-malus';
+import { seedFromSession } from '@/lib/city/growth-engine';
 import type {
   BuildingMeta,
   CityGrid,
@@ -20,13 +21,17 @@ export { DEFAULT_THEME_ID } from '@/lib/city/theme-registry';
 
 /**
  * The growth engine port (principle D): the pure function that computes the new
- * layer state from the current one and an elapsed focus time. Injected so the
- * slice stays a thin delegation layer and the concrete engine
+ * layer state from the current one, an elapsed focus time and the session seed.
+ * Injected so the slice stays a thin delegation layer and the concrete engine
  * (`lib/city/growth-engine.ts`, M2.T12) can be plugged in from the outside.
- * The default is the identity, i.e. "no growth engine wired yet": a no-op that
- * keeps the slice fully usable and testable.
+ * `seedFromSession` (M2.T15) is what makes the same session always rebuild the
+ * same city; the default is the identity, i.e. "no growth engine wired yet".
  */
-export type CityGrowthEngine = (layers: CityLayers, elapsedMs: number) => CityLayers;
+export type CityGrowthEngine = (
+  layers: CityLayers,
+  elapsedMs: number,
+  seed: number,
+) => CityLayers;
 
 export const identityGrowthEngine: CityGrowthEngine = (layers) => layers;
 
@@ -110,7 +115,11 @@ export function createCitySlice(
 
     growCity(elapsedMs: number): void {
       const { city } = get();
-      const layers = growthEngine(city.layers, elapsedMs);
+      const layers = growthEngine(
+        city.layers,
+        elapsedMs,
+        seedFromSession(city.sessionId),
+      );
       // Same reference means the engine computed no change: skip the write so a
       // no-op tick does not persist/re-render (same identity pattern as M1.T10).
       if (layers !== city.layers) set({ city: { ...city, layers } });

@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T14** (Milestone 2 in progress).
+> Updated to: **M2.T15** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T14 done; M2.T15 … M2.T21 remaining.
-- Tests: `bun run test` → **339 passing tests** across 39 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T15 done; M2.T16 … M2.T21 remaining.
+- Tests: `bun run test` → **344 passing tests** across 40 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -56,6 +56,7 @@ description: Rules for updating the changelog
 | M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | — (to be committed) |
 | M2.T13b | `lib/city/theme-registry.ts` — color themes/biomes per session | completed | — (to be committed) |
 | M2.T14 | `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow) | completed | — (to be committed) |
+| M2.T15 | Linking growth-engine ↔ character-insertion tick (2s) | completed | — (to be committed) |
 
 ---
 
@@ -451,6 +452,21 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the container/presentational split is the acceptance criterion made concrete — `CityCanvas` is the only store reader, `CityLayer`/`CityCell` are prop-only. Per-cell **domain** colors are not derivable yet (nothing populates `city.buildings`, M2.T16) and the growth/malus engines write `{ char }` without a color, so the render path applies one deterministic palette color per layer via the M2.T13 hash and lets a future per-cell `color` override it; this is the "renderer applies the biome palette" integration anticipated by the M2.T13b note. `happy-dom` returns inline colors as the authored hex (not `rgb(...)`) and keeps `<style>` content in `textContent`, so the assertions read `element.style.*` and scope text checks to `.city-cell` rather than the whole container.
 - Acceptance criteria: verified — (1) the grid is passed down as a prop and `CityCell` does no store access (only `CityCanvas` reads the store); (2) the component's CSS applies `text-shadow: 0 0 4px currentColor`; (3) the rendering test proves that a destroyed cell shows neither the building's character nor its color.
 
+### M2.T15 — Linking growth-engine ↔ character-insertion tick (2s)
+- `entrypoints/background.ts` — growth is now wired to the **`TIMER_TICK`** typed message (M1.T1): the background replaces the `TIMER_TICK` placeholder with `createGrowthTick(store, now)`, a small tracker that owns the running/idle baseline and, on each tick, calls `citySlice.growCity(elapsed)` (M2.T11) with the **undistracted focus time elapsed since the previous tick**.
+  - **Tick source (design decision)**: the tick is the existing `TIMER_TICK` message — the fine-grained 2s tick of the §1 "two distinct clocks" note, which lives on the active context (the popup) and is deliberately separate from the 60s `browser.alarms` countdown clock (M1.T5). This is the only channel through which a tick can arrive while the timer is not running, which is exactly the §3.3 edge case (a tick while `paused` must not grow). The popup-side emitter is future UI wiring (M3.T4); the background receiver (this task) is complete and integration-tested.
+  - **Baseline**: a subscription detects the transitions into/out of `running` and (re)sets `lastGrowthAt`: entering `running` sets it to `now()` (a fresh start and a resume both measure from that moment), leaving it clears it, so the paused gap is never counted as focus time. On the first tick of a running stretch the baseline is set to "now" (never to `sessionStartedAt`), so a service-worker restart cannot replay the whole session into the city a second time.
+  - **Guard**: a tick that arrives while `status !== 'running'` returns without touching the city or the baseline (safe no-op). Non-positive elapsed deltas are ignored, so a coalesced/duplicate tick cannot grow the city.
+  - The tracker is disposed through the existing `disposers` list, so `handle.dispose()` detaches it (and the existing listener-count test still sees exactly one listener per `RuntimeMessage` type).
+- `lib/city/growth-engine.ts` — new pure `seedFromSession(sessionId: string | null): number` (FNV-1a `hashString` over the session id, `null` → empty string), the deterministic session → city seed.
+- `store/city.slice.ts` — the `CityGrowthEngine` port now receives the seed (`(layers, elapsedMs, seed) => layers`); `growCity` derives it with `seedFromSession(city.sessionId)` and passes it to the injected engine. `identityGrowthEngine` and every existing injected engine remain compatible (a function with fewer parameters satisfies the widened type).
+- `store/index.ts` — `defaultDependencies().growthEngine` is now the **concrete, session-seeded** `growCity` instead of `identityGrowthEngine`, so the running app actually builds a city on the ticks (resolves the M2.T12 note that growth stayed a no-op until M2.T15). The popup's read-only store keeps the same default; it never calls `growCity`.
+- Files created/modified: `entrypoints/background.ts`, `lib/city/growth-engine.ts`, `store/city.slice.ts`, `store/index.ts`, `tests/integration/background/growth-tick.test.ts` (new), `tests/unit/store/city-slice.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/background/growth-tick.test.ts` (5 tests, integration with `fakeBrowser` + `FakeAlarmProvider` + injected clock) — a sequence of two 2s ticks while running grows the city by exactly the `growCity(previous, 2s, seed)` output per step (one character at a time, never a block); a tick while `paused` leaves the city reference untouched (the §3.3 edge case); a tick while `idle` does not grow; a sub-2s delta (1999 ms) is a no-op; a paused gap of several seconds is not counted after resume (only the two running stretches yield two characters). `tests/unit/store/city-slice.test.ts` (+0 tests, updated) — the two delegation assertions now include the derived seed (`seedFromSession(null)` for a session-less store).
+- Relevant notes/decisions: the delta is measured with the **injected clock** (`BackgroundDependencies.now`), not derived from the message's `remainingSeconds`, because the persisted timer value is not decremented during a session (M2.T1 leaves that to the UI estimate); the clock is the single source of truth for elapsed focus time and is injected for determinism. The seed binding touches `store/city.slice.ts`/`store/index.ts` beyond the card's file list, but it is the wiring the M2.T12 open note explicitly assigned to M2.T15 ("`store/index.ts` still defaults `growthEngine` to `identityGrowthEngine` … until M2.T15 binds the session-derived seed"), and it is additive: the port merely gained a parameter and the default swapped from the identity placeholder to the real engine.
+- Acceptance criteria: verified — (1) a tick with `status === 'running'` and no violation grows the city by the expected delta (asserted cell-by-cell against `growCity`); (2) the integration test drives a sequence of simulated `TIMER_TICK` messages and the resulting grid is deep-equal to the growth engine's expected output; a tick while `paused` is a no-op.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -476,7 +492,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 7. **Overlay reachability is bounded by the content-script injection rules (M2.T8)** — with `main_frame` no longer blocked (see the M2.T8 entry), the top-level navigation gate is the overlay itself. Pages where content scripts cannot be injected (Chrome Web Store, the PDF viewer, other extensions' pages, and — in Firefox MV2 — some restricted URLs) therefore cannot be gated at all: the user reaches them with no overlay and no malus. This is inherent to the content-script approach (it is why M3.T6's manual cross-browser pass matters) and is accepted rather than worked around; a hard-block alternative would need an extension interstitial page with a one-time allow, which is a different design. Also inherent: at `document_idle` the page paints briefly before the overlay covers it.
 8. **`SITE_BLOCKED_ATTEMPT` no longer carries `tabId` (M2.T8)** — its M5.T1 payload criterion landed early, so what remains of M5.T1 is the runtime validation of the discriminated union, the `sender.id`/`sender.tab` check, and deriving `tabId` from `sender.tab.id` for the variants that need it. M2.T10 must read the tab id from `sender`, not from the payload.
 9. **M2.T10 leaves the malus unwired (by design)** — `applyMalus` and `createTabDistractionTracker` are pure/standalone: nothing calls them yet, and the tracker is not attached to the background. M2.T16 owns the wiring (route the `SITE_BLOCKED_ATTEMPT` "proceed" choice to `applyMalus`, identify the affected domain's building, and emit `MALUS_APPLIED`). The removal rule chosen here (topmost occupied cell first) may need revisiting at M2.T16 once `citySlice.buildings` (M2.T11) gives every building a domain identity, at which point the malus can target one building instead of the globally topmost cell.
-10. **Growth engine exists but is not yet wired (M2.T12)** — `lib/city/growth-engine.ts` now provides the concrete, seeded `growCity`/`createGrowthEngine` (M2.T12), but `store/index.ts` still defaults `growthEngine` to `identityGrowthEngine`, so `citySlice.growCity` remains a no-op in the running app until M2.T15 binds the session-derived seed and invokes it on every tick. The theme registry (M2.T13b) now supplies the default `selectThemeId`, so a new session already gets a real biome. No task yet writes `city.buildings` (reset keeps it `{}`; M2.T16 populates it). Expected: each layer is complete at its own level.
+10. **Growth ticks have no popup-side emitter yet (M2.T15)** — the background now consumes `TIMER_TICK` and grows the city through the session-seeded engine (resolving the M2.T12 "growth engine is not wired" note), but nothing *sends* `TIMER_TICK` yet: `TimerDisplay`/`TimerControls` (M2.T3) do not run the fine-grained 2s timer and `App.tsx` (M3.T4) is not composed. Until the emitter lands the city only grows in tests. This is the send half of the same popup → background timer path as issue #6 (timer commands not routed); both should be closed together, most naturally in M3.T4. No task yet writes `city.buildings` (reset keeps it `{}`; M2.T16 populates it).
 11. **Missing M2.T13b detail card in `docs/roadmap-en.md`** — the task appears only in the summary table (line 52); §1.5 jumps from the M2.T13 card to the M2.T14 card, so there are no explicit acceptance criteria or edge cases for M2.T13b. The implementation was derived from the `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the card (and the §3.3 test/task mapping row) should be added so future contributors have the authoritative spec.
 
 ---

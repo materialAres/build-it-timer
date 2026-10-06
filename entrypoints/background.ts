@@ -137,6 +137,59 @@ function handleMutation(store: AppStore) {
 }
 
 /**
+ * Growth wiring (M2.T15): the fine-grained character-insertion tick arrives as
+ * the typed `TIMER_TICK` message from the active context (popup) — the 2s tick
+ * of the §1 "two distinct clocks" note, deliberately separate from the 60s
+ * `browser.alarms` countdown clock (M1.T5).
+ *
+ * On each tick the *undistracted* focus time elapsed since the previous tick is
+ * measured with the injected clock and handed to `citySlice.growCity` (M2.T11),
+ * which delegates to the session-seeded engine (M2.T12). A tick that arrives
+ * while the timer is not `running` neither grows the city nor moves the
+ * baseline, so paused/idle time is never counted as focus time. The baseline is
+ * set to "now" on the first tick of a running stretch (never to
+ * `sessionStartedAt`), so a service-worker restart cannot replay the whole
+ * session into the city a second time.
+ */
+export interface GrowthTickHandle {
+  /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
+  handleTick(): void;
+  /** Detach the status subscription owned by the tracker. */
+  dispose(): void;
+}
+
+function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
+  let lastGrowthAt: number | null = null;
+  let status = store.getState().timer.status;
+
+  // Detect the transitions into/out of `running` even when no tick arrives:
+  // resuming must start measuring from the resume moment, not from the last
+  // running tick before the pause (otherwise the paused gap would count as focus).
+  const unsubscribe = store.subscribe(() => {
+    const next = store.getState().timer.status;
+    if (next === status) return;
+    status = next;
+    lastGrowthAt = next === 'running' ? now() : null;
+  });
+
+  const handleTick = (): void => {
+    const { timer } = store.getState();
+    if (timer.status !== 'running') {
+      lastGrowthAt = null;
+      return;
+    }
+    const current = now();
+    const baseline = lastGrowthAt ?? current;
+    lastGrowthAt = current;
+    const elapsed = current - baseline;
+    if (elapsed <= 0) return;
+    store.getState().growCity(elapsed);
+  };
+
+  return { handleTick, dispose: unsubscribe };
+}
+
+/**
  * Wiring-only orchestrator (M1.T7): it creates the background's writable store
  * and alarm provider and registers the typed message listeners. It deliberately
  * contains no business logic, so the background can start cleanly and be tested
@@ -153,7 +206,10 @@ export function startBackground(
   // subscribes to: two providers would mean the alarm fires into a void.
   const alarmProvider =
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
-  const store = dependencies.store ?? createAppStore({ dependencies: { alarmProvider } });
+  const now = dependencies.now ?? Date.now;
+  const store =
+    dependencies.store ??
+    createAppStore({ dependencies: { alarmProvider, now } });
 
   // Dynamic DNR rules (M2.T7): the browser's ruleset is a projection of the
   // store, so it is recomputed from *state* rather than patched at each call
@@ -176,8 +232,21 @@ export function startBackground(
   // background's store rehydrates whenever the persisted key changes (M1.T8).
   disposers.push(attachStoreSync(store));
 
+  // Growth across the timer ticks (M2.T15): the tracker owns the running/idle
+  // baseline used to size each `growCity` delta.
+  const growthTick = createGrowthTick(store, now);
+  disposers.push(() => {
+    growthTick.dispose();
+  });
+
   for (const type of MESSAGE_TYPES) {
-    disposers.push(onMessage(type, handlePlaceholder));
+    const handler =
+      type === 'TIMER_TICK'
+        ? (): void => {
+            growthTick.handleTick();
+          }
+        : handlePlaceholder;
+    disposers.push(onMessage(type, handler));
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
@@ -205,7 +274,7 @@ export function startBackground(
     const { timer } = store.getState();
     const restored = await restoreTimer(timer, {
       alarmProvider,
-      now: dependencies.now ?? Date.now,
+      now,
     });
     if (restored.changed) store.setState({ timer: restored.timer });
     // Awaited so `ready` also means "the dynamic ruleset reflects the restored

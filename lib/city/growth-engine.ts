@@ -6,6 +6,7 @@ import type {
   ComposedBuilding,
   SeededRandom,
 } from '@/components/city/city.types';
+import { hashString } from '@/utils/hash';
 import { composeBuilding } from './building-composer';
 
 /**
@@ -216,9 +217,20 @@ export interface GrowthEngineOptions {
 }
 
 /**
- * Adapter to the `CityGrowthEngine` port consumed by `citySlice.growCity`
- * (M2.T11). Binding the seed here keeps the port's `(layers, elapsedMs)`
- * signature while the concrete engine stays a pure function of its inputs.
+ * Deterministic session → growth seed mapping (M2.T15). The same session id
+ * always yields the same seed, so a city keeps its building variants across
+ * service-worker restarts, while different sessions get different cities.
+ * `null` (no session yet) hashes the empty string instead of throwing.
+ */
+export function seedFromSession(sessionId: string | null): number {
+  return hashString(sessionId ?? '');
+}
+
+/**
+ * Convenience adapter that binds a fixed seed once (used by tests and any
+ * caller that does not follow a session). The production store does not need it
+ * any more: the slice derives the per-session seed (M2.T15) and calls `growCity`
+ * directly, so it can pass the port's `seed` argument through.
  */
 export function createGrowthEngine(
   options: GrowthEngineOptions,
