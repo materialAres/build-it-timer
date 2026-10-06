@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T12** (Milestone 2 in progress).
+> Updated to: **M2.T12b** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T12 done; M2.T12b … M2.T21 remaining.
-- Tests: `bun run test` → **299 passing tests** across 34 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T12b done; M2.T13 … M2.T21 remaining.
+- Tests: `bun run test` → **310 passing tests** across 35 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -52,6 +52,7 @@ description: Rules for updating the changelog
 | M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | — (to be committed) |
 | M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | — (to be committed) |
 | M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | — (to be committed) |
+| M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | — (to be committed) |
 
 ---
 
@@ -396,6 +397,20 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/city/growth-engine.test.ts` (12 tests, unit) — zero/sub-tick delta is a no-op returning the same reference; negative/`NaN`/`±Infinity` deltas are no-ops; **three consecutive 2s steps each add exactly one character** (the "not in blocks" criterion); a single 2s×2+1.999s delta adds exactly 2; the first three characters spread one per layer; determinism (same state/delta/seed → deep-equal, adapter agrees with `growCity`); different seeds diverge once modules are unlocked; every glyph is a single non-whitespace character; purity (input untouched); an already full grid returns the same reference; a very large delta fills exactly to capacity without exceeding the grid dimensions and further growth stays a no-op; the seeded adapter matches the port signature.
 - Relevant notes/decisions: the engine returns only `CityLayers` (the port's shape), so it does not populate `city.buildings` — the domain→building locator stays with M2.T16. The composer's first unlock is at minute 5, but growth must start at tick one, hence the documented per-layer fallback glyph; layer-specific structural character selection and lit windows/trees/cars are the decoration engine's job (M2.T12b), keeping this module focused on the character cadence and the cap (`KISS`). The concrete engine is **not yet plugged into the store** — `store/index.ts` still defaults to `identityGrowthEngine` — because binding the session seed and invoking it on every tick is M2.T15; the pure module is complete and unit-tested in isolation.
 - Acceptance criteria: verified — (1) determinism for the same state + time delta + seed, with no internal `Date.now()`/`Math.random()`; (2) at least three consecutive 2s steps each insert one character, never a block; (3) a full grid is left unchanged and the function returns the same reference, with no extension beyond the configured dimensions.
+
+### M2.T12b — `lib/city/decoration-engine.ts` — procedural details
+- `lib/city/decoration-engine.ts` (new) — pure, deterministic `decorate(layers: CityLayers, rng: SeededRandom, options?: DecorationOptions): CityLayers` plus the `createDecorator(options)` adapter (the `CityDecorator` port, symmetric to `createGrowthEngine`).
+  - **Windows**: `WINDOW_GLYPHS = ['[', ']']` are the window pane glyphs that reach the flattened single-character grid (M2.T12 extracts one char at a time from the tile-library rows, so `[ ]` arrives as individual panes). Each such occupied cell is lit with probability `DEFAULT_WINDOW_LIT_CHANCE` (0.45) into one of `LIT_WINDOW_GLYPHS = ['*', '#', '░']` (the card's `[*]`/`[#]`/`[░]` projected onto one cell).
+  - **Decorations**: `DECORATION_GLYPHS` is per-layer data (Open/Closed) — background `['~', '.']` (clouds/stars), foreground `['T', '!', 'o']` (trees/streetlights/cars), middleground `[]` (the main skyline stays readable). Overlay glyphs are seeded onto *empty* cells only, at `DEFAULT_DECORATION_CHANCE` (0.05).
+  - **Structure preserved**: no occupied cell is ever removed, and only window glyphs may change — every other occupied glyph is returned byte-identical. Decorations never overwrite a building cell.
+  - **Determinism & purity**: randomness comes only from the injected `rng`, scanned in a fixed order (background → middleground → foreground, row-major), so same state + same seed → deep-equal result; the input layers are never mutated; no `Date.now()`/`Math.random()` (§1.4).
+  - **No-op identity**: when disabled (`enabled: false`) or when no cell is eligible/changed, the *same* `CityLayers` reference is returned, so callers can skip a write/re-render (same pattern as M2.T10/M2.T12).
+  - **Defensive input**: a non-finite `windowLitChance`/`decorationChance` falls back to its default and is clamped to `[0, 1]`; a non-finite `rng.next()` is treated as "do not decorate" instead of producing a random glyph.
+- Files created/modified: `lib/city/decoration-engine.ts` (new), `tests/unit/lib/city/decoration-engine.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/city/decoration-engine.test.ts` (11 tests, unit) — disabled (direct + factory) returns the same reference; no eligible cell → same reference; determinism (same state + same seed → deep-equal); every non-window occupied glyph (`|`, `_`, `#`, `=`) is left untouched; at `windowLitChance: 1` the `[`/`]` panes become a brightness glyph and the set of occupied positions is unchanged; no building cell is ever emptied; at `decorationChance: 1` decorations land only on originally-empty background/foreground cells and never on the middleground; every glyph is a single non-whitespace character; purity (input JSON unchanged); decoupling from growth (`growCity` → `decorate` keeps every grown building cell occupied); the configured `createDecorator` adapter matches the direct call.
+- Relevant notes/decisions: the card's `decorate(cityState, rng)` is implemented over `CityLayers` (the grid state the growth engine and malus operate on), not the full `CityState` object, to stay consistent with `growCity`/`applyMalus` and browser-free. Because it draws into empty cells, decoration is explicitly a **rendering-only, subsequent step** — applied after growth (the UI step is M2.T14) and never persisted back as building structure, otherwise its overlay glyphs would be counted as buildings by `growth-engine` (M2.T12). The middleground intentionally has no decoration data. The module is standalone/not wired yet, like the M2.T12 engine.
+- Acceptance criteria: verified — (1) load-bearing structure is never altered: occupied cells are never removed and non-window glyphs are returned unchanged (unit tests); (2) same state + same seed → same decorated result (determinism test); (3) decoration is a separate, optional step, disableable via `enabled: false`/`createDecorator({ enabled: false })` without affecting structural growth (decoupling test).
 
 ---
 
