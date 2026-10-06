@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T19** (Milestone 2 in progress).
+> Updated to: **M2.T20** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T19 done; M2.T20 … M2.T21 remaining.
-- Tests: `bun run test` → **390 passing tests** across 46 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T20 done; M2.T21 remaining.
+- Tests: `bun run test` → **401 passing tests** across 46 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -61,6 +61,7 @@ description: Rules for updating the changelog
 | M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | — (to be committed) |
 | M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | — (to be committed) |
 | M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | — (to be committed) |
+| M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | — (to be committed) |
 
 ---
 
@@ -519,6 +520,18 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: **the roadmap has no M2.T19 detail card** — only the summary-table row (line 58), the §1.2 folder comment (`session-history.slice.ts # history of the last 5 sessions`) and the §1.3 persisted-state list; the contract here was derived from those plus the M1.T1 note that `SessionSummary` "is the type the last-5-sessions history (M2.T19) is based on". The missing card is recorded as a new open issue. The slice is **not yet populated at runtime**: the `SESSION_ENDED` variant exists and already carries a `SessionSummary`, but nothing emits it (the timer never detects reaching zero and the background's `SESSION_ENDED` listener is still the shared placeholder); wiring that event to `recordSession` is left to the task that owns session completion (same "each layer complete at its own level" approach as M2.T12/M2.T18) and tracked as an open issue. `M3.T7` (`SessionHistory` UI) consumes `selectSessionHistory`.
 - Acceptance criteria: derived (no card) — verified: the slice keeps the last 5 completed sessions, newest first, deduped by session id, and persists them across a restart; `bun run compile`, `bun run lint`, `bun run test` (390) and both builds are green.
 
+### M2.T20 — Allowlist/blocklist mutual-exclusion validation
+- `store/blocklist.slice.ts` — `addSiteToList` now enforces **mutual exclusion**: the same canonical domain can never live in both lists at once, so adding it to one list *moves* it out of the other (the "move" resolution the roadmap's UI-feedback clause offers). A moved entry is reused as-is, so an allow ↔ block switch **preserves the site's `tagIds`** instead of silently dropping them.
+  - Comparison is on the already-normalized domain (`getRegistrableDomain`, M1.T2/M2.T4), so `https://www.facebook.com` and `https://m.facebook.com/x` collapse onto the same canonical `facebook.com` and the move is recognized regardless of the URL shape.
+  - The previous no-op semantics are preserved: an invalid input (malformed URL / bare public suffix) or a duplicate add to the list that already holds the domain with no conflict returns the **same state reference**, so the background still persists nothing for a rejected/no-op mutation (M1.T10 identity check).
+- `store/blocklist.slice.ts` — new pure `resolveListConflicts(state)`: the explicit precedence rule for a **residual conflict** (a preset expansion, an import, or a pre-existing persisted state — none of which go through `addSiteToList`). **The allowlist always wins** (consistent with the DNR generator M2.T6 and the overlay M2.T8): a domain present in the allowlist is dropped from the blocklist and the allowlist is left untouched. It returns the *same* reference when nothing conflicts (same identity pattern as M1.T10/M2.T10). `addSiteToList` runs it on every accepted add, so any residual conflict present elsewhere in the state is healed in passing and every add returns a conflict-free state.
+- `store/index.ts` — re-exports `resolveListConflicts` from the store barrel.
+- Files created/modified: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-mutations.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`.
+- Dependencies added: none (reuses `getRegistrableDomain`/`tldts` from M1.T2/M2.T4).
+- Tests: `tests/unit/store/blocklist-mutations.test.ts` (+10 tests, unit) — allowlist → blocklist move creates no double entry; blocklist → allowlist move; the moved entry keeps its tags; the move is recognized across URL/subdomain variants; an invalid input does not move anything (same reference); a domain already on both lists keeps the target entry and clears the allowlist; a residual conflict elsewhere is healed while adding a new domain (allowlist wins); `resolveListConflicts` drops the blocklisted copy while keeping the allowlist; it is a same-reference no-op when nothing conflicts; it does not mutate its input (pure). `tests/integration/messaging/mutation-bus.test.ts` (+1 test, integration with `fakeBrowser`) — an allowlist `BLOCKLIST_ADD_SITE` followed by a blocklisted add for the same domain through the real cross-context path leaves the domain only in the blocklist and the allowlist empty.
+- Relevant notes/decisions: the resolution is the **move** option of the card's "the UI offers to move it or shows explicit feedback"; because `components/blocklist/SiteList.tsx` does not exist yet and is the deliverable of **M3.T3** (which, per its own card, consumes M2.T20 to render the feedback), this task delivers the store-level semantics that make a double entry impossible and leaves the visible feedback to M3.T3 — documented as a new open issue rather than anticipating that task. `resolveListConflicts` is live (called by every `addSiteToList`), not dead code, and the allowlist-wins branch mirrors the existing consumption-time precedence so the two can never diverge. Preserving `tagIds` on a move is an addition beyond the literal criterion, chosen so a user's tagging is not lost when switching a site between lists.
+- Acceptance criteria: verified — (1) adding to the blocklist a domain already in the allowlist (or vice versa) creates no double entry and the domain ends up only in the target list, with the comparison performed on normalized domains (unit + integration tests); (2) the precedence rule is explicit and tested: a residual conflict always resolves in favour of the allowlist (`resolveListConflicts`, and the `addSiteToList` heal-the-state case).
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -550,6 +563,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 13. **Population upstream wiring is not implemented (M2.T18)** — `calculatePopulation` (pure) and `PopulationCounter`/`setPopulation` (store + UI) exist, but nothing computes a session's focused minutes and calls `setPopulation` yet: no persisted field tracks elapsed focus time (the city slice receives per-tick deltas, the timer keeps `remainingSeconds`). Until that wiring lands (most naturally alongside the popup's `TIMER_TICK` emitter, issue #9, and/or at `SESSION_ENDED`), the counter reads the persisted default `0`.
 14. **Missing M2.T19 detail card in `docs/roadmap-en.md`** — like M2.T13b/M2.T18, M2.T19 appears only in the summary table (line 58); §1.5 has no card for it, so there are no explicit acceptance criteria or edge cases. The implementation was derived from the summary row, the §1.2 folder comment and the §1.3 persisted-state list; the card (and the §3.3 test/task mapping row) should be added.
 15. **Session history has no runtime producer (M2.T19)** — the `sessionHistory` slice, its pure helper and persistence exist, but nothing calls `recordSession` yet: the `SESSION_ENDED` message (M1.T1) already carries a `SessionSummary` yet is never emitted (the timer never detects reaching zero) and its background listener is still the shared placeholder. Until that wiring lands (the session-completion path), the history stays empty at runtime. This is the same class of upstream gap as issues #9 (timer commands / `TIMER_TICK` emitter) and #13 (population), and is most naturally closed where session completion is implemented.
+16. **M2.T20 UI feedback not rendered yet** — the card lists `components/blocklist/SiteList.tsx` for the "UI offers to move it or shows explicit feedback" clause, but that component is the deliverable of **M3.T3** (which, per its own card, consumes M2.T20's precedence in the feedback). M2.T20 therefore delivers the store-level mutual exclusion (`addSiteToList` moves the domain) and the explicit `resolveListConflicts` precedence (allowlist wins); the visible feedback (e.g. "moved from the blocklist") is left to M3.T3 rather than anticipating it.
 
 ---
 

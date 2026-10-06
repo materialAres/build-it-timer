@@ -193,6 +193,7 @@ export {
   createBlocklistSlice,
   addSiteToList,
   removeSiteFromList,
+  resolveListConflicts,
   upsertTag,
   removeTag,
   selectAllowlist,

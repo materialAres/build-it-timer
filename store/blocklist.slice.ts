@@ -32,14 +32,47 @@ export const createBlocklistSlice: StateCreator<AppState, [], [], BlocklistSlice
 // rejected: the helper returns the *same* state reference, which the background
 // uses to skip persisting and the UI to show "Enter a valid URL" (M2.T21/M3.T3).
 //
-// Allowlist/blocklist mutual exclusion (M2.T20) and the DNR side-effect (M2.T7)
-// are owned by those tasks.
+// The DNR side-effect is owned by M2.T7.
 
 const toEntry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
 
 const hasSite = (entries: ReadonlyArray<BlocklistEntry>, domain: string): boolean =>
   entries.some((entry) => entry.domain.value === domain);
 
+const oppositeList = (list: BlocklistListName): BlocklistListName =>
+  list === 'allowlist' ? 'blocklist' : 'allowlist';
+
+/**
+ * Enforce the allowlist/blocklist precedence on a state that may already hold
+ * the same canonical domain in both lists (a preset expansion, an import, or a
+ * pre-existing persisted state — none of which go through `addSiteToList`).
+ *
+ * **The allowlist always wins** (M2.T6/M2.T8): a domain present in the allowlist
+ * is dropped from the blocklist; the allowlist is never touched. Returns the
+ * *same* reference when there is no residual conflict, so the caller can skip a
+ * write (same identity pattern as M1.T10/M2.T10).
+ */
+export function resolveListConflicts(state: BlocklistState): BlocklistState {
+  const allowed = new Set(state.allowlist.map((entry) => entry.domain.value));
+  const blocklist = state.blocklist.filter((entry) => !allowed.has(entry.domain.value));
+  if (blocklist.length === state.blocklist.length) return state;
+  return { ...state, blocklist };
+}
+
+/**
+ * Add a site to one list, enforcing **mutual exclusion** (M2.T20): a canonical
+ * domain can never live in both lists at once, so adding it to one list *moves*
+ * it out of the other (the "move" resolution the UI offers). The comparison is
+ * on the already-normalized domain (M1.T2/M2.T4), so `https://m.` and `www.`
+ * variants of the same registrable domain collapse onto one another.
+ *
+ * A duplicate add to the list that already holds the domain, with no residual
+ * conflict, is a no-op returning the same reference (M1.T10/M2.T4). Because a
+ * moved entry keeps its `tagIds`, an allow/block switch does not silently lose
+ * the tags a user attached to the site. A residual conflict present elsewhere in
+ * the state is healed in passing (`resolveListConflicts`): every add returns a
+ * conflict-free state.
+ */
 export function addSiteToList(
   state: BlocklistState,
   list: BlocklistListName,
@@ -49,8 +82,24 @@ export function addSiteToList(
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  if (hasSite(state[list], domain)) return state;
-  return { ...state, [list]: [...state[list], toEntry(domain)] };
+  const other = oppositeList(list);
+  const alreadyInTarget = hasSite(state[list], domain);
+  const inOther = state[other].find((entry) => entry.domain.value === domain);
+
+  if (alreadyInTarget && inOther === undefined) return state;
+
+  const target = alreadyInTarget
+    ? state[list]
+    : [...state[list], inOther ?? toEntry(domain)];
+
+  return resolveListConflicts({
+    ...state,
+    [other]:
+      inOther === undefined
+        ? state[other]
+        : state[other].filter((entry) => entry.domain.value !== domain),
+    [list]: target,
+  });
 }
 
 export function removeSiteFromList(

@@ -209,4 +209,28 @@ describe('cross-context mutation path (M1.T10)', () => {
     setSpy.mockRestore();
     handle.dispose();
   });
+
+  // M2.T20: adding a domain to one list must move it out of the other, so a
+  // canonical domain can never end up on both lists through the mutation path.
+  it('moves a domain from the allowlist to the blocklist (M2.T20)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'allowlist', site: 'https://www.facebook.com' },
+    });
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'https://m.facebook.com/something' },
+    });
+
+    expect(store.getState().blocklist.blocklist).toEqual([
+      { domain: { value: 'facebook.com' }, tagIds: [] },
+    ]);
+    expect(store.getState().blocklist.allowlist).toEqual([]);
+
+    handle.dispose();
+  });
 });
