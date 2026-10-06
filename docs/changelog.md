@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T11** (Milestone 2 in progress).
+> Updated to: **M2.T11b** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11 done; M2.T11b … M2.T21 remaining.
-- Tests: `bun run test` → **266 passing tests** across 31 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11b done; M2.T11c … M2.T21 remaining.
+- Tests: `bun run test` → **275 passing tests** across 32 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -49,6 +49,7 @@ description: Rules for updating the changelog
 | M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | — (to be committed) |
 | M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | — (to be committed) |
 | M2.T11 | `citySlice` — city grid/layer state, new every session | completed | — (to be committed) |
+| M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | — (to be committed) |
 
 ---
 
@@ -355,6 +356,18 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/store/city-slice.test.ts` (12 tests, unit with `FakeAlarmProvider`) — initial state is three empty layers at the default dimensions, no buildings, no theme/session; configurable dimensions (`width`/`height`); `resetCityForNewSession` clears layers and buildings and assigns theme+session; the default theme comes from the injected `selectThemeId`; `growCity` delegates to the injected engine (spy: called with the current layers and the elapsed ms) and applies the returned layers; `growCity` skips the write when the engine returns the same reference; `applyMalusToCity` removes exactly one character per tick via `applyMalus`; malus on an empty city is a no-op returning the same reference; non-finite/negative ticks never crash; `startTimer` starts a brand-new city bound to the new session; resuming a paused session keeps the already-built city; granular city selectors. `tests/integration/store/storage-adapter.test.ts` (+2 tests) — consecutive `setItem` writes are both recognized as self-writes and each is consumed once; a value this context never wrote is not a self-write.
 - Relevant notes/decisions: the slice owns **state + delegation only**. The concrete growth engine (`lib/city/growth-engine.ts`, M2.T12), the theme registry (M2.T13b), the building composer (M2.T11c) and the malus wiring (M2.T16) are explicitly deferred to their tasks; the growth delegation is satisfied structurally through the `CityGrowthEngine` port but the default is an identity no-op until M2.T12, and no task currently populates `city.buildings` (reset sets it to `{}`). The roadmap's §3.3 testing table still lists a stale M2.T11 edge case (`destroyBuilding` on out-of-grid coordinates); the task card is authoritative and defines no `destroyBuilding` action — destruction is `applyMalusToCity`/`applyMalus` (M2.T10) — so the equivalent robustness (empty/invalid/oversized ticks) is covered instead. The self-write queue fix is a correctness fix in a module owned by M1.T10/M1.T3, required to keep the M2.T7 regression suite green after adding the second write; it is additive and changes no single-write behaviour.
 - Acceptance criteria: verified — (1) initial state is the three empty layers of configurable dimensions; (2) `resetCityForNewSession` fully resets the layers and assigns a new theme/session and is invoked by `startTimer()` on a new session; (3) `growCity`/`applyMalusToCity` delegate without computing internally — `applyMalusToCity` to `apply-malus.ts` (M2.T10, concrete) and `growCity` to the injected growth-engine port whose concrete implementation is M2.T12 (placeholder identity until then).
+
+### M2.T11b — `lib/city/tile-library.ts` — library of composable ASCII modules
+- `lib/city/tile-library.ts` (new) — the static, typed dataset of reusable ASCII modules the building composer (M2.T11c) selects from. Data only, no selection logic (Open/Closed, §1.1): adding a variant is adding an array element, never touching the composition code.
+  - `TILE_BASE_WIDTH = 8` is the exported, configurable grid unit: every module width is an exact multiple of it, which is what lets two modules line up on the same character grid when one is stacked on the other.
+  - `TILE_LIBRARY: ReadonlyArray<BuildingModule>` — **three variants per category**: bases (`base-office`, `base-residential`, `base-glass`), floors (`floor-office`, `floor-residential`, `floor-glass-front`) and tops (`top-antenna`, `top-dome`, `top-helipad`). Each module explicitly declares its own `widthChars` (all 8 = `TILE_BASE_WIDTH` today) and every ASCII row is exactly that wide, so a base + N floors + a top never misaligns.
+  - `isWidthCompatible(widthChars, baseWidth?)` — pure guard (positive integer multiple of the base width) that encodes the compatibility rule and is total for non-integer/non-positive input.
+  - `getModulesByCategory(category)` / `getModuleById(id)` — pure lookups (declaration order / first match, like `getPresetById` in M2.T5), kept separate from variant *selection*, which remains M2.T11c's job.
+- Files created/modified: `lib/city/tile-library.ts` (new), `tests/unit/lib/city/tile-library.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/city/tile-library.test.ts` (9 tests, unit) — ≥2 variants per category; every module declares a positive, compatible width; every row is exactly `widthChars` long; widths are mutually compatible within each category (one unique width per category, itself a grid multiple); unique module ids; `getModulesByCategory` filters correctly in declaration order; `getModuleById` returns the module / `undefined`; `isWidthCompatible` accepts base-width multiples (including a custom base) and rejects zero, negatives, non-integers and non-multiples.
+- Relevant notes/decisions: the library intentionally holds no picking logic so the composer can stay the single place where minute thresholds + seeded randomness decide what to build. All current widths equal `TILE_BASE_WIDTH`, so any base/floor/top combination stacks directly; the compatibility check (multiples of the base width) leaves room for future wider modules without breaking alignment. ASCII tops carry significant leading/trailing spaces — the `widthChars` assertion is what guarantees those are counted, not trimmed.
+- Acceptance criteria: verified — (1) each module declares its own width and the test enforces mutually compatible widths within a category; (2) at least two variants per category (three each) are present; (3) data only, no selection logic.
 
 ---
 
