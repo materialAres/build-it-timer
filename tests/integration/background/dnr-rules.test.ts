@@ -5,62 +5,18 @@ import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { createBrowserRuleApplier } from '@/lib/blocking/apply-rules';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
+import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 import { STORE_NAME } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
 
 type DnrRule = Browser.declarativeNetRequest.Rule;
-type UpdateRuleOptions = Browser.declarativeNetRequest.UpdateRuleOptions;
 
-/**
- * `fakeBrowser` declares `declarativeNetRequest` but does not implement it (the
- * methods throw `MockNotImplementedError`), so the dynamic ruleset is modelled
- * here: `getDynamicRules` returns what is live and `updateDynamicRules` applies
- * the removals/additions and records the call. The production applier is then
- * exercised against the real browser object.
- *
- * The methods are replaced rather than spied on because both are overloaded
- * (promise + callback form), which makes `vi.spyOn(...).mockImplementation()`
- * resolve against the void-returning overload.
- */
-const restorers: Array<() => void> = [];
-
-function installDynamicRulesFake(): {
-  readonly updates: UpdateRuleOptions[];
-  liveRules(): DnrRule[];
-} {
-  const dnr = browser.declarativeNetRequest;
-  const originalGetDynamicRules = dnr.getDynamicRules;
-  const originalUpdateDynamicRules = dnr.updateDynamicRules;
-
-  let live: DnrRule[] = [];
-  const updates: UpdateRuleOptions[] = [];
-
-  dnr.getDynamicRules = () => Promise.resolve([...live]);
-  dnr.updateDynamicRules = (options: UpdateRuleOptions) => {
-    updates.push(options);
-    const removed = new Set(options.removeRuleIds ?? []);
-    live = [...live.filter((rule) => !removed.has(rule.id)), ...(options.addRules ?? [])];
-    return Promise.resolve();
-  };
-
-  restorers.push(() => {
-    dnr.getDynamicRules = originalGetDynamicRules;
-    dnr.updateDynamicRules = originalUpdateDynamicRules;
-  });
-
-  return { updates, liveRules: () => live };
-}
+/** The shared in-memory dynamic ruleset (see `tests/setup.ts`). */
+const installDynamicRulesFake = installFakeDynamicRules;
 
 /** Make every dynamic-rules call fail, to exercise the error boundary. */
 function installFailingDynamicRules(): void {
-  const dnr = browser.declarativeNetRequest;
-  const original = dnr.getDynamicRules;
-
-  dnr.getDynamicRules = () => Promise.reject(new Error('declarativeNetRequest unavailable'));
-
-  restorers.push(() => {
-    dnr.getDynamicRules = original;
-  });
+  installFakeDynamicRules().fail();
 }
 
 /** Let the asynchronous rule sync (queued microtasks) settle. */
@@ -75,8 +31,7 @@ describe('background DNR rule application (M2.T7)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    for (const restore of restorers) restore();
-    restorers.length = 0;
+    installFakeDynamicRules().recover();
   });
 
   it('applies the blocklist rules when a session is running and removes them on pause', async () => {
