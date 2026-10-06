@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T11c** (Milestone 2 in progress).
+> Updated to: **M2.T12** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11c done; M2.T12 … M2.T21 remaining.
-- Tests: `bun run test` → **287 passing tests** across 33 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T12 done; M2.T12b … M2.T21 remaining.
+- Tests: `bun run test` → **299 passing tests** across 34 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -51,6 +51,7 @@ description: Rules for updating the changelog
 | M2.T11 | `citySlice` — city grid/layer state, new every session | completed | — (to be committed) |
 | M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | — (to be committed) |
 | M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | — (to be committed) |
+| M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | — (to be committed) |
 
 ---
 
@@ -382,6 +383,20 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the composer is standalone — nothing consumes it yet; the concrete growth engine (`lib/city/growth-engine.ts`, M2.T12) is what will call it (the roadmap even lists M2.T11c as its dependency), and the theme/palette (M2.T13) and decoration (M2.T12b) steps remain separate modules. The variant draw order is deliberate (stable lower modules while new ones unlock) so a growing city does not re-roll the buildings it already shows. The function returns `ComposedBuilding` rather than declaring a new `Building` type, to avoid duplicating the M1.T1 shape.
 - Acceptance criteria: verified — (1) unlock thresholds are configurable, ordered data, not hardwired `if/else`; (2) same `minutesFocused` + same seed → identical building; (3) an unbuilt building (0 minutes) is representable and distinct from a base-only building.
 
+### M2.T12 — `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid
+- `lib/city/growth-engine.ts` (new) — pure `growCity(layers, elapsedMs, seed = 0): CityLayers` plus the `createGrowthEngine({ seed })` adapter that fits the `CityGrowthEngine` port `(layers, elapsedMs) => layers` consumed by `citySlice.growCity` (M2.T11).
+  - **Cadence**: one character per 2 seconds — `ticks = floor(elapsedMs / GROWTH_TICK_MS)`, `GROWTH_TICK_MS = 2_000` (the same constant named by `applyMalus`, M2.T10/M2.T15). Each tick inserts exactly **one** character, never a whole module, so a single call with a larger delta places `ticks` characters one after the other.
+  - **Distribution**: a rotating `background → middleground → foreground` order spreads every batch of three characters one per parallax layer (background small buildings/stars, middleground skyscrapers, foreground street/trees), skipping a layer once it is full.
+  - **Placement**: within a layer, the next free cell is chosen columns left→right and, inside a column, rows bottom→top, so the ASCII reads as buildings rising from the ground. This is the inverse of the M2.T10 removal order (topmost cell first).
+  - **Glyph from the composer (M2.T11c dependency)**: each character is taken from the building `composeBuilding(minutesFocused, rng)` has earned at the current focused time, seeded from the engine's stable `seed` (a fresh `SeededRandom` per call, so already-unlocked modules keep their variant); before the first 5-minute unlock the composer returns an unbuilt building and a per-layer fallback glyph (`.`/`#`/`|`) is used. The glyph is `characters.charAt(tick % characters.length)` — single, non-whitespace, and deterministic.
+  - **Determinism & purity**: same `(layers, elapsedMs, seed)` → deep-equal result; no internal `Date.now()`/`Math.random()` (a local mulberry32 `SeededRandom` is derived from the injected seed); the input layers are never mutated. Session-to-session variety is the caller's seed, derived from the session id (wiring is M2.T15).
+  - **Full-grid cap**: when no free cell remains the loop stops and the *same* `CityLayers` reference is returned, so the cap is an explicit no-op (no error, no write beyond the configured dimensions); score/population are computed elsewhere from elapsed time and keep advancing, as the roadmap requires. A non-finite/negative delta defensively yields 0 ticks (mirroring `applyMalus`), so it can never become an unbounded loop.
+- Files created/modified: `lib/city/growth-engine.ts` (new), `tests/unit/lib/city/growth-engine.test.ts` (new).
+- Dependencies added: none (reuses `building-composer.ts` and the `CityLayers` types; no new package).
+- Tests: `tests/unit/lib/city/growth-engine.test.ts` (12 tests, unit) — zero/sub-tick delta is a no-op returning the same reference; negative/`NaN`/`±Infinity` deltas are no-ops; **three consecutive 2s steps each add exactly one character** (the "not in blocks" criterion); a single 2s×2+1.999s delta adds exactly 2; the first three characters spread one per layer; determinism (same state/delta/seed → deep-equal, adapter agrees with `growCity`); different seeds diverge once modules are unlocked; every glyph is a single non-whitespace character; purity (input untouched); an already full grid returns the same reference; a very large delta fills exactly to capacity without exceeding the grid dimensions and further growth stays a no-op; the seeded adapter matches the port signature.
+- Relevant notes/decisions: the engine returns only `CityLayers` (the port's shape), so it does not populate `city.buildings` — the domain→building locator stays with M2.T16. The composer's first unlock is at minute 5, but growth must start at tick one, hence the documented per-layer fallback glyph; layer-specific structural character selection and lit windows/trees/cars are the decoration engine's job (M2.T12b), keeping this module focused on the character cadence and the cap (`KISS`). The concrete engine is **not yet plugged into the store** — `store/index.ts` still defaults to `identityGrowthEngine` — because binding the session seed and invoking it on every tick is M2.T15; the pure module is complete and unit-tested in isolation.
+- Acceptance criteria: verified — (1) determinism for the same state + time delta + seed, with no internal `Date.now()`/`Math.random()`; (2) at least three consecutive 2s steps each insert one character, never a block; (3) a full grid is left unchanged and the function returns the same reference, with no extension beyond the configured dimensions.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -407,7 +422,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 7. **Overlay reachability is bounded by the content-script injection rules (M2.T8)** — with `main_frame` no longer blocked (see the M2.T8 entry), the top-level navigation gate is the overlay itself. Pages where content scripts cannot be injected (Chrome Web Store, the PDF viewer, other extensions' pages, and — in Firefox MV2 — some restricted URLs) therefore cannot be gated at all: the user reaches them with no overlay and no malus. This is inherent to the content-script approach (it is why M3.T6's manual cross-browser pass matters) and is accepted rather than worked around; a hard-block alternative would need an extension interstitial page with a one-time allow, which is a different design. Also inherent: at `document_idle` the page paints briefly before the overlay covers it.
 8. **`SITE_BLOCKED_ATTEMPT` no longer carries `tabId` (M2.T8)** — its M5.T1 payload criterion landed early, so what remains of M5.T1 is the runtime validation of the discriminated union, the `sender.id`/`sender.tab` check, and deriving `tabId` from `sender.tab.id` for the variants that need it. M2.T10 must read the tab id from `sender`, not from the payload.
 9. **M2.T10 leaves the malus unwired (by design)** — `applyMalus` and `createTabDistractionTracker` are pure/standalone: nothing calls them yet, and the tracker is not attached to the background. M2.T16 owns the wiring (route the `SITE_BLOCKED_ATTEMPT` "proceed" choice to `applyMalus`, identify the affected domain's building, and emit `MALUS_APPLIED`). The removal rule chosen here (topmost occupied cell first) may need revisiting at M2.T16 once `citySlice.buildings` (M2.T11) gives every building a domain identity, at which point the malus can target one building instead of the globally topmost cell.
-10. **M2.T11 leaves growth/theme/buildings deferred (by design)** — `citySlice.growCity` delegates to an injected `CityGrowthEngine` port whose default is `identityGrowthEngine`, a no-op until `lib/city/growth-engine.ts` (M2.T12) is plugged in; the theme id assigned on reset comes from the injected `selectThemeId` default (`DEFAULT_THEME_ID`) until the theme registry (M2.T13b) exists; and no task yet writes `city.buildings` (reset keeps it `{}`, for M2.T12/M2.T16 to populate). Consequently `growCity` is structurally complete but produces no visible growth today — expected, and the reason the task is complete at the slice level.
+10. **Growth engine exists but is not yet wired (M2.T12)** — `lib/city/growth-engine.ts` now provides the concrete, seeded `growCity`/`createGrowthEngine` (M2.T12), but `store/index.ts` still defaults `growthEngine` to `identityGrowthEngine`, so `citySlice.growCity` remains a no-op in the running app until M2.T15 binds the session-derived seed and invokes it on every tick. Likewise the theme id assigned on reset still comes from the injected `selectThemeId` default (`DEFAULT_THEME_ID`) until the theme registry (M2.T13b), and no task yet writes `city.buildings` (reset keeps it `{}`; M2.T16 populates it). Expected: each layer is complete at its own level.
 
 ---
 
