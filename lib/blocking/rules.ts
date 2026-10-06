@@ -9,12 +9,18 @@ import type { BlocklistEntry } from '@/store/store.types';
 export type DnrRule = Browser.declarativeNetRequest.Rule;
 
 /**
- * Resource types a blocked domain intercepts: the top-level navigation and
- * embedded frames. Sub-resources (scripts, images, xhr) are intentionally left
- * alone so a blocked page fails cleanly instead of half-loading.
+ * Resource types a blocked domain intercepts: embedded frames only (M2.T8
+ * revision). Sub-resources (scripts, images, xhr) are intentionally left alone
+ * so a blocked page fails cleanly instead of half-loading.
+ *
+ * `main_frame` is deliberately **not** blocked: DNR resolves a top-level block
+ * before the document exists, so the browser renders its own
+ * `ERR_BLOCKED_BY_CLIENT` page — where no content script can run. The overlay
+ * (M2.T8) could then never appear and "proceed anyway" would have nothing to
+ * proceed to. Top-level navigation is therefore gated by the overlay, which
+ * needs the page to load; DNR stays as a secondary layer against embedding.
  */
 const BLOCKED_RESOURCE_TYPES: `${Browser.declarativeNetRequest.ResourceType}`[] = [
-  'main_frame',
   'sub_frame',
 ];
 

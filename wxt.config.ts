@@ -37,6 +37,11 @@ export default defineConfig({
     // is what the background's rule sync (M2.T7) needs to install the
     // blocklist rules; the `tabs` permission is not needed for that.
     permissions: ['storage', 'alarms', 'declarativeNetRequest'],
+    // The overlay (M2.T8) must be able to run on any page, because the
+    // blocklist is user-defined and therefore unknown at build time. Declared
+    // both as a host permission (so the script may be injected) and as a
+    // content script match (see `entrypoints/blocked-overlay.content.ts`).
+    host_permissions: ['<all_urls>'],
   },
   webExt: {
     // `binaries` is keyed by browser name; an empty map keeps web-ext's own

@@ -59,7 +59,7 @@ describe('background orchestrator skeleton (M1.T7)', () => {
       { type: 'TIMER_PAUSED', payload: {} },
       {
         type: 'SITE_BLOCKED_ATTEMPT',
-        payload: { domain: 'facebook.com', choice: 'proceed', tabId: 1 },
+        payload: { domain: 'facebook.com', choice: 'proceed' },
       },
       { type: 'MALUS_APPLIED', payload: { domain: 'facebook.com', charactersRemoved: 1 } },
       {

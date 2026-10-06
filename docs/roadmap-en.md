@@ -281,6 +281,7 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - A domain in the blocklist generates a correct blocking rule (normalized `urlFilter`).
   - **Precedence order (design decision)**: the **allowlist always wins** over the blocklist. A domain present in both allowlist and blocklist is not blocked: the allowlist rule has higher priority and cancels the block. Behavior explicitly tested as a first-class case (not as an edge case).
+  - **Resource types (design decision, revised during M2.T8)**: the generated rules intercept **`sub_frame` only**, never `main_frame`. A DNR `block` on `main_frame` is resolved before the document exists, so the browser renders its own `ERR_BLOCKED_BY_CLIENT` page, where no content script can run: the top-level navigation is gated by the Shadow DOM overlay instead (M2.T8), which requires the page to load. Embedded frames of a blocked domain remain hard-blocked, so DNR stays as a secondary layer.
   - No real calls to `browser.declarativeNetRequest` in this module (pure, testable without a browser).
 
 #### M2.T7 — Applying DNR rules from the background
@@ -292,13 +293,19 @@ Each task is a standalone card, with this fixed format:
   - Test with `fakeBrowser`: changing the blocklist during `running` triggers a call to `updateDynamicRules` with the expected rules; a transition to `paused` triggers a rule-removal call.
 
 #### M2.T8 — Overlay alert content script (Shadow DOM)
-* **Objective**: content script that, on an attempt to access a blocked site, mounts a Shadow DOM overlay with an alert message and a choice of "go back" / "proceed anyway".
-* **Files**: `entrypoints/content/blocked-overlay.content.ts`, `components/common/BlockedOverlay.tsx`
+* **Objective**: content script that, when the user lands on a domain in the blocklist while the timer is `running`, mounts a Shadow DOM overlay covering the page — "You put this site on your blocklist. Are you sure you want to access it?" — with two choices: **Yes** (access the site, malus then accrues while the user stays there, M2.T10) and **No** (go back, no malus; when the tab has no history to go back to, the overlay stays up showing "Great! Keep focusing!").
+* **Files**: `entrypoints/blocked-overlay.content.ts`, `components/common/BlockedOverlay.tsx`, `wxt.config.ts` (`host_permissions` + `matches: ['<all_urls>']`)
 * **Dependencies**: M1.T6, M2.T4
+* **Design decision (soft-block, agreed with the maintainer while implementing this task)**: top-level navigation is **not** blocked by DNR — M2.T6 now emits `sub_frame`-only rules — because a `main_frame` block is resolved before the document exists, leaving the user on `ERR_BLOCKED_BY_CLIENT` where no content script runs: the overlay would be unreachable and "proceed anyway" would have nothing to proceed to. The overlay therefore *is* the gate for top-level navigation, and DNR remains a secondary layer for embedded frames. Consequence for M2.T10: the malus starts from the "Yes" choice on an actually reachable page, not from a DNR block event.
 * **Acceptance criteria**:
-  - The overlay is isolated in Shadow DOM (host-page styles do not affect it, verifiable in test/e2e).
-  - Choosing "proceed anyway" sends a `SITE_BLOCKED_ATTEMPT` message (or similar) to the background via the M1.T6 bus.
-  - Choosing "go back" closes the overlay without sending any malus messages.
+  - The overlay is isolated in Shadow DOM (host-page styles do not affect it, verifiable in test/e2e): open shadow root on a dedicated host element, styles carried inside the root, `all: initial` on the root container so inheritable properties (`color`, `font`, `line-height`, `visibility`) do not leak across the boundary.
+  - Choosing **Yes** sends a `SITE_BLOCKED_ATTEMPT` message with `choice: 'proceed'` to the background via the M1.T6 bus, then dismisses the overlay and leaves the page usable. No malus is computed here: applying it is M2.T10's job.
+  - Choosing **No** sends `SITE_BLOCKED_ATTEMPT` with `choice: 'go-back'` and closes the overlay without sending any malus message (`MALUS_APPLIED` is never emitted by this task).
+  - The domain is resolved with `getRegistrableDomain` (M1.T2 — the single normalization point, DRY) and the block decision reuses M2.T6's precedence: **allowlist wins**. The overlay never mounts when `status !== 'running'`.
+  - The content script is registered for `<all_urls>` with `runAt: 'document_idle'` and the required `host_permissions`; mounting twice on the same page yields a single overlay (idempotence).
+  - A background that does not respond (no listener, or a rejected `sendMessage`) is handled without crashing the page and without leaving the overlay in a stuck state.
+* **Notes / accepted limitations**: at `document_idle` the page is already rendered, so a brief flash of content precedes the overlay (accepted trade-off, no `document_start` pre-hide hack); pages where content scripts cannot run (Chrome Web Store, PDF viewer, other extensions' pages) cannot be gated; re-navigating to a blocked domain shows the overlay again, and malus continuity across that re-mount belongs to the background (M2.T10/M2.T16), not to the overlay. The content script reads the persisted store straight from `browser.storage.local` (light reader, no zustand in the content bundle) and subscribes to `storage.onChanged`, so list edits are picked up live and no "lists are frozen while running" restriction is needed.
+* **Follow-ups**: overlay strings are hardcoded in EN here and moved to `i18n.t(...)` in M3.T9; the `tabId` field was removed from the `SITE_BLOCKED_ATTEMPT` payload with this task (its M5.T1 removal landed early).
 
 #### M2.T9 — `scoreSlice` + `lib/score/calculate-score.ts`
 * **Objective**: pure function `calculateScore(distractionRatio: number): 'excellent'|'good'|'bad'` according to the updated thresholds — Excellent (0%), Good (≤30%), Bad (>30%) — plus a slice that keeps this state for the current session. `distractionRatio` is calculated based on distraction time relative to the focus time **actually elapsed up to the moment of the check** (not the session's planned duration), so the value is recalculated at every check and can change over the course of the session.
@@ -314,6 +321,7 @@ Each task is a standalone card, with this fixed format:
 * **Objective**: when the `SITE_BLOCKED_ATTEMPT` message (from M2.T8) arrives with the "proceed" choice, the background applies the malus as the **inverse of growth**: as long as the user stays on the blocked site (or keeps a tab open on it, see below), the characters of the affected building are removed one at a time at the same 2s cadence used for construction (M2.T15), rather than being destroyed all at once.
 * **Files**: `lib/score/apply-malus.ts`
 * **Dependencies**: M2.T9, M2.T8
+* **Note (soft-block model, M2.T8)**: the malus starts after the user chooses "Yes" in the overlay, on a page that **is** reachable — top-level navigation is not blocked by DNR (see M2.T6/M2.T8). The background therefore cannot rely on a DNR `block` event to detect distraction: it tracks the tab (per the multi-tab rule below) starting from the `SITE_BLOCKED_ATTEMPT` message with the `proceed` choice.
 * **Acceptance criteria**:
   - Pure function `applyMalus(cityState, ticksOfDistraction) → newCityState` that removes one character for each 2s tick spent in a distracted state, symmetric to `growth-engine.ts` (see M2.T12) but in the opposite direction.
   - If the building reaches zero characters, it stays in the "empty cell" state (no error, no undefined intermediate state).
@@ -473,7 +481,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M3.T9 — Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default)
 * **Objective**: configure the official WXT `@wxt-dev/i18n` module (a type-safe, synchronous wrapper around `browser.i18n`) for all visible popup strings and content script messages, with **English as the default language** (and as the fallback for missing keys). The actual language is determined **automatically from the browser's language**: if the browser is set to Italian, the extension shows Italian; in every other case it shows English. **There is no manual language selector** nor any persisted user preference: changing language requires changing the browser's language (an intrinsic limitation of the `browser.i18n` API, accepted at design time in exchange for lightness, synchronous loading, and native caching). Translations live in `locales/<lang>.yml` files with nested keys, compiled at build time into the `_locales/<lang>/messages.json` files expected by the browser: no async fetch, no duplicated translation bundle per entrypoint.
-* **Files**: `wxt.config.ts` (registration of the `'@wxt-dev/i18n/module'` module + `manifest.default_locale: 'en'`), `locales/en.yml` (default EN strings, grouped by area: `timer`, `city`, `score`, `blocklist`, `overlay`, `common`), `components/**` components and `entrypoints/popup/App.tsx` (use of `i18n.t(...)`), `entrypoints/content/blocked-overlay.content.ts` (use of `i18n.t(...)` for overlay messages).
+* **Files**: `wxt.config.ts` (registration of the `'@wxt-dev/i18n/module'` module + `manifest.default_locale: 'en'`), `locales/en.yml` (default EN strings, grouped by area: `timer`, `city`, `score`, `blocklist`, `overlay`, `common`), `components/**` components and `entrypoints/popup/App.tsx` (use of `i18n.t(...)`), `entrypoints/blocked-overlay.content.ts` (use of `i18n.t(...)` for overlay messages).
 * **Dependencies**: M3.T4
 * **Added runtime dependencies**: `@wxt-dev/i18n` (`^0.2.7`).
 * **Acceptance criteria**:
@@ -549,17 +557,17 @@ Each task is a standalone card, with this fixed format:
 
 > This milestone translates into tasks the measures that emerged from a security audit of the architecture (§2 of the audit document, "Part 2 — Could your project expose users to attacks?"). It does not add features: it makes the logic already planned in Milestones 1–2 secure and defensive. The three risks classified as **High** concern the message bus (M1.T6), domain normalization (M1.T2/M2.T21), and DNR rule generation (M2.T6).
 >
-> **Sequencing note**: these tasks are security prerequisites for the critical logic in §3.4 and should ideally land **before** the tasks that consume the respective modules (M5.T1 before M2.T8/M2.T10/M2.T16; M5.T2 before M2.T4/M2.T6/M2.T21; M5.T3 before M2.T7). The corresponding M2 cards remain valid; the hardening is additive and does not replace them.
+> **Sequencing note**: these tasks are security prerequisites for the critical logic in §3.4 and should ideally land **before** the tasks that consume the respective modules (M5.T1 before M2.T10/M2.T16 — its `SITE_BLOCKED_ATTEMPT`/`tabId` part landed early, with M2.T8; M5.T2 before M2.T4/M2.T6/M2.T21; M5.T3 before M2.T7). The corresponding M2 cards remain valid; the hardening is additive and does not replace them.
 
 #### M5.T1 — Message bus hardening: runtime validation and sender provenance
 * **Objective**: make the message bus (M1.T6) robust against malformed or forged messages — validate every `RuntimeMessage` at runtime with guards (never casts) and never trust `tabId`/identifiers coming from the payload, always deriving them from `sender`.
-* **Files**: `lib/messaging/messages.types.ts` (runtime validation guards; removal of `tabId` from the payload), `lib/messaging/bus.ts` (incoming validation + origin check), `entrypoints/background.ts`, `entrypoints/content.ts`.
+* **Files**: `lib/messaging/messages.types.ts` (runtime validation guards; removal of `tabId` from the payload), `lib/messaging/bus.ts` (incoming validation + origin check), `entrypoints/background.ts`, `entrypoints/blocked-overlay.content.ts`.
 * **Dependencies**: M1.T6
 * **Audit references**: risk "🔴 High — Message bus has no runtime validation and trusts caller-supplied tabId" (involves M1.T6, M2.T10, M2.T16).
 * **Acceptance criteria**:
   - `onMessage` validates the input with runtime guards on the discriminated union: unknown `type`, missing fields, or wrong types → the message is discarded without exceptions and without mutating the store (never `as RuntimeMessage`).
   - The background rejects messages where `sender.id !== browser.runtime.id` and requires `sender.tab` where the payload presupposes it.
-  - `tabId` is no longer read from the payload: variants that need it derive it from `sender.tab.id`; the payload of `SITE_BLOCKED_ATTEMPT` (and equivalent variants) no longer contains `tabId`.
+  - `tabId` is no longer read from the payload: variants that need it derive it from `sender.tab.id`. **Already satisfied for `SITE_BLOCKED_ATTEMPT`, whose payload lost `tabId` in M2.T8**; the remaining variants are covered here.
   - Test (integration, `fakeBrowser`): malformed/forged message → no crash, no mutation; `tabId` injected in the payload is ignored; a sender with an id different from `browser.runtime.id` is rejected; an unrecognized `type` is ignored.
 
 #### M5.T2 — Hardening of `lib/url/domain.ts`: scheme restriction, canonicalization, and IDN

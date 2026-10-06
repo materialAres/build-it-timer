@@ -15,7 +15,7 @@ describe('typed message bus', () => {
 
     const message: MessageOf<'SITE_BLOCKED_ATTEMPT'> = {
       type: 'SITE_BLOCKED_ATTEMPT',
-      payload: { domain: 'facebook.com', choice: 'proceed', tabId: 1 },
+      payload: { domain: 'facebook.com', choice: 'proceed' },
     };
     await sendMessage(message);
 

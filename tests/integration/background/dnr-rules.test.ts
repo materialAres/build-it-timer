@@ -186,7 +186,7 @@ describe('background DNR rule application (M2.T7)', () => {
         {
           id: 1,
           action: { type: 'block' },
-          condition: { urlFilter: `||${BLOCKED_DOMAIN}^`, resourceTypes: ['main_frame'] },
+          condition: { urlFilter: `||${BLOCKED_DOMAIN}^`, resourceTypes: ['sub_frame'] },
         },
       ],
     });
@@ -264,7 +264,7 @@ describe('background DNR rule application (M2.T7)', () => {
       {
         id: 1,
         action: { type: 'block' },
-        condition: { urlFilter: `||${BLOCKED_DOMAIN}^`, resourceTypes: ['main_frame'] },
+        condition: { urlFilter: `||${BLOCKED_DOMAIN}^`, resourceTypes: ['sub_frame'] },
       },
     ]);
 

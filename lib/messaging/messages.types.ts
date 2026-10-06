@@ -15,12 +15,15 @@ interface TimerPausedMessage {
   readonly payload: Record<string, never>; // no payload but explicit
 }
 
+// The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
+// design: the content script cannot know its own tab id without the `tabs`
+// permission, and a caller-supplied id is untrusted anyway — the background
+// derives it from `sender.tab.id` (M5.T1, whose payload part landed here).
 interface SiteBlockedAttemptMessage {
   readonly type: 'SITE_BLOCKED_ATTEMPT';
   readonly payload: {
     readonly domain: string;
     readonly choice: 'proceed' | 'go-back';
-    readonly tabId: number;
   };
 }
 

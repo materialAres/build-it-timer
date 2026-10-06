@@ -33,7 +33,7 @@ describe('selectActiveRules (M2.T7)', () => {
       {
         id: 1,
         action: { type: 'block' },
-        condition: { urlFilter: '||facebook.com^', resourceTypes: ['main_frame', 'sub_frame'] },
+        condition: { urlFilter: '||facebook.com^', resourceTypes: ['sub_frame'] },
       },
     ]);
   });

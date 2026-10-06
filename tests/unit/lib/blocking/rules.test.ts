@@ -4,7 +4,7 @@ import type { BlocklistEntry } from '@/store/store.types';
 
 const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
 
-const BLOCK_RESOURCE_TYPES = ['main_frame', 'sub_frame'];
+const BLOCK_RESOURCE_TYPES = ['sub_frame'];
 
 describe('buildDnrRules (M2.T6)', () => {
   it('returns no rules for an empty blocklist', () => {
