@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T21** (Milestone 2 completed).
+> Updated to: **M3.T1** (Milestone 3 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -14,7 +14,8 @@ description: Rules for updating the changelog
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
-- Tests: `bun run test` → **421 passing tests** across 48 files (unit + integration + component).
+- Milestone 3 (secondary features) — **in progress**: M3.T1 done; M3.T2, M3.T3, M3.T4, M3.T5, M3.T6, M3.T7, M3.T9, M3.T10 remaining.
+- Tests: `bun run test` → **436 passing tests** across 50 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -63,6 +64,7 @@ description: Rules for updating the changelog
 | M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | — (to be committed) |
 | M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | — (to be committed) |
 | M2.T21 | Defensive blocklist input normalization (entry + navigation check) | completed | — (to be committed) |
+| M3.T1 | `PresetPicker` (preset selection UI) | completed | — (to be committed) |
 
 ---
 
@@ -545,6 +547,22 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/blocking/normalize-entry.test.ts` (9 tests, unit) — subdomain/protocol/port/ccSLD inputs collapse to the canonical form; determinism over repeated calls; bare public suffixes including private ones (`github.io`) rejected with `INVALID_URL_MESSAGE`; malformed/empty/whitespace/IP rejected; the exact UI wording asserted; a hostile corpus never throws; agreement with `getRegistrableDomain` over a corpus; every M2.T5 preset domain normalizes to itself. `tests/integration/background/navigation-normalization.test.ts` (7 tests, integration with `fakeBrowser`) — a canonical blocklist entry matches non-canonical navigation URLs; the entry path and the navigation check resolve the same input to the same canonical form; malformed/bare-suffix/IP/`undefined` URLs neither block nor throw; a non-blocklisted domain is ignored; no block while `paused`; allowlist wins on a residual conflict. `tests/unit/lib/blocking/rules.test.ts` (+3 tests, unit) — a non-canonical stored entry is canonicalized before the rule is built; invalid entries (`co.uk`, `github.io`, malformed) are dropped; allowlist precedence applies on the canonicalized domains. `tests/unit/lib/url/domain.test.ts` (+1 test, unit) — bare public suffixes including private ones are rejected.
 - Relevant notes/decisions: `normalizeEntry` is a thin wrapper over `getRegistrableDomain` so the normalization rule lives in exactly one place and both boundaries (plus the DNR consumption) call it; it surfaces `INVALID_URL_MESSAGE` as the failure's message because rendering the user error belongs to the caller (M3.T3), per the M1.T2 note. Normalization still **removes** subdomains (collapses to `eTLD+1`), it never adds them. The preset path is covered by contract (M2.T5 domains are canonical; M3.T1 will apply them through the same function) — the visible "Enter a valid URL" feedback remains M3.T3's deliverable and is not anticipated here. The `allowPrivateDomains` change is a correctness fix in `lib/url/domain.ts` (a file owned by M1.T2/M5.T2, not listed on the card), required to satisfy the card's explicit `github.io` criterion; it is additive and behaviour-preserving for every existing case.
 - Acceptance criteria: verified — (1) **entry**: every site is canonicalized through the shared function and invalid input (a bare public suffix including `github.io`, a malformed URL) is rejected without throwing, with `INVALID_URL_MESSAGE` available to the UI; (2) **navigation check**: the tab URL is normalized before matching, a non-normalizable URL neither crashes nor triggers an erroneous block, and allowlist > blocklist precedence applies; (3) the tests assert that the same input produces the same canonical form regardless of the entry point.
+
+---
+
+## Milestone 3 — Secondary features
+
+### M3.T1 — `PresetPicker` (preset selection UI)
+- `components/blocklist/PresetPicker.tsx` (new) — presentational picker: it renders one `<button>` per entry of `PRESETS` (M2.T5) and, on click, invokes the **single** store action `applyPreset(preset.id)`. It holds no expansion/normalization logic and touches no browser API (Separation of Concerns, §1.1; coupling rule §1.3); `role="group"` + a per-preset `aria-label` make the choices accessible, and it carries its own CRT/monospace stylesheet.
+- `store/blocklist.slice.ts` — new pure `addPresetToList(state, list, preset)` expands a whole preset into one state: each domain goes through the existing `addSiteToList` (so normalization M2.T4, dedup and allow/block mutual exclusion M2.T20 are reused, never reimplemented) and the preset's `tag` (the purpose M2.T5 gave that field) is attached to every contributed domain. It returns the *same* reference when nothing changes (unknown/empty/already-applied preset), and applying two presets with an overlapping domain yields a single entry carrying both tags.
+- `store/blocklist.slice.ts` — the slice now exposes the `applyPreset(presetId)` action and `createBlocklistSlice` became a factory taking `BlocklistDependencies` (`sendMutation`, injectable per principle D). The action expands the preset in **one** `set` (one re-render) and then sends a **single** `BLOCKLIST_APPLY_PRESET` mutation, so the client does not dispatch N messages for N domains. An unknown preset id is a no-op (no update, no message).
+- `store/index.ts` — `StoreDependencies` now includes `BlocklistDependencies`; `defaultDependencies().sendMutation` bridges to the M1.T6 message bus (`void sendMessage(...)`); `addPresetToList` and the new types are re-exported.
+- `entrypoints/background.ts` — the previously inert `BLOCKLIST_APPLY_PRESET` case now resolves the preset with `getPresetById` (M2.T5) and applies `addPresetToList` to the writable store, so the whole preset is persisted in exactly one `setState` (no persist for an unknown id). This closes the M1.T10 note that left preset expansion "accepted-but-inert until M2.T5".
+- Files created/modified: `components/blocklist/PresetPicker.tsx` (new), `store/blocklist.slice.ts`, `store/index.ts`, `entrypoints/background.ts`, `tests/unit/store/blocklist-preset.test.ts` (new), `tests/unit/components/blocklist/PresetPicker.test.tsx` (new), `tests/integration/messaging/mutation-bus.test.ts`.
+- Dependencies added: none (reuses the M2.T5 preset data, the M2.T4/M2.T20 helpers and the existing M1.T6 bus; React was already present).
+- Tests: `tests/unit/store/blocklist-preset.test.ts` (10 tests, unit with `fakeBrowser`) — every Social domain is added; the preset tag is attached to each contributed domain; two synthetic overlapping presets produce no duplicate and merge both tags; a domain already on the allowlist is moved onto the blocklist preserving its tags (M2.T20); an empty preset is a same-reference no-op; re-applying the same preset is idempotent (same reference); purity (input untouched); every declared preset expands without leftovers; the `applyPreset` action performs exactly one store update and sends exactly one mutation with the right payload; an unknown id neither mutates nor sends. `tests/unit/components/blocklist/PresetPicker.test.tsx` (4 tests, component with Testing Library + `user-event`) — one button per preset; clicking Social invokes `applyPreset` once (spy) and adds all four domains; clicking it twice creates no duplicates; the component carries its stylesheet. `tests/integration/messaging/mutation-bus.test.ts` (updated, integration with `fakeBrowser`) — the old `BLOCKLIST_APPLY_PRESET` no-op test now asserts the whole preset is applied and persisted exactly once, plus a new unknown-id no-op case.
+- Relevant notes/decisions: the acceptance criterion ("single store action, not N") is met at two levels — the popup does one `set` + one mutation, and the background does one `setState`/persist. The M1.T9 single-writer rule is preserved: the read-only popup applies the identical, idempotent expansion in memory for immediate feedback and asks the background to persist it, then converges through the M1.T8 bridge. Attaching `Preset.tag` realises the M2.T5 intent; tag *management* UI stays in M3.T2. The §3.3 edge case ("two overlapping presets") is covered with synthetic presets because the shipped M2.T5 catalogue has no overlap.
+- Acceptance criteria: verified — selecting "Social" adds all of its domains to the blocklist in a single store action/update, verified at unit, component and integration level (one persist).
 
 ---
 

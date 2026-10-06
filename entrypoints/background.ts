@@ -2,6 +2,7 @@ import {
   createAppStore,
   attachStoreSync,
   addSiteToList,
+  addPresetToList,
   removeSiteFromList,
   upsertTag,
   removeTag,
@@ -9,6 +10,7 @@ import {
   type BlocklistListName,
   type BlocklistState,
 } from '@/store';
+import { getPresetById } from '@/lib/blocking/presets';
 import {
   createBrowserAlarmProvider,
   type AlarmProvider,
@@ -114,10 +116,15 @@ function applyMutation(state: BlocklistState, message: MutationMessage): Blockli
       if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
       return removeSiteFromList(state, list, site);
     }
-    case 'BLOCKLIST_APPLY_PRESET':
-      // Preset expansion needs the preset dataset (M2.T5); until then the
-      // message is accepted but has no effect on the state.
-      return state;
+    case 'BLOCKLIST_APPLY_PRESET': {
+      const { presetId } = message.payload;
+      if (typeof presetId !== 'string' || presetId.length === 0) return state;
+      const preset = getPresetById(presetId);
+      if (preset === undefined) return state;
+      // The whole preset is expanded in a single state update (M3.T1), so the
+      // mutation persists once no matter how many domains it contains.
+      return addPresetToList(state, 'blocklist', preset);
+    }
     case 'TAG_UPSERT': {
       if (!isTag(message.payload)) return state;
       return upsertTag(state, message.payload);

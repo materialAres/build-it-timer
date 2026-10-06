@@ -143,14 +143,39 @@ describe('cross-context mutation path (M1.T10)', () => {
     handle.dispose();
   });
 
-  it('accepts BLOCKLIST_APPLY_PRESET as a no-op until M2.T5', async () => {
+  it('applies a whole preset in one mutation and persists once (M3.T1)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    await sendMessage({
+      type: 'BLOCKLIST_APPLY_PRESET',
+      payload: { presetId: 'social' },
+    });
+
+    // The whole preset is expanded in a single store action...
+    expect(store.getState().blocklist.blocklist.map((entry) => entry.domain.value)).toEqual([
+      'instagram.com',
+      'facebook.com',
+      'x.com',
+      'tiktok.com',
+    ]);
+    // ...so the background persists exactly once, not once per domain.
+    expect(setSpy).toHaveBeenCalledTimes(1);
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+
+  it('ignores an unknown preset id without mutating (M3.T1)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
     await sendMessage({
       type: 'BLOCKLIST_APPLY_PRESET',
-      payload: { presetId: 'social' },
+      payload: { presetId: 'does-not-exist' },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([]);

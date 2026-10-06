@@ -13,7 +13,13 @@ import {
   type CityDependencies,
   type CitySlice,
 } from './city.slice';
-import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
+import { sendMessage } from '@/lib/messaging/bus';
+import type { MutationMessage } from '@/lib/messaging/messages.types';
+import {
+  createBlocklistSlice,
+  type BlocklistDependencies,
+  type BlocklistSlice,
+} from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
@@ -61,7 +67,7 @@ const initialUiState: UiSlice['ui'] = {
 // engine, theme picker and a deterministic clock/entropy source without
 // touching the browser APIs. The timer slice (M2.T1) and the city slice
 // (M2.T11) share this object; later slices extend it.
-export type StoreDependencies = TimerDependencies & CityDependencies;
+export type StoreDependencies = TimerDependencies & CityDependencies & BlocklistDependencies;
 
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
@@ -76,6 +82,11 @@ const defaultDependencies = (): StoreDependencies => ({
   selectThemeId,
   width: DEFAULT_CITY_WIDTH,
   height: DEFAULT_CITY_HEIGHT,
+  // A read-only context changes configuration only by asking the background
+  // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) uses this sender.
+  sendMutation: (message: MutationMessage): void => {
+    void sendMessage(message);
+  },
 });
 
 const createAppState =
@@ -83,7 +94,7 @@ const createAppState =
   (...args) => ({
     ...createTimerSlice(dependencies)(...args),
     ...createCitySlice(dependencies)(...args),
-    ...createBlocklistSlice(...args),
+    ...createBlocklistSlice(dependencies)(...args),
     ...createScoreSlice(...args),
     ...createSessionHistorySlice(...args),
     ui: initialUiState,
@@ -192,6 +203,7 @@ export type {
 export {
   createBlocklistSlice,
   addSiteToList,
+  addPresetToList,
   removeSiteFromList,
   resolveListConflicts,
   upsertTag,
@@ -200,7 +212,11 @@ export {
   selectBlocklist,
   selectCustomTags,
 } from './blocklist.slice';
-export type { BlocklistListName, BlocklistState } from './blocklist.slice';
+export type {
+  BlocklistDependencies,
+  BlocklistListName,
+  BlocklistState,
+} from './blocklist.slice';
 export {
   createSessionHistorySlice,
   appendSessionSummary,
