@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T16** (Milestone 2 in progress).
+> Updated to: **M2.T17** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T16 done; M2.T17 … M2.T21 remaining.
-- Tests: `bun run test` → **359 passing tests** across 42 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T17 done; M2.T18 … M2.T21 remaining.
+- Tests: `bun run test` → **365 passing tests** across 43 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -58,6 +58,7 @@ description: Rules for updating the changelog
 | M2.T14 | `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow) | completed | — (to be committed) |
 | M2.T15 | Linking growth-engine ↔ character-insertion tick (2s) | completed | — (to be committed) |
 | M2.T16 | Linking malus ↔ building destruction | completed | — (to be committed) |
+| M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | — (to be committed) |
 
 ---
 
@@ -480,6 +481,17 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/background/malus-wiring.test.ts` (10 tests, unit with a stub tracker + injected sender) — "proceed" destroys a character in the same update cycle (`applyMalus(before, 1)`); emits `MALUS_APPLIED` with the domain and count; "go-back" is a no-op (no removal, no message); two malus events in close succession apply only once; no malus while the timer is not `running`; one character per accrued 2s tick; the pre-"proceed" open time is forgiven; an already-empty city is a safe no-op; a new session resets the stretch; `dispose()` detaches the session subscription. `tests/integration/background/malus.test.ts` (5 tests, integration with `fakeBrowser` + `FakeAlarmProvider` + `FakeTabEventSource`) — the real `startBackground` handler destroys a character in the same update cycle as the `SITE_BLOCKED_ATTEMPT` "proceed" message; `MALUS_APPLIED` is broadcast; "go-back" destroys nothing and emits nothing; two `proceed` messages do not double-apply; with `facebook.com` on the blocklist a blocked tab plus a 2s `TIMER_TICK` grows one character and removes one (asserted against `applyMalus(growCity(...))`).
 - Relevant notes/decisions: per the M2.T10 note, the malus targets the **globally topmost occupied cell** (`applyMalus`'s rule), not a domain-specific building: nothing populates `city.buildings` (M2.T11) and the growth engine (M2.T12) grows by focus time, not by domain, so a domain→building locator is not derivable without changing the growth engine — this stays deferred (see Open issues). The malus is driven by the same fine-grained `TIMER_TICK` as growth; if the popup is closed no tick arrives and the pending distortion is applied at the next tick (the tracker accumulates in the background meanwhile). The immediate first character is what makes the acceptance criterion ("within the same update cycle") hold even at the instant of the choice.
 - Acceptance criteria: verified — simulating `SITE_BLOCKED_ATTEMPT` with the `proceed` choice makes the city store lose a character in the same update cycle (`applyMalus(before, 1)`), emits `MALUS_APPLIED`, and continues one character per 2s while the blocked tab stays open.
+
+### M2.T17 — `ScoreBadge` (Excellent/Good/Bad UI)
+- `components/score/ScoreBadge.tsx` (new) — presentational badge showing the current session score level: it reads the level through `selectScoreLevel` (M2.T9) and derives both its label and its modifier class from it — no scoring logic in the component (Separation of Concerns, §1.1).
+  - **Data-driven labels (Open/Closed, §1.1)**: `SCORE_BADGE_LABELS: Record<ScoreLevel, string>` (exported) maps each level to its EN display text (`Excellent`/`Good`/`Bad`), so a new level is an entry, never an `if/else` chain.
+  - **Distinctive style per level**: the component carries its own `SCORE_BADGE_STYLES` sheet with `score-badge--excellent`/`--good`/`--bad` colors (green `#51cf66`, yellow `#fcc419`, red `#ff6b6b`) and a pill border; `text-shadow: 0 0 4px currentColor` keeps the CRT glow consistent with the city (M2.T14). The element exposes `data-level` and the `score-badge--<level>` class for both styling and tests.
+  - **Accessibility**: rendered as `role="status"` (polite live region) with `aria-label="Focus score: <label>"`, so a level change is announced without stealing focus.
+- Files created/modified: `components/score/ScoreBadge.tsx` (new), `tests/unit/components/score/ScoreBadge.test.tsx` (new).
+- Dependencies added: none (reuses the existing store selector and `ScoreLevel` type; React was already present).
+- Tests: `tests/unit/components/score/ScoreBadge.test.tsx` (6 tests, component with Testing Library + `happy-dom`) — the three variants forced from the store (label, modifier class and `data-level` for `excellent`/`good`/`bad`); **a transition from `excellent` to `bad` between two consecutive renders** on the same mounted node updates label and class without a remount (the §3.3 edge case); the three labels/modifier classes are distinct; the stylesheet carries a rule per level and the `text-shadow: 0 0 4px currentColor` glow.
+- Relevant notes/decisions: the badge owns presentation only — the level is still derived from the ratio by `calculateScore` (M2.T9) and set through `setDistractionRatio`; the component never recomputes it. Labels are hardcoded in EN for now and move to `i18n.t(...)` in M3.T9, like the overlay (M2.T8). The component is not yet composed into the popup: `App.tsx` (M3.T4) is the task that mounts it.
+- Acceptance criteria: verified — the component correctly renders the three variants based on the store value, tested with each state forced (`excellent`, `good`, `bad`) plus the state transition.
 
 ---
 
