@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T8** (Milestone 2 in progress).
+> Updated to: **M2.T9** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T8 done; M2.T9 … M2.T21 remaining.
-- Tests: `bun run test` → **223 passing tests** across 26 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T9 done; M2.T10 … M2.T21 remaining.
+- Tests: `bun run test` → **235 passing tests** across 28 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -46,6 +46,7 @@ description: Rules for updating the changelog
 | M2.T6 | `declarativeNetRequest` rule generator | completed | — (to be committed) |
 | M2.T7 | Applying DNR rules from the background, active only in-session | completed | — (to be committed) |
 | M2.T8 | Overlay alert content script (Shadow DOM) | completed | — (to be committed) |
+| M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | — (to be committed) |
 
 ---
 
@@ -309,6 +310,17 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/components/common/BlockedOverlay.test.tsx` (6 tests, component) — renders the question naming the domain; exactly the two choices Yes/No; Yes → `onProceed` only; No → `onGoBack` only; the encouragement replaces the question once dismissed; the stylesheet is inside its own markup. `tests/unit/lib/blocking/is-domain-blocked.test.ts` (6 tests, unit) — blocked/not blocked, empty list, **allowlist wins (first-class case)**, only the non-allowlisted domain blocked, canonical-form-only matching. `tests/unit/lib/blocking/store-snapshot.test.ts` (8 tests, unit) — extracts status + lists, ignores unneeded slices, rejects missing/empty/non-string values, malformed JSON, a missing state envelope, a malformed blocklist, and a missing/unknown timer status. `tests/integration/content/blocked-overlay.test.ts` (15 tests, integration with `fakeBrowser`) — mounts on a blocked domain while running; the host has no light-DOM children and the root carries the `all: initial` sheet (isolation); no mount while idle; no mount on a non-blocked domain; allowlist wins; a URL with no registrable domain does not crash; **the script run twice yields one overlay (idempotence)**; a blocklist change arriving while the page is open mounts *and* unmounts the overlay; Yes → `proceed`; Yes closes the overlay; No → `go-back` + `goBack()` with **no `MALUS_APPLIED`**; No keeps the encouragement when there is no history; **a background with no listener does not break the page**; the real `createStoreReader` works against the persisted key; `ctx.notifyInvalidated()` removes the overlay; teardown removes the storage subscription. Updated for the revision: `tests/unit/lib/blocking/rules.test.ts`, `tests/unit/lib/blocking/apply-rules.test.ts`, `tests/integration/background/dnr-rules.test.ts` (`sub_frame` only), `tests/integration/messaging/bus.test.ts`, `tests/integration/background/background.test.ts` (payload without `tabId`).
 - Relevant notes/decisions: the store key and envelope are duplicated as *strings/guards* in `store-snapshot.ts` instead of importing `store/index.ts`, which is what keeps zustand out of the content bundle; a test asserts the key matches. Accepted limitations (also recorded in the roadmap card): at `document_idle` the page paints briefly before the overlay covers it; pages where content scripts cannot run (Chrome Web Store, PDF viewer, other extensions' pages) cannot be gated; re-navigating to a blocked domain shows the overlay again, and malus continuity across that re-mount belongs to the background (M2.T10/M2.T16). Overlay strings are hardcoded in EN for now and move to `i18n.t(...)` in M3.T9 (the roadmap's M3.T9 file list was corrected to the new path). No "lists are frozen while running" restriction was added: the content script re-reads storage, so mid-session edits are consistent.
 - Acceptance criteria: verified — (1) the overlay is isolated in Shadow DOM (open shadow root, no light-DOM children, sheet inside the root, `all: initial`; asserted in the integration test); (2) "Yes" sends `SITE_BLOCKED_ATTEMPT` with `choice: 'proceed'` through the M1.T6 bus; (3) "No" sends `go-back` and closes/answers without any malus message. Re-verified after the change: `bun run test` (223 passing), `bun run compile`, `bun run lint`, `bun run build` (Chrome MV3 manifest contains the `<all_urls>` content script and host permission).
+
+### M2.T9 — `scoreSlice` + `lib/score/calculate-score.ts`
+- `lib/score/calculate-score.ts` (new) — pure `calculateScore(distractionRatio): ScoreLevel` implementing the updated thresholds: exactly `0` → `'excellent'`, `(0, 0.3]` → `'good'`, `> 0.3` → `'bad'` (two thresholds, three levels, no gray zones). `GOOD_MAX_RATIO = 0.3` is exported as the single named boundary rather than a magic number in the comparison.
+  - **Defensive/out-of-range input** (the ratio crosses an untrusted boundary, §1.4): a non-finite ratio is clamped into `[0, 1]` instead of leaking into the comparison — `NaN` is treated as `0` (the "no distraction observed" default, mirroring `formatDuration`, M2.T3), `±Infinity` clamp to `0`/`1`. The function is total and never throws.
+  - The function owns only the stable `ratio → level` mapping; how `distractionRatio` is derived from individual distraction events (duration/number/weight) remains the open point of roadmap §4 and is deliberately not fixed here.
+- `store/score.slice.ts` — the stub now carries a `setDistractionRatio(distractionRatio)` action that writes the raw ratio and derives `level` through `calculateScore` (thin delegation: no scoring logic in the store, principle S). `ScoreState` is exported as its own type (parallel to `BlocklistState`); the `score` slice stays persisted (M1.T4), so the level survives a service-worker restart during a still-active session. No browser dependency (principle D).
+- Files created/modified: `lib/score/calculate-score.ts` (new), `store/score.slice.ts`, `tests/unit/lib/score/calculate-score.test.ts` (new), `tests/unit/store/score-slice.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/score/calculate-score.test.ts` (8 tests, unit) — `0 → excellent`; `0.3 → good`; `0.31 → bad`; `1.0 → bad`; a parametric table over the boundaries (`0`, `0.001`, `0.15`, `0.3`, `0.3000001`, `0.31`, `0.75`, `1.0`); the good boundary inclusive and `GOOD_MAX_RATIO + Number.EPSILON` bad; exact zero only (`-0` included); out-of-range/non-finite input (`-0.5`, `-Infinity`, `1.5`, `Infinity`, `NaN`) defensively clamped without throwing. `tests/unit/store/score-slice.test.ts` (4 tests, unit with `FakeAlarmProvider`) — default `excellent`/`0`; `setDistractionRatio` derives the level (0.1 → good, 0.5 → bad, 0 → excellent); the exact `0.3`/`0.31` boundary; the granular `selectScoreLevel`/`selectDistractionRatio` selectors.
+- Relevant notes/decisions: the roadmap's testing-strategy table (§3.3) still lists the old boundaries (`0.2`/`0.5`) for M2.T9; the task card's revised thresholds (`0.3`/`0.31`) are authoritative and are what the tests cover. The level is derived, never set directly, so the thresholds cannot drift between the store and the pure function. Consuming the score in the UI (`ScoreBadge`, M2.T17) and the per-session reset remain owned by those tasks.
+- Acceptance criteria: verified — (1) `calculateScore(0)` → `'excellent'`; (2) `calculateScore(0.3)` → `'good'`, `calculateScore(0.31)` → `'bad'`; (3) all boundary values (`0`, `0.3`, `0.31`, `1.0`) covered by parametric tests; (4) the `distractionRatio` derivation formula is left as the documented open point, only the threshold function is implemented.
 
 ---
 
