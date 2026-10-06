@@ -84,4 +84,28 @@ describe('buildDnrRules (M2.T6)', () => {
     expect(blocklist).toEqual(blocklistBefore);
     expect(allowlist).toEqual(allowlistBefore);
   });
+
+  describe('defensive normalization on consumption (M2.T21)', () => {
+    it('canonicalizes a non-canonical stored entry before building the rule', () => {
+      const rules = buildDnrRules([entry('https://m.facebook.com/x')], []);
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0]?.condition.urlFilter).toBe('||facebook.com^');
+    });
+
+    it('drops an entry that is not a valid registrable domain', () => {
+      expect(buildDnrRules([entry('co.uk')], [])).toEqual([]);
+      expect(buildDnrRules([entry('github.io')], [])).toEqual([]);
+      expect(buildDnrRules([entry('not a url')], [])).toEqual([]);
+    });
+
+    it('applies allowlist precedence on the canonicalized domains', () => {
+      const rules = buildDnrRules(
+        [entry('https://m.facebook.com/x')],
+        [entry('facebook.com')],
+      );
+
+      expect(rules).toEqual([]);
+    });
+  });
 });

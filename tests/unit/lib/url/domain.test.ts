@@ -99,5 +99,11 @@ describe('getRegistrableDomain', () => {
         expect(result.error).toBeInstanceOf(Error);
       }
     });
+
+    it('returns a failure for a "bare" public suffix, including private ones', () => {
+      for (const input of ['co.uk', 'com', 'github.io']) {
+        expect(getRegistrableDomain(input).ok).toBe(false);
+      }
+    });
   });
 });

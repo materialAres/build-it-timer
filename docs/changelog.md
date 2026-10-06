@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T20** (Milestone 2 in progress).
+> Updated to: **M2.T21** (Milestone 2 completed).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T20 done; M2.T21 remaining.
-- Tests: `bun run test` → **401 passing tests** across 46 files (unit + integration + component).
+- Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
+- Tests: `bun run test` → **421 passing tests** across 48 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -62,6 +62,7 @@ description: Rules for updating the changelog
 | M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | — (to be committed) |
 | M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | — (to be committed) |
 | M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | — (to be committed) |
+| M2.T21 | Defensive blocklist input normalization (entry + navigation check) | completed | — (to be committed) |
 
 ---
 
@@ -532,6 +533,19 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the resolution is the **move** option of the card's "the UI offers to move it or shows explicit feedback"; because `components/blocklist/SiteList.tsx` does not exist yet and is the deliverable of **M3.T3** (which, per its own card, consumes M2.T20 to render the feedback), this task delivers the store-level semantics that make a double entry impossible and leaves the visible feedback to M3.T3 — documented as a new open issue rather than anticipating that task. `resolveListConflicts` is live (called by every `addSiteToList`), not dead code, and the allowlist-wins branch mirrors the existing consumption-time precedence so the two can never diverge. Preserving `tagIds` on a move is an addition beyond the literal criterion, chosen so a user's tagging is not lost when switching a site between lists.
 - Acceptance criteria: verified — (1) adding to the blocklist a domain already in the allowlist (or vice versa) creates no double entry and the domain ends up only in the target list, with the comparison performed on normalized domains (unit + integration tests); (2) the precedence rule is explicit and tested: a residual conflict always resolves in favour of the allowlist (`resolveListConflicts`, and the `addSiteToList` heal-the-state case).
 
+### M2.T21 — Defensive normalization of blocklist input (entry + navigation check)
+- `lib/blocking/normalize-entry.ts` (new) — the single pure `normalizeEntry(input: string): Result<string>` shared by the two untrusted boundaries, plus `INVALID_URL_MESSAGE = 'Enter a valid URL'`. It delegates to `getRegistrableDomain` (DRY, §1.1), so the entry path and the navigation check always agree on the canonical form; a failure carries the user-facing message the UI renders (M3.T3) and never throws.
+- `lib/url/domain.ts` — `parse` now receives `{ allowPrivateDomains: true }`, so a **bare private suffix** (`github.io`, `blogspot.com`) is rejected exactly like `co.uk`/`com`. This closes a latent M1.T2 gap: both the M1.T2 and M2.T21 cards list `github.io` as an invalid registrable domain, but the previous implementation accepted it (tldts treated `github.io` as the `eTLD+1` of the `io` TLD because the PSL private section was disabled). Every existing valid/invalid case is behaviour-preserving.
+- `store/blocklist.slice.ts` — `addSiteToList`/`removeSiteFromList` now canonicalize through `normalizeEntry` instead of calling `getRegistrableDomain` directly (identical behaviour, now the shared named entry point). The rejection path is unchanged: same-state reference on invalid input, so the background skips persisting and the UI can surface `INVALID_URL_MESSAGE`.
+- `entrypoints/background.ts` — the navigation check (`createDistractionPredicate`) normalizes the tab URL with `normalizeEntry`; a non-normalizable URL yields `false` (no crash, no erroneous block), after which `isDomainBlocked` applies the allowlist-wins precedence (M2.T6/M2.T8). The predicate is now **exported** so this boundary is directly testable.
+- `entrypoints/blocked-overlay.content.tsx` — the content-script gate (the top-level navigation gate, M2.T8) resolves the page URL with the same `normalizeEntry`, so the two navigation checks cannot diverge on the canonical form.
+- `lib/blocking/rules.ts` — `buildDnrRules` canonicalizes every stored domain **on consumption** (an entry from an older persisted state, an import, or a hand-edited store is not trusted) and drops entries that are not valid registrable domains; the allowlist-wins comparison runs on the canonicalized domains, so `www.`/`m.` variants still collapse onto one another.
+- Files created/modified: `lib/blocking/normalize-entry.ts` (new), `tests/unit/lib/blocking/normalize-entry.test.ts` (new), `tests/integration/background/navigation-normalization.test.ts` (new), `lib/url/domain.ts`, `store/blocklist.slice.ts`, `entrypoints/background.ts`, `entrypoints/blocked-overlay.content.tsx`, `lib/blocking/rules.ts`, `tests/unit/lib/blocking/rules.test.ts`, `tests/unit/lib/url/domain.test.ts`.
+- Dependencies added: none (`tldts` was already a runtime dependency from M1.T2).
+- Tests: `tests/unit/lib/blocking/normalize-entry.test.ts` (9 tests, unit) — subdomain/protocol/port/ccSLD inputs collapse to the canonical form; determinism over repeated calls; bare public suffixes including private ones (`github.io`) rejected with `INVALID_URL_MESSAGE`; malformed/empty/whitespace/IP rejected; the exact UI wording asserted; a hostile corpus never throws; agreement with `getRegistrableDomain` over a corpus; every M2.T5 preset domain normalizes to itself. `tests/integration/background/navigation-normalization.test.ts` (7 tests, integration with `fakeBrowser`) — a canonical blocklist entry matches non-canonical navigation URLs; the entry path and the navigation check resolve the same input to the same canonical form; malformed/bare-suffix/IP/`undefined` URLs neither block nor throw; a non-blocklisted domain is ignored; no block while `paused`; allowlist wins on a residual conflict. `tests/unit/lib/blocking/rules.test.ts` (+3 tests, unit) — a non-canonical stored entry is canonicalized before the rule is built; invalid entries (`co.uk`, `github.io`, malformed) are dropped; allowlist precedence applies on the canonicalized domains. `tests/unit/lib/url/domain.test.ts` (+1 test, unit) — bare public suffixes including private ones are rejected.
+- Relevant notes/decisions: `normalizeEntry` is a thin wrapper over `getRegistrableDomain` so the normalization rule lives in exactly one place and both boundaries (plus the DNR consumption) call it; it surfaces `INVALID_URL_MESSAGE` as the failure's message because rendering the user error belongs to the caller (M3.T3), per the M1.T2 note. Normalization still **removes** subdomains (collapses to `eTLD+1`), it never adds them. The preset path is covered by contract (M2.T5 domains are canonical; M3.T1 will apply them through the same function) — the visible "Enter a valid URL" feedback remains M3.T3's deliverable and is not anticipated here. The `allowPrivateDomains` change is a correctness fix in `lib/url/domain.ts` (a file owned by M1.T2/M5.T2, not listed on the card), required to satisfy the card's explicit `github.io` criterion; it is additive and behaviour-preserving for every existing case.
+- Acceptance criteria: verified — (1) **entry**: every site is canonicalized through the shared function and invalid input (a bare public suffix including `github.io`, a malformed URL) is rejected without throwing, with `INVALID_URL_MESSAGE` available to the UI; (2) **navigation check**: the tab URL is normalized before matching, a non-normalizable URL neither crashes nor triggers an erroneous block, and allowlist > blocklist precedence applies; (3) the tests assert that the same input produces the same canonical form regardless of the entry point.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -564,6 +578,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 14. **Missing M2.T19 detail card in `docs/roadmap-en.md`** — like M2.T13b/M2.T18, M2.T19 appears only in the summary table (line 58); §1.5 has no card for it, so there are no explicit acceptance criteria or edge cases. The implementation was derived from the summary row, the §1.2 folder comment and the §1.3 persisted-state list; the card (and the §3.3 test/task mapping row) should be added.
 15. **Session history has no runtime producer (M2.T19)** — the `sessionHistory` slice, its pure helper and persistence exist, but nothing calls `recordSession` yet: the `SESSION_ENDED` message (M1.T1) already carries a `SessionSummary` yet is never emitted (the timer never detects reaching zero) and its background listener is still the shared placeholder. Until that wiring lands (the session-completion path), the history stays empty at runtime. This is the same class of upstream gap as issues #9 (timer commands / `TIMER_TICK` emitter) and #13 (population), and is most naturally closed where session completion is implemented.
 16. **M2.T20 UI feedback not rendered yet** — the card lists `components/blocklist/SiteList.tsx` for the "UI offers to move it or shows explicit feedback" clause, but that component is the deliverable of **M3.T3** (which, per its own card, consumes M2.T20's precedence in the feedback). M2.T20 therefore delivers the store-level mutual exclusion (`addSiteToList` moves the domain) and the explicit `resolveListConflicts` precedence (allowlist wins); the visible feedback (e.g. "moved from the blocklist") is left to M3.T3 rather than anticipating it.
+17. **Entry-rejection feedback has no transport yet (M2.T21)** — `normalizeEntry` returns a failure carrying `INVALID_URL_MESSAGE` and `addSiteToList` returns the same state reference on rejection, but the `BLOCKLIST_ADD_SITE` mutation is fire-and-forget (the M1.T6 `sendMessage` `Result` reports only delivery, not the background's decision). A read-only popup cannot learn that the background rejected the input, so "Enter a valid URL" (M3.T3) must validate on the popup side with `normalizeEntry` before dispatching — or a future mutation ack is needed. Recorded so M3.T3 does not discover it late.
 
 ---
 

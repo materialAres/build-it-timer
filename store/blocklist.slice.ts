@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import { getRegistrableDomain } from '@/lib/url/domain';
+import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import type { BlocklistEntry, Tag } from './store.types';
 import type { AppState } from '.';
 
@@ -25,12 +25,13 @@ export const createBlocklistSlice: StateCreator<AppState, [], [], BlocklistSlice
 // change. These helpers are pure and side-effect-free so they can run on the
 // background side and be unit-tested without a store or a browser.
 //
-// User input is untrusted (M2.T4): every site goes through
-// `getRegistrableDomain` before it is stored, so only the canonical registrable
-// form (`eTLD+1`, subdomains removed — the M1.T2 design decision) ever reaches
-// the state. A malformed URL or a "bare" public suffix (`co.uk`, `com`) is
-// rejected: the helper returns the *same* state reference, which the background
-// uses to skip persisting and the UI to show "Enter a valid URL" (M2.T21/M3.T3).
+// User input is untrusted (M2.T4): every site goes through `normalizeEntry`
+// (M2.T21, the single entry/navigation canonicalizer) before it is stored, so
+// only the canonical registrable form (`eTLD+1`, subdomains removed — the M1.T2
+// design decision) ever reaches the state. A malformed URL or a "bare" public
+// suffix (`co.uk`, `com`, `github.io`) is rejected: the helper returns the *same*
+// state reference, which the background uses to skip persisting and the UI to
+// show "Enter a valid URL" (M2.T21/M3.T3).
 //
 // The DNR side-effect is owned by M2.T7.
 
@@ -78,7 +79,7 @@ export function addSiteToList(
   list: BlocklistListName,
   site: string,
 ): BlocklistState {
-  const normalized = getRegistrableDomain(site);
+  const normalized = normalizeEntry(site);
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
@@ -109,7 +110,7 @@ export function removeSiteFromList(
 ): BlocklistState {
   // Normalize on removal too, so a full URL (`https://m.facebook.com/x`) removes
   // the canonical `facebook.com` entry instead of silently matching nothing.
-  const normalized = getRegistrableDomain(site);
+  const normalized = normalizeEntry(site);
   if (!normalized.ok) return state;
 
   const domain = normalized.value;

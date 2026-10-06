@@ -26,7 +26,7 @@ import {
   type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
-import { getRegistrableDomain } from '@/lib/url/domain';
+import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import {
   createBrowserTabEventSource,
   createTabDistractionTracker,
@@ -216,17 +216,22 @@ function countOccupied(layers: CityLayers): number {
 
 /**
  * Whether an open tab is a distraction right now: a blocked, canonical domain
- * while a focus session is running. Reuses `isDomainBlocked` (M2.T8) so the
- * allowlist-wins precedence (M2.T6) is not reimplemented.
+ * while a focus session is running. The navigation URL is untrusted, so it is
+ * canonicalized with `normalizeEntry` (M2.T21) — the same function the entry
+ * path uses — before matching; a URL that cannot be normalized does not match
+ * any list (no crash, no erroneous block). Reuses `isDomainBlocked` (M2.T8) so
+ * the allowlist-wins precedence (M2.T6) is not reimplemented.
  */
-function createDistractionPredicate(store: AppStore): (url: string | undefined) => boolean {
+export function createDistractionPredicate(
+  store: AppStore,
+): (url: string | undefined) => boolean {
   return (url) => {
     if (url === undefined) return false;
     const { timer, blocklist } = store.getState();
     if (timer.status !== 'running') return false;
-    const parsed = getRegistrableDomain(url);
-    if (!parsed.ok) return false;
-    return isDomainBlocked(blocklist, parsed.value);
+    const normalized = normalizeEntry(url);
+    if (!normalized.ok) return false;
+    return isDomainBlocked(blocklist, normalized.value);
   };
 }
 
