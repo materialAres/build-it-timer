@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T11b** (Milestone 2 in progress).
+> Updated to: **M2.T11c** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11b done; M2.T11c … M2.T21 remaining.
-- Tests: `bun run test` → **275 passing tests** across 32 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T11c done; M2.T12 … M2.T21 remaining.
+- Tests: `bun run test` → **287 passing tests** across 33 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -50,6 +50,7 @@ description: Rules for updating the changelog
 | M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | — (to be committed) |
 | M2.T11 | `citySlice` — city grid/layer state, new every session | completed | — (to be committed) |
 | M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | — (to be committed) |
+| M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | — (to be committed) |
 
 ---
 
@@ -368,6 +369,18 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/city/tile-library.test.ts` (9 tests, unit) — ≥2 variants per category; every module declares a positive, compatible width; every row is exactly `widthChars` long; widths are mutually compatible within each category (one unique width per category, itself a grid multiple); unique module ids; `getModulesByCategory` filters correctly in declaration order; `getModuleById` returns the module / `undefined`; `isWidthCompatible` accepts base-width multiples (including a custom base) and rejects zero, negatives, non-integers and non-multiples.
 - Relevant notes/decisions: the library intentionally holds no picking logic so the composer can stay the single place where minute thresholds + seeded randomness decide what to build. All current widths equal `TILE_BASE_WIDTH`, so any base/floor/top combination stacks directly; the compatibility check (multiples of the base width) leaves room for future wider modules without breaking alignment. ASCII tops carry significant leading/trailing spaces — the `widthChars` assertion is what guarantees those are counted, not trimmed.
 - Acceptance criteria: verified — (1) each module declares its own width and the test enforces mutually compatible widths within a category; (2) at least two variants per category (three each) are present; (3) data only, no selection logic.
+
+### M2.T11c — `lib/city/building-composer.ts` — building composition from modules based on minutes
+- `lib/city/building-composer.ts` (new) — pure `composeBuilding(minutesFocused: number, rng: SeededRandom): ComposedBuilding` (reusing the M1.T1 `ComposedBuilding` type, whose `moduleIds`/`rows`/`widthChars` shape is exactly the "Building" the roadmap asks for). It progressively unlocks tile-library modules by focused time and picks each variant pseudo-randomly through the injected generator.
+  - **Thresholds as data (Open/Closed, §1.1)**: `BUILDING_UNLOCK_SCHEDULE: ReadonlyArray<BuildingUnlockRule>` (`{ minuteThreshold, moduleCategory }`) encodes the roadmap's example — `5'` base, `10'` first floor, `20'` an additional floor, `25'` top. Adding/removing a step is an array edit; `composeBuilding` contains no hardwired `if/else` per category.
+  - **Determinism**: variants are drawn in schedule order, one `rng.next()` per unlocked category, so the same `(minutesFocused, seed)` always yields the same building. Because draws happen only in schedule order, a module that is already unlocked keeps its variant as the building grows (base `5'` = base `25'`); only newly unlocked categories consume new draws. No internal `Date.now()`/`Math.random()` (principles D, §1.4).
+  - **Unbuilt state**: at 0 minutes (and below the first threshold) it returns `{ moduleIds: [], rows: [], widthChars: 0 }`, representable and distinct from a base-only building. `moduleIds` are in unlock order (base → top), while `rows` are in visual top-to-bottom order (grid row 0 is the top, consistent with M2.T10's top-down removal), with `padRow` centering narrower modules so a future wider base and narrower top still align; all current widths are equal (`TILE_BASE_WIDTH`), so padding is a no-op today.
+  - **Defensive input**: `minutesFocused` is clamped like `calculateScore` (M2.T9) — `NaN` → unbuilt, negatives/`-Infinity` → 0, `+Infinity` → everything unlocked; a misbehaving `rng.next()` outside `[0,1)` is clamped to a valid variant index (untrusted collaborator, §1.4). No browser dependency (principle D).
+- Files created/modified: `lib/city/building-composer.ts` (new), `tests/unit/lib/city/building-composer.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/city/building-composer.test.ts` (12 tests, unit) — schedule is ordered, data-driven and every category resolves to modules; unbuilt at 0 distinct from a base; unbuilt below the first threshold; exactly one more module unlocked at each of `5/10/20/25`; no growth past the last threshold (`10_000'` = `25'`); unlocked categories follow the schedule; already-unlocked modules stay stable as the building grows; same minutes + same seed → deep-equal building; different seeds produce more than one variant; rows are laid out top-then-floors-then-base; every row is exactly `widthChars` wide; negative/`NaN`/`-Infinity`/`+Infinity` minutes defensively normalized.
+- Relevant notes/decisions: the composer is standalone — nothing consumes it yet; the concrete growth engine (`lib/city/growth-engine.ts`, M2.T12) is what will call it (the roadmap even lists M2.T11c as its dependency), and the theme/palette (M2.T13) and decoration (M2.T12b) steps remain separate modules. The variant draw order is deliberate (stable lower modules while new ones unlock) so a growing city does not re-roll the buildings it already shows. The function returns `ComposedBuilding` rather than declaring a new `Building` type, to avoid duplicating the M1.T1 shape.
+- Acceptance criteria: verified — (1) unlock thresholds are configurable, ordered data, not hardwired `if/else`; (2) same `minutesFocused` + same seed → identical building; (3) an unbuilt building (0 minutes) is representable and distinct from a base-only building.
 
 ---
 
