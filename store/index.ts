@@ -1,6 +1,7 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
+import { selectThemeId } from '@/lib/city/theme-registry';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
@@ -8,7 +9,6 @@ import {
   createCitySlice,
   DEFAULT_CITY_HEIGHT,
   DEFAULT_CITY_WIDTH,
-  DEFAULT_THEME_ID,
   identityGrowthEngine,
   type CityDependencies,
   type CitySlice,
@@ -65,7 +65,9 @@ const defaultDependencies = (): StoreDependencies => ({
   now: Date.now,
   random: Math.random,
   growthEngine: identityGrowthEngine,
-  selectThemeId: () => DEFAULT_THEME_ID,
+  // Each session gets a deterministic biome from the theme registry (M2.T13b),
+  // replacing the placeholder fixed default.
+  selectThemeId,
   width: DEFAULT_CITY_WIDTH,
   height: DEFAULT_CITY_HEIGHT,
 });

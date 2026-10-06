@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T13** (Milestone 2 in progress).
+> Updated to: **M2.T13b** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T13 done; M2.T13b … M2.T21 remaining.
-- Tests: `bun run test` → **318 passing tests** across 36 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T13b done; M2.T14 … M2.T21 remaining.
+- Tests: `bun run test` → **329 passing tests** across 38 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -54,6 +54,7 @@ description: Rules for updating the changelog
 | M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | — (to be committed) |
 | M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | — (to be committed) |
 | M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | — (to be committed) |
+| M2.T13b | `lib/city/theme-registry.ts` — color themes/biomes per session | completed | — (to be committed) |
 
 ---
 
@@ -424,6 +425,21 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the function is pure and browser-free (principle D) and has no internal `Date.now()`/`Math.random()`. It is standalone for now — nothing consumes it yet; the theme registry (M2.T13b) supplies the palette and `CityCanvas`/`CityCell` (M2.T14) apply the color to the cell — consistent with the "each layer complete at its own level" sequencing recorded in the open issues.
 - Acceptance criteria: verified — (1) same normalized domain → same color, proven with repeated calls; (2) reasonably uniform distribution over a 400-domain sample with a no-majority guard; (3) the color is drawn from a defined blue/orange/green/yellow palette.
 
+### M2.T13b — `lib/city/theme-registry.ts` — color themes/biomes per session
+- `lib/city/theme-registry.ts` (new) — the static registry of color themes/biomes plus the deterministic session → biome selection.
+  - `THEME_REGISTRY: ReadonlyArray<Theme>` — data only (Open/Closed, §1.1): four complete `Theme` entries (`default` "Neon Metropolis", `sunset`, `arctic`, `phosphor`), each with a non-empty `palette` (hex colors the M2.T13 domain hash draws from) and a `backgroundColor` for the CRT backdrop. Adding a biome is an array edit, never a change to `selectThemeId` or its consumers.
+  - `DEFAULT_THEME_ID` — now owned by the registry (`'default'`, a real member of the registry so the fallback is always renderable); `store/city.slice.ts` re-exports it so existing store-barrel imports keep working.
+  - `getThemeById(id): Theme | undefined` — pure lookup (first match, same shape as `getPresetById`/`getModuleById`).
+  - `selectThemeId(sessionId): string` — pure, deterministic session → theme id: FNV-1a of the session id modulo the registry, so the same session always resolves to the same biome across a service-worker restart, while different sessions get different biomes. Total at the untrusted boundary (§1.4): an empty/unknown session id (or an empty registry) degrades to `DEFAULT_THEME_ID` instead of throwing. No internal `Date.now()`/`Math.random()` (principle D, §1.4).
+- `utils/hash.ts` (new) — the shared FNV-1a 32-bit string hash, moved here from `lib/city/palette.ts` because two deterministic mappings now need it (domain → color, M2.T13; session → theme, M2.T13b). Pure, dependency-free, no domain logic (it belongs in `utils/` per §1.2). `palette.ts` now imports it (behaviour-preserving extraction; the palette tests remain green).
+- `store/city.slice.ts` — `DEFAULT_THEME_ID` is re-exported from the theme registry instead of being declared locally.
+- `store/index.ts` — `defaultDependencies().selectThemeId` is now the registry's `selectThemeId` (was the placeholder `() => DEFAULT_THEME_ID`), so a running app assigns each new session a real biome without the slice changing (the integration point anticipated by M2.T11).
+- Files created/modified: `lib/city/theme-registry.ts` (new), `utils/hash.ts` (new), `lib/city/palette.ts`, `store/city.slice.ts`, `store/index.ts`, `tests/unit/lib/city/theme-registry.test.ts` (new), `tests/integration/store/theme-registry-wiring.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/city/theme-registry.test.ts` (8 tests, unit) — ≥2 biomes with unique ids; every theme has non-empty id/name/backgroundColor/palette and hex colors; the documented default id is a real registry member; `getThemeById` returns the theme or `undefined`; `selectThemeId` is deterministic (50 repetitions); it always returns a registry id (including for empty/whitespace and Unicode session ids); it never throws; a 60-session sample spreads over more than one biome (no gross bias). `tests/integration/store/theme-registry-wiring.test.ts` (3 tests, integration with `fakeBrowser`) — the default store assigns a registry biome through `resetCityForNewSession`; different sessions get different biomes; the default id is in the registry.
+- Relevant notes/decisions: **the roadmap has no M2.T13b detail card** — only the summary-table row (`lib/city/theme-registry.ts` — color themes/biomes per session, dependency M1.T1) and, in the changelog, the M2.T11/M2.T13 notes that a theme registry was expected to supply `selectThemeId` and the active `Theme.palette`. The contract implemented here (a data registry + `getThemeById` + deterministic `selectThemeId(sessionId)`) was therefore derived from the existing `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the missing card is recorded as an open documentation issue. The palette remains a parameter to `getBuildingColor` (M2.T13), so a biome's palette is applied by the renderer (M2.T14) without changing the hash logic. The hash extraction is the only change to a module owned by another task and is behaviour-preserving.
+- Acceptance criteria: verified — (1) themes/biomes are defined as data and adding one requires no logic change; (2) the same session id deterministically maps to the same biome, and different sessions vary; (3) the default store wires the registry in (the M2.T11 `selectThemeId` port), with the unit and integration tests above.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -449,7 +465,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 7. **Overlay reachability is bounded by the content-script injection rules (M2.T8)** — with `main_frame` no longer blocked (see the M2.T8 entry), the top-level navigation gate is the overlay itself. Pages where content scripts cannot be injected (Chrome Web Store, the PDF viewer, other extensions' pages, and — in Firefox MV2 — some restricted URLs) therefore cannot be gated at all: the user reaches them with no overlay and no malus. This is inherent to the content-script approach (it is why M3.T6's manual cross-browser pass matters) and is accepted rather than worked around; a hard-block alternative would need an extension interstitial page with a one-time allow, which is a different design. Also inherent: at `document_idle` the page paints briefly before the overlay covers it.
 8. **`SITE_BLOCKED_ATTEMPT` no longer carries `tabId` (M2.T8)** — its M5.T1 payload criterion landed early, so what remains of M5.T1 is the runtime validation of the discriminated union, the `sender.id`/`sender.tab` check, and deriving `tabId` from `sender.tab.id` for the variants that need it. M2.T10 must read the tab id from `sender`, not from the payload.
 9. **M2.T10 leaves the malus unwired (by design)** — `applyMalus` and `createTabDistractionTracker` are pure/standalone: nothing calls them yet, and the tracker is not attached to the background. M2.T16 owns the wiring (route the `SITE_BLOCKED_ATTEMPT` "proceed" choice to `applyMalus`, identify the affected domain's building, and emit `MALUS_APPLIED`). The removal rule chosen here (topmost occupied cell first) may need revisiting at M2.T16 once `citySlice.buildings` (M2.T11) gives every building a domain identity, at which point the malus can target one building instead of the globally topmost cell.
-10. **Growth engine exists but is not yet wired (M2.T12)** — `lib/city/growth-engine.ts` now provides the concrete, seeded `growCity`/`createGrowthEngine` (M2.T12), but `store/index.ts` still defaults `growthEngine` to `identityGrowthEngine`, so `citySlice.growCity` remains a no-op in the running app until M2.T15 binds the session-derived seed and invokes it on every tick. Likewise the theme id assigned on reset still comes from the injected `selectThemeId` default (`DEFAULT_THEME_ID`) until the theme registry (M2.T13b), and no task yet writes `city.buildings` (reset keeps it `{}`; M2.T16 populates it). Expected: each layer is complete at its own level.
+10. **Growth engine exists but is not yet wired (M2.T12)** — `lib/city/growth-engine.ts` now provides the concrete, seeded `growCity`/`createGrowthEngine` (M2.T12), but `store/index.ts` still defaults `growthEngine` to `identityGrowthEngine`, so `citySlice.growCity` remains a no-op in the running app until M2.T15 binds the session-derived seed and invokes it on every tick. The theme registry (M2.T13b) now supplies the default `selectThemeId`, so a new session already gets a real biome. No task yet writes `city.buildings` (reset keeps it `{}`; M2.T16 populates it). Expected: each layer is complete at its own level.
+11. **Missing M2.T13b detail card in `docs/roadmap-en.md`** — the task appears only in the summary table (line 52); §1.5 jumps from the M2.T13 card to the M2.T14 card, so there are no explicit acceptance criteria or edge cases for M2.T13b. The implementation was derived from the `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the card (and the §3.3 test/task mapping row) should be added so future contributors have the authoritative spec.
 
 ---
 

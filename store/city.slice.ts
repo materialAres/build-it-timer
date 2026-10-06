@@ -11,13 +11,12 @@ export const DEFAULT_CITY_WIDTH = 40;
 export const DEFAULT_CITY_HEIGHT = 12;
 
 /**
- * Placeholder theme used until the theme registry lands (M2.T13b). Kept as a
- * named constant so the integration point is explicit: `startTimer` (M2.T1)
- * always resets the city to a *new* session, and the theme id it assigns comes
- * from `selectThemeId`. M2.T13b replaces the default with a real pick from the
- * session's biome without touching the slice.
+ * The default theme id now lives in the theme registry (M2.T13b); re-exported
+ * here so existing imports from the store barrel keep working. The id assigned
+ * to a new session comes from the injected `selectThemeId` (the registry's
+ * `selectThemeId` in production).
  */
-export const DEFAULT_THEME_ID = 'default';
+export { DEFAULT_THEME_ID } from '@/lib/city/theme-registry';
 
 /**
  * The growth engine port (principle D): the pure function that computes the new

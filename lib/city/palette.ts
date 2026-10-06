@@ -1,4 +1,5 @@
 import { getRegistrableDomain } from '@/lib/url/domain';
+import { hashString } from '@/utils/hash';
 
 /**
  * The default building palette (roadmap M2.T13): blue, orange, green, yellow.
@@ -15,20 +16,6 @@ export const DEFAULT_BUILDING_PALETTE: ReadonlyArray<string> = [
 
 /** Deterministic fallback for the degenerate empty-palette input. */
 const FALLBACK_COLOR = '#4dabf7';
-
-/**
- * FNV-1a (32-bit). A small, dependency-free, well-mixed string hash: the same
- * domain always produces the same number, so the palette assignment is stable
- * across sessions and contexts. Not cryptographic — determinism is the goal.
- */
-function hashString(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
 
 /**
  * Canonical key for a domain: the registrable form (eTLD+1, subdomains
