@@ -5,7 +5,9 @@ import { useAppStore } from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
 function setScore(level: ScoreLevel, distractionRatio = 0): void {
-  useAppStore.setState({ score: { level, distractionRatio } });
+  useAppStore.setState((state) => ({
+    score: { ...state.score, level, distractionRatio },
+  }));
 }
 
 describe('ScoreBadge (M2.T17)', () => {

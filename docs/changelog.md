@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T17** (Milestone 2 in progress).
+> Updated to: **M2.T18** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T17 done; M2.T18 … M2.T21 remaining.
-- Tests: `bun run test` → **365 passing tests** across 43 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T18 done; M2.T19 … M2.T21 remaining.
+- Tests: `bun run test` → **380 passing tests** across 45 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -59,6 +59,7 @@ description: Rules for updating the changelog
 | M2.T15 | Linking growth-engine ↔ character-insertion tick (2s) | completed | — (to be committed) |
 | M2.T16 | Linking malus ↔ building destruction | completed | — (to be committed) |
 | M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | — (to be committed) |
+| M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | — (to be committed) |
 
 ---
 
@@ -493,6 +494,19 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the badge owns presentation only — the level is still derived from the ratio by `calculateScore` (M2.T9) and set through `setDistractionRatio`; the component never recomputes it. Labels are hardcoded in EN for now and move to `i18n.t(...)` in M3.T9, like the overlay (M2.T8). The component is not yet composed into the popup: `App.tsx` (M3.T4) is the task that mounts it.
 - Acceptance criteria: verified — the component correctly renders the three variants based on the store value, tested with each state forced (`excellent`, `good`, `bad`) plus the state transition.
 
+### M2.T18 — `PopulationCounter` + `lib/score/calculate-population.ts`
+- `lib/score/calculate-population.ts` (new) — pure `calculatePopulation(minutesFocused: number): number`: every unlocked `base` of the building-composer schedule is a house (`POPULATION_PER_HOUSE = 5`) and every unlocked `floor` is a building floor (`POPULATION_PER_FLOOR = 15`); decorative `top` elements add no inhabitants.
+  - **Reuses the M2.T11c schedule (dependency)**: population is derived from `BUILDING_UNLOCK_SCHEDULE` rather than duplicating the minute thresholds, so the value matches what `composeBuilding` actually unlocks for the same focused time while staying independent of the randomly chosen module variant (only categories count). Because it derives from elapsed focus time, it keeps evolving after the grid is visually full (the M2.T12 note) instead of being clamped by the rendered grid.
+  - **Pure/total** (§1.4, principles D): no internal `Date.now()`/`Math.random()`; `NaN` → 0, negative/`-Infinity` → 0, `+Infinity` → every step unlocked (the maximum, 35).
+- `store/score.slice.ts` — `ScoreState` gains `population: number` (default `0`) and the slice a `setPopulation(population)` action; `setDistractionRatio` now preserves the field instead of rebuilding the object. New granular `selectPopulation`. `setPopulation` defensively normalizes at the store boundary (non-finite/negative → 0, floored), consistent with the other untrusted-input guards.
+- `store/index.ts` — re-exports `selectPopulation` from the score slice.
+- `components/score/PopulationCounter.tsx` (new) — presentational counter: reads the population through `selectPopulation` (no calculation in the component, Separation of Concerns §1.1) and renders the value plus a `population` label, with `role="status"` (polite live region), `data-population` and a defensive `0` fallback for a stale/non-finite persisted value. It carries its own stylesheet with the CRT `text-shadow: 0 0 4px currentColor` glow used by the city (M2.T14) and the badge (M2.T17).
+- Files created/modified: `lib/score/calculate-population.ts` (new), `components/score/PopulationCounter.tsx` (new), `store/score.slice.ts`, `store/index.ts`, `tests/unit/lib/score/calculate-population.test.ts` (new), `tests/unit/components/score/PopulationCounter.test.tsx` (new), `tests/unit/store/score-slice.test.ts`, `tests/unit/components/score/ScoreBadge.test.tsx`.
+- Dependencies added: none (reuses the M2.T11c schedule and the existing store/React stack).
+- Tests: `tests/unit/lib/score/calculate-population.test.ts` (8 tests, unit) — zero before the first house (`0`, `4.9`); +5 at the base threshold; +15 at each floor threshold (10 → 20, 20 → 35); the top adds nothing (24/25/`10_000` → 35); agreement with `composeBuilding`'s categories for several minutes and two extreme seeds (variant-independent); monotonic non-decreasing over focused time; defensive normalization (`NaN`, negative, `-Infinity` → 0; `+Infinity` → 35). `tests/unit/components/score/PopulationCounter.test.tsx` (4 tests, component with Testing Library + `happy-dom`) — renders the store value with `data-population`/`aria-label`; zero for an empty city; updates on a population change between two consecutive renders without a remount; label + CRT-glow stylesheet. `tests/unit/store/score-slice.test.ts` (+3 tests, updated) — population default `0` and `setPopulation` + selector; changing the population leaves the level/ratio intact; defensive normalization (non-finite/negative → 0, floored). `tests/unit/components/score/ScoreBadge.test.tsx` (updated) — the `setScore` helper preserves the new field, so the M2.T17 suite stays green.
+- Relevant notes/decisions: **the roadmap has no M2.T18 detail card** — only the summary-table row (line 57). The contract implemented here was derived from that row (`PopulationCounter` + `lib/score/calculate-population.ts`, dependency M2.T11c), the folder comment "+5 per house, +15 per building floor" (§1.2 / design document) and the M2.T12 note that population is based on elapsed time, not on the grid state; the missing card is recorded as a new open issue. The action that *computes* the population from a session's focused time and calls `setPopulation` is deliberately not wired here: no store field tracks elapsed focus minutes, and choosing/wiring one is outside the summary-row scope; the counter is standalone until that upstream wiring lands (same "each layer complete at its own level" approach as M2.T12/M2.T13b). Population lives in the persisted `score` slice (M2.T9) so it survives a service-worker restart during a session and is the natural source for `SessionSummary.population` (M1.T1/M2.T19).
+- Acceptance criteria: derived (no card) — verified: `calculatePopulation` implements the +5-house/+15-floor formula and is unit-tested at every threshold and edge case; `PopulationCounter` renders the session population from the store, covered by component tests; `bun run compile`, `bun run lint`, `bun run test` (380) and both builds are green.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -520,6 +534,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 9. **Growth ticks have no popup-side emitter yet (M2.T15)** — the background now consumes `TIMER_TICK` and grows the city through the session-seeded engine (resolving the M2.T12 "growth engine is not wired" note), but nothing *sends* `TIMER_TICK` yet: `TimerDisplay`/`TimerControls` (M2.T3) do not run the fine-grained 2s timer and `App.tsx` (M3.T4) is not composed. Until the emitter lands the city only grows in tests. This is the send half of the same popup → background timer path as issue #6 (timer commands not routed); both should be closed together, most naturally in M3.T4.
 10. **`city.buildings` is still never populated; the malus targets the globally topmost cell (M2.T16)** — M2.T16 wired the malus (M2.T10) to the store and the tab distraction tracker to the background (resolving the former issue #9), but no task writes `city.buildings` (`resetCityForNewSession` keeps it `{}`) and the growth engine (M2.T12) grows by focus time, not by domain: a domain → building locator is therefore not derivable without changing the growth engine. `applyMalus`'s documented rule (remove the topmost occupied cell) is used as-is; per-domain destruction and the per-cell domain color anticipated by `CityCanvas` (M2.T14) remain deferred. A separate task would be needed to attach a domain identity to each building.
 11. **Missing M2.T13b detail card in `docs/roadmap-en.md`** — the task appears only in the summary table (line 52); §1.5 jumps from the M2.T13 card to the M2.T14 card, so there are no explicit acceptance criteria or edge cases for M2.T13b. The implementation was derived from the `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the card (and the §3.3 test/task mapping row) should be added so future contributors have the authoritative spec.
+12. **Missing M2.T18 detail card in `docs/roadmap-en.md`** — like M2.T13b, M2.T18 appears only in the summary table (line 57); §1.5 jumps from the M2.T17 card to the M2.T20 card, so there are no explicit acceptance criteria or edge cases. The implementation was derived from the summary row, the folder comment "+5 per house, +15 per building floor" and the M2.T12 note; the card (and the §3.3 test/task mapping row) should be added.
+13. **Population upstream wiring is not implemented (M2.T18)** — `calculatePopulation` (pure) and `PopulationCounter`/`setPopulation` (store + UI) exist, but nothing computes a session's focused minutes and calls `setPopulation` yet: no persisted field tracks elapsed focus time (the city slice receives per-tick deltas, the timer keeps `remainingSeconds`). Until that wiring lands (most naturally alongside the popup's `TIMER_TICK` emitter, issue #9, and/or at `SESSION_ENDED`), the counter reads the persisted default `0`.
 
 ---
 

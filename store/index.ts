@@ -194,7 +194,12 @@ export {
   selectCustomTags,
 } from './blocklist.slice';
 export type { BlocklistListName, BlocklistState } from './blocklist.slice';
-export { createScoreSlice, selectScoreLevel, selectDistractionRatio } from './score.slice';
+export {
+  createScoreSlice,
+  selectScoreLevel,
+  selectDistractionRatio,
+  selectPopulation,
+} from './score.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';
 export type { BlocklistSlice } from './blocklist.slice';
