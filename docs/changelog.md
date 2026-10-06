@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T9** (Milestone 2 in progress).
+> Updated to: **M2.T10** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T9 done; M2.T10 … M2.T21 remaining.
-- Tests: `bun run test` → **235 passing tests** across 28 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T10 done; M2.T11 … M2.T21 remaining.
+- Tests: `bun run test` → **252 passing tests** across 30 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -47,6 +47,7 @@ description: Rules for updating the changelog
 | M2.T7 | Applying DNR rules from the background, active only in-session | completed | — (to be committed) |
 | M2.T8 | Overlay alert content script (Shadow DOM) | completed | — (to be committed) |
 | M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | — (to be committed) |
+| M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | — (to be committed) |
 
 ---
 
@@ -322,6 +323,22 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the roadmap's testing-strategy table (§3.3) still lists the old boundaries (`0.2`/`0.5`) for M2.T9; the task card's revised thresholds (`0.3`/`0.31`) are authoritative and are what the tests cover. The level is derived, never set directly, so the thresholds cannot drift between the store and the pure function. Consuming the score in the UI (`ScoreBadge`, M2.T17) and the per-session reset remain owned by those tasks.
 - Acceptance criteria: verified — (1) `calculateScore(0)` → `'excellent'`; (2) `calculateScore(0.3)` → `'good'`, `calculateScore(0.31)` → `'bad'`; (3) all boundary values (`0`, `0.3`, `0.31`, `1.0`) covered by parametric tests; (4) the `distractionRatio` derivation formula is left as the documented open point, only the threshold function is implemented.
 
+### M2.T10 — `lib/score/apply-malus.ts` — progressive character-by-character deletion
+- `lib/score/apply-malus.ts` (new) — pure `applyMalus(city: CityLayers, ticksOfDistraction: number): CityLayers`, the inverse of the growth engine (M2.T12): **one character is removed per 2s tick** (`MALUS_TICK_MS = 2_000`, the same cadence as construction, M2.T15), not the whole building at once.
+  - **Removal rule (design decision)**: growth builds upwards, so the malus removes the **topmost occupied cell first**, scanning rows top → bottom and, within a row, the middleground → background → foreground and left → right. Which building belongs to the blocked domain is deliberately **not** decided here — it belongs to the integration task (M2.T16); this function only owns the character deletion.
+  - **Already empty**: when no character is left the function returns the *same* `CityLayers` reference (identity), so "malus on an empty city" is an explicit no-op and never an error or an undefined cell; a partially destroyed cell becomes the explicit empty state `{ char: null }`.
+  - **Defensive input**: ticks are floored and clamped to `>= 0`; a non-finite value is treated as `0` (mirroring `calculateScore`/`formatDuration`, M2.T3/M2.T9). Pure: no browser, no clock, no randomness (§1.4).
+- `lib/timer/tab-distraction-tracker.ts` (new) — the multi-tab detection adapter the card requires, kept separate from the pure function:
+  - `createTabDistractionTracker({ eventSource, isDistractedUrl, now, tickMs? })` subscribes to tab updates/removals, seeds the initially open tabs (`tabs.query`) and accumulates distraction time as `elapsed × number of open blocked tabs`, exposing whole 2s ticks through `getTicks()`. The `isDistractedUrl` predicate (which owns the M2.T6/M2.T8 allowlist-wins precedence) and the clock are injected, so the tracker is unit-testable without a browser (principle D/L).
+  - **Documented choice (roadmap M2.T10)**: the **first option — any open blocked tab counts, regardless of which tab is active — is implemented**. `tabs.onUpdated`/`onRemoved` + `tabs.query` reliably report a tab's URL and its open/close transitions without focus tracking, and this accumulates across simultaneously open blocked tabs as the roadmap asks; the active-tab fallback (`tabs.onActivated` + `windows.onFocusChanged`) was therefore not needed. The "why" is a code comment.
+  - `createBrowserTabEventSource()` is the thin `browser.tabs`-backed port; the tracker itself imports no `browser` API.
+- `wxt.config.ts` — `tabs` added to `manifest.permissions` (M2.T10), so a tab's URL is available on every page type (host permissions alone can leave it undefined on a restricted page). Verified in both generated manifests.
+- Files created/modified: `lib/score/apply-malus.ts` (new), `lib/timer/tab-distraction-tracker.ts` (new), `tests/helpers/fake-tab-event-source.ts` (new), `tests/unit/lib/score/apply-malus.test.ts` (new), `tests/unit/lib/timer/tab-distraction-tracker.test.ts` (new), `wxt.config.ts`.
+- Dependencies added: none (`browser.tabs` is a platform API).
+- Tests: `tests/unit/lib/score/apply-malus.test.ts` (9 tests, unit) — one character per tick; top-down removal; explicit `{ char: null }` empty state; more ticks than characters never goes below zero; already-empty city → same reference and no throw; zero/negative/`NaN`/`Infinity` ticks → same reference; purity (input untouched); determinism (deep-equal); consumption across all three layers. `tests/unit/lib/timer/tab-distraction-tracker.test.ts` (8 tests, unit with `FakeTabEventSource`) — no ticks without an open blocked tab; one tick per 2s; stops on close; stops on navigating away; accumulates across two simultaneously open tabs; counts tabs already open at startup; trusts the supplied predicate (allowlist wins); `dispose()` stops observing.
+- Relevant notes/decisions: this task owns the **pure deletion + the browser-API detection adapter only**. Wiring the `SITE_BLOCKED_ATTEMPT` ("proceed") message to `applyMalus`, and identifying the affected domain's building, is M2.T16; the tracker is likewise not yet attached to the background (same wiring). `MALUS_TICK_MS` is the single named 2s cadence constant (shared with M2.T15).
+- Acceptance criteria: verified — (1) `applyMalus` removes exactly one character per 2s tick (unit tests); (2) an already-empty building/city is an explicit no-op returning the same reference (no crash, no undefined intermediate state); (3) multi-tab detection lives in a dedicated browser-API adapter, with the first-choice rule documented by a why-comment and reported here; (4) `applyMalus` is pure and covered without a browser.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -341,11 +358,12 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
 2. **`framer-motion`** not yet installed (will be needed from M3.T5).
 3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
-4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix, `declarativeNetRequest` in M2.T7, `host_permissions: ['<all_urls>']` in M2.T8). The `tabs` permission still needs to be added by M2.T10 (the overlay no longer needs it: `SITE_BLOCKED_ATTEMPT` lost `tabId` in M2.T8). The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
+4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix, `declarativeNetRequest` in M2.T7, `host_permissions: ['<all_urls>']` in M2.T8, `tabs` in M2.T10). The vitest suite cannot catch a missing permission because `fakeBrowser` provides the APIs regardless of the manifest; only a real-browser run (dev/e2e) can.
 5. **`urlFilter` escaping (M5.T3)** — `buildDnrRules` (M2.T6) interpolates the domain into `urlFilter` as-is, trusting the canonical form produced by M2.T4. A domain containing `*`/`|`/`^`/`||` would be interpreted as DNR syntax; M5.T3 adds the escaping/validation. Tracked as a follow-up, not a defect of M2.T6 (entries are canonical by construction).
 6. **Timer commands from the popup are not routed to the background yet (found during M2.T7)** — the popup's `useAppStore` is read-only (M1.T9), so `TimerControls` (M2.T3) calling `startTimer()`/`pauseTimer()`/`resetTimer()` mutates only the popup's in-memory state and schedules an alarm on the popup's own provider; the background — which is what owns the timer, the alarms and the DNR rules (M2.T7) — never learns about it. The mutation-message mechanism that fixes this already exists (M1.T10, `MutationMessage` + `applyMutation`), but no task explicitly assigns the timer transition to it: M1.T10 covers the blocklist/tag variants only, and the `TIMER_STARTED`/`TIMER_PAUSED` variants from M1.T1 are declared but not handled. This does **not** invalidate M2.T7 (whose acceptance criteria are met in the background), but it must be closed before the M3.T4 acceptance criterion ("starting a timer from the UI updates `TimerDisplay` and the city state after a simulated tick") can pass end-to-end.
 7. **Overlay reachability is bounded by the content-script injection rules (M2.T8)** — with `main_frame` no longer blocked (see the M2.T8 entry), the top-level navigation gate is the overlay itself. Pages where content scripts cannot be injected (Chrome Web Store, the PDF viewer, other extensions' pages, and — in Firefox MV2 — some restricted URLs) therefore cannot be gated at all: the user reaches them with no overlay and no malus. This is inherent to the content-script approach (it is why M3.T6's manual cross-browser pass matters) and is accepted rather than worked around; a hard-block alternative would need an extension interstitial page with a one-time allow, which is a different design. Also inherent: at `document_idle` the page paints briefly before the overlay covers it.
 8. **`SITE_BLOCKED_ATTEMPT` no longer carries `tabId` (M2.T8)** — its M5.T1 payload criterion landed early, so what remains of M5.T1 is the runtime validation of the discriminated union, the `sender.id`/`sender.tab` check, and deriving `tabId` from `sender.tab.id` for the variants that need it. M2.T10 must read the tab id from `sender`, not from the payload.
+9. **M2.T10 leaves the malus unwired (by design)** — `applyMalus` and `createTabDistractionTracker` are pure/standalone: nothing calls them yet, and the tracker is not attached to the background. M2.T16 owns the wiring (route the `SITE_BLOCKED_ATTEMPT` "proceed" choice to `applyMalus`, identify the affected domain's building, and emit `MALUS_APPLIED`). The removal rule chosen here (topmost occupied cell first) may need revisiting at M2.T16 once `citySlice.buildings` (M2.T11) gives every building a domain identity, at which point the malus can target one building instead of the globally topmost cell.
 
 ---
 
