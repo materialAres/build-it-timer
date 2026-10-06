@@ -15,6 +15,7 @@ import {
 } from './city.slice';
 import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
+import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
@@ -32,6 +33,7 @@ export type AppState =
   CitySlice &
   BlocklistSlice &
   ScoreSlice &
+  SessionHistorySlice &
   UiSlice;
 
 // The persisted payload: the data of the persisted slices only. The action
@@ -43,6 +45,7 @@ export interface PersistedState {
   readonly city: CitySlice['city'];
   readonly blocklist: BlocklistSlice['blocklist'];
   readonly score: ScoreSlice['score'];
+  readonly sessionHistory: SessionHistorySlice['sessionHistory'];
 }
 
 export const STORE_NAME = 'timer-focus-store';
@@ -82,6 +85,7 @@ const createAppState =
     ...createCitySlice(dependencies)(...args),
     ...createBlocklistSlice(...args),
     ...createScoreSlice(...args),
+    ...createSessionHistorySlice(...args),
     ui: initialUiState,
   });
 
@@ -90,6 +94,7 @@ export const partialize = (state: AppState): PersistedState => ({
   city: state.city,
   blocklist: state.blocklist,
   score: state.score,
+  sessionHistory: state.sessionHistory,
 });
 
 export type AppStore = ReturnType<typeof buildStore>;
@@ -104,6 +109,7 @@ export type AppStore = ReturnType<typeof buildStore>;
  * | `timer` | background | n/a (driven by alarms in the background) |
  * | `city` | background | n/a (grown/destroyed in the background) |
  * | `score` | background | n/a (computed in the background) |
+ * | `sessionHistory` | background | n/a (recorded at session end) |
  * | `blocklist` | background | mutation message (M1.T10) |
  * | `ui` | each context | volatile, never persisted |
  *
@@ -194,6 +200,17 @@ export {
   selectCustomTags,
 } from './blocklist.slice';
 export type { BlocklistListName, BlocklistState } from './blocklist.slice';
+export {
+  createSessionHistorySlice,
+  appendSessionSummary,
+  MAX_SESSION_HISTORY,
+  selectSessionHistory,
+  selectSessionHistoryState,
+} from './session-history.slice';
+export type {
+  SessionHistorySlice,
+  SessionHistoryState,
+} from './session-history.slice';
 export {
   createScoreSlice,
   selectScoreLevel,

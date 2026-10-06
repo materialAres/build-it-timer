@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
   createAppStore,
@@ -6,9 +6,10 @@ import {
   selectRemainingSeconds,
   selectCustomTags,
   selectActiveTab,
+  selectSessionHistory,
   STORE_NAME,
 } from '@/store';
-import type { Tag } from '@/store/store.types';
+import type { SessionSummary, Tag } from '@/store/store.types';
 
 const testTag: Tag = { id: 'focus', label: 'Focus' };
 
@@ -27,6 +28,7 @@ describe('useAppStore', () => {
     expect(state.blocklist.allowlist).toEqual([]);
     expect(state.score.level).toBe('excellent');
     expect(state.city.layers.background.width).toBeGreaterThan(0);
+    expect(state.sessionHistory.sessions).toEqual([]);
     expect(state.ui.activeTab).toBe('timer');
   });
 
@@ -35,9 +37,31 @@ describe('useAppStore', () => {
     const persisted = partialize(store.getState());
 
     expect(Object.keys(persisted).sort()).toEqual(
-      ['blocklist', 'city', 'score', 'timer'].sort(),
+      ['blocklist', 'city', 'score', 'sessionHistory', 'timer'].sort(),
     );
     expect(persisted).not.toHaveProperty('ui');
+  });
+
+  it('persists the session history across a simulated restart (M2.T19)', async () => {
+    const ended: SessionSummary = {
+      sessionId: 'session-1',
+      score: 'good',
+      population: 10,
+      endedAt: 1_700_000_000_000,
+    };
+    const first = createAppStore();
+    await first.persist.rehydrate();
+    first.getState().recordSession(ended);
+    // Wait for the persist middleware's async write to land before restarting.
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      expect(raw[STORE_NAME]).toBeTypeOf('string');
+    });
+
+    const restarted = createAppStore();
+    await restarted.persist.rehydrate();
+
+    expect(selectSessionHistory(restarted.getState())).toEqual([ended]);
   });
 
   it('recovers a persisted field after a simulated restart', async () => {

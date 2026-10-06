@@ -6,15 +6,15 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M2.T18** (Milestone 2 in progress).
+> Updated to: **M2.T19** (Milestone 2 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
 
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
-- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T18 done; M2.T19 … M2.T21 remaining.
-- Tests: `bun run test` → **380 passing tests** across 45 files (unit + integration + component).
+- Milestone 2 (core features) — **in progress**: M2.T1 … M2.T19 done; M2.T20 … M2.T21 remaining.
+- Tests: `bun run test` → **390 passing tests** across 46 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -60,6 +60,7 @@ description: Rules for updating the changelog
 | M2.T16 | Linking malus ↔ building destruction | completed | — (to be committed) |
 | M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | — (to be committed) |
 | M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | — (to be committed) |
+| M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | — (to be committed) |
 
 ---
 
@@ -507,6 +508,17 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: **the roadmap has no M2.T18 detail card** — only the summary-table row (line 57). The contract implemented here was derived from that row (`PopulationCounter` + `lib/score/calculate-population.ts`, dependency M2.T11c), the folder comment "+5 per house, +15 per building floor" (§1.2 / design document) and the M2.T12 note that population is based on elapsed time, not on the grid state; the missing card is recorded as a new open issue. The action that *computes* the population from a session's focused time and calls `setPopulation` is deliberately not wired here: no store field tracks elapsed focus minutes, and choosing/wiring one is outside the summary-row scope; the counter is standalone until that upstream wiring lands (same "each layer complete at its own level" approach as M2.T12/M2.T13b). Population lives in the persisted `score` slice (M2.T9) so it survives a service-worker restart during a session and is the natural source for `SessionSummary.population` (M1.T1/M2.T19).
 - Acceptance criteria: derived (no card) — verified: `calculatePopulation` implements the +5-house/+15-floor formula and is unit-tested at every threshold and edge case; `PopulationCounter` renders the session population from the store, covered by component tests; `bun run compile`, `bun run lint`, `bun run test` (380) and both builds are green.
 
+### M2.T19 — `session-history.slice.ts` — history of the last 5 sessions
+- `store/session-history.slice.ts` (new) — the `sessionHistory` slice: `{ sessions: ReadonlyArray<SessionSummary> }` plus the `recordSession(summary)` action. `SessionSummary` is the M1.T1 type (`sessionId`, `score`, `population`, `endedAt`) and is the exact payload carried by the `SESSION_ENDED` message (M1.T1).
+  - **Pure helper `appendSessionSummary(sessions, summary, max = MAX_SESSION_HISTORY)`**: inserts the new summary at the **front (newest first)**, **dedups by `sessionId`** (a re-emitted `SESSION_ENDED` replaces the existing entry instead of growing the history), and caps at the last `MAX_SESSION_HISTORY = 5` entries, dropping the oldest. It never mutates the input; a non-positive `max` returns the *same* reference (no-op, so the caller can skip persisting/re-rendering — same identity pattern as M1.T10/M2.T10), while a non-finite `max` falls back to the default cap instead of leaking into `slice` (§1.4).
+  - `createSessionHistorySlice` is a **thin store layer** (compute nothing, principle S/D): it delegates to the pure helper and writes only when the array reference changed. Selectors `selectSessionHistory` (the array) and `selectSessionHistoryState`.
+- `store/index.ts` — the slice is combined into `AppState` and added to `PersistedState`/`partialize`, so the history is part of the persisted state (roadmap §1.3, "history of the last 5 completed sessions") and survives a service-worker restart; the single-writer ownership table gains the `sessionHistory` row. Re-exports the slice, helper, constant, selectors and types.
+- Files created/modified: `store/session-history.slice.ts` (new), `store/index.ts`, `tests/unit/store/session-history-slice.test.ts` (new), `tests/integration/store/store.test.ts`.
+- Dependencies added: none (reuses the existing `SessionSummary` type and store/React stack).
+- Tests: `tests/unit/store/session-history-slice.test.ts` (9 tests, unit) — default empty history + selectors; record a session and expose it; newest-first order; the cap keeps only the last 5 (six inserts drop the oldest); the same `sessionId` is replaced instead of duplicated; `appendSessionSummary` purity (input untouched, new reference); a custom `max` is honored; a non-positive `max` is a no-op returning the same reference; a non-finite `max` falls back to the default cap. `tests/integration/store/store.test.ts` (+1 test, updated) — `partialize` now keeps `sessionHistory` (and still drops `ui`); the recorded history survives a simulated restart (record → await the async write → new store instance on the same fake storage).
+- Relevant notes/decisions: **the roadmap has no M2.T19 detail card** — only the summary-table row (line 58), the §1.2 folder comment (`session-history.slice.ts # history of the last 5 sessions`) and the §1.3 persisted-state list; the contract here was derived from those plus the M1.T1 note that `SessionSummary` "is the type the last-5-sessions history (M2.T19) is based on". The missing card is recorded as a new open issue. The slice is **not yet populated at runtime**: the `SESSION_ENDED` variant exists and already carries a `SessionSummary`, but nothing emits it (the timer never detects reaching zero and the background's `SESSION_ENDED` listener is still the shared placeholder); wiring that event to `recordSession` is left to the task that owns session completion (same "each layer complete at its own level" approach as M2.T12/M2.T18) and tracked as an open issue. `M3.T7` (`SessionHistory` UI) consumes `selectSessionHistory`.
+- Acceptance criteria: derived (no card) — verified: the slice keeps the last 5 completed sessions, newest first, deduped by session id, and persists them across a restart; `bun run compile`, `bun run lint`, `bun run test` (390) and both builds are green.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -536,6 +548,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 11. **Missing M2.T13b detail card in `docs/roadmap-en.md`** — the task appears only in the summary table (line 52); §1.5 jumps from the M2.T13 card to the M2.T14 card, so there are no explicit acceptance criteria or edge cases for M2.T13b. The implementation was derived from the `Theme` type (M1.T1) and the `CityDependencies.selectThemeId` port (M2.T11); the card (and the §3.3 test/task mapping row) should be added so future contributors have the authoritative spec.
 12. **Missing M2.T18 detail card in `docs/roadmap-en.md`** — like M2.T13b, M2.T18 appears only in the summary table (line 57); §1.5 jumps from the M2.T17 card to the M2.T20 card, so there are no explicit acceptance criteria or edge cases. The implementation was derived from the summary row, the folder comment "+5 per house, +15 per building floor" and the M2.T12 note; the card (and the §3.3 test/task mapping row) should be added.
 13. **Population upstream wiring is not implemented (M2.T18)** — `calculatePopulation` (pure) and `PopulationCounter`/`setPopulation` (store + UI) exist, but nothing computes a session's focused minutes and calls `setPopulation` yet: no persisted field tracks elapsed focus time (the city slice receives per-tick deltas, the timer keeps `remainingSeconds`). Until that wiring lands (most naturally alongside the popup's `TIMER_TICK` emitter, issue #9, and/or at `SESSION_ENDED`), the counter reads the persisted default `0`.
+14. **Missing M2.T19 detail card in `docs/roadmap-en.md`** — like M2.T13b/M2.T18, M2.T19 appears only in the summary table (line 58); §1.5 has no card for it, so there are no explicit acceptance criteria or edge cases. The implementation was derived from the summary row, the §1.2 folder comment and the §1.3 persisted-state list; the card (and the §3.3 test/task mapping row) should be added.
+15. **Session history has no runtime producer (M2.T19)** — the `sessionHistory` slice, its pure helper and persistence exist, but nothing calls `recordSession` yet: the `SESSION_ENDED` message (M1.T1) already carries a `SessionSummary` yet is never emitted (the timer never detects reaching zero) and its background listener is still the shared placeholder. Until that wiring lands (the session-completion path), the history stays empty at runtime. This is the same class of upstream gap as issues #9 (timer commands / `TIMER_TICK` emitter) and #13 (population), and is most naturally closed where session completion is implemented.
 
 ---
 
