@@ -1,12 +1,21 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
+import { selectThemeId } from '@/lib/city/theme-registry';
+import { growCity } from '@/lib/city/growth-engine';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
-import { createCitySlice, type CitySlice } from './city.slice';
+import {
+  createCitySlice,
+  DEFAULT_CITY_HEIGHT,
+  DEFAULT_CITY_WIDTH,
+  type CityDependencies,
+  type CitySlice,
+} from './city.slice';
 import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
+import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
@@ -24,6 +33,7 @@ export type AppState =
   CitySlice &
   BlocklistSlice &
   ScoreSlice &
+  SessionHistorySlice &
   UiSlice;
 
 // The persisted payload: the data of the persisted slices only. The action
@@ -35,6 +45,7 @@ export interface PersistedState {
   readonly city: CitySlice['city'];
   readonly blocklist: BlocklistSlice['blocklist'];
   readonly score: ScoreSlice['score'];
+  readonly sessionHistory: SessionHistorySlice['sessionHistory'];
 }
 
 export const STORE_NAME = 'timer-focus-store';
@@ -46,24 +57,35 @@ const initialUiState: UiSlice['ui'] = {
 };
 
 // Collaborators the slices need to act (principle D). Injected through
-// `createAppStore` so a test can substitute a fake alarm provider and a
-// deterministic clock/entropy source without touching the browser APIs. For now
-// only the timer slice (M2.T1) consumes them; later slices extend this type.
-export type StoreDependencies = TimerDependencies;
+// `createAppStore` so a test can substitute a fake alarm provider, growth
+// engine, theme picker and a deterministic clock/entropy source without
+// touching the browser APIs. The timer slice (M2.T1) and the city slice
+// (M2.T11) share this object; later slices extend it.
+export type StoreDependencies = TimerDependencies & CityDependencies;
 
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
+  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCity`
+  // receives the seed derived from the session id by the city slice, so the
+  // running app actually builds a city instead of the placeholder identity.
+  growthEngine: growCity,
+  // Each session gets a deterministic biome from the theme registry (M2.T13b),
+  // replacing the placeholder fixed default.
+  selectThemeId,
+  width: DEFAULT_CITY_WIDTH,
+  height: DEFAULT_CITY_HEIGHT,
 });
 
 const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
   (...args) => ({
     ...createTimerSlice(dependencies)(...args),
-    ...createCitySlice(...args),
+    ...createCitySlice(dependencies)(...args),
     ...createBlocklistSlice(...args),
     ...createScoreSlice(...args),
+    ...createSessionHistorySlice(...args),
     ui: initialUiState,
   });
 
@@ -72,6 +94,7 @@ export const partialize = (state: AppState): PersistedState => ({
   city: state.city,
   blocklist: state.blocklist,
   score: state.score,
+  sessionHistory: state.sessionHistory,
 });
 
 export type AppStore = ReturnType<typeof buildStore>;
@@ -86,6 +109,7 @@ export type AppStore = ReturnType<typeof buildStore>;
  * | `timer` | background | n/a (driven by alarms in the background) |
  * | `city` | background | n/a (grown/destroyed in the background) |
  * | `score` | background | n/a (computed in the background) |
+ * | `sessionHistory` | background | n/a (recorded at session end) |
  * | `blocklist` | background | mutation message (M1.T10) |
  * | `ui` | each context | volatile, never persisted |
  *
@@ -148,11 +172,28 @@ export {
   selectSessionId,
 } from './timer.slice';
 export type { TimerDependencies } from './timer.slice';
-export { createCitySlice, selectCityLayers, selectCityThemeId } from './city.slice';
+export {
+  createCitySlice,
+  DEFAULT_CITY_HEIGHT,
+  DEFAULT_CITY_WIDTH,
+  DEFAULT_THEME_ID,
+  identityGrowthEngine,
+  selectCity,
+  selectCityBuildings,
+  selectCityLayers,
+  selectCitySessionId,
+  selectCityThemeId,
+} from './city.slice';
+export type {
+  CityDependencies,
+  CityGrowthEngine,
+  CityState,
+} from './city.slice';
 export {
   createBlocklistSlice,
   addSiteToList,
   removeSiteFromList,
+  resolveListConflicts,
   upsertTag,
   removeTag,
   selectAllowlist,
@@ -160,7 +201,23 @@ export {
   selectCustomTags,
 } from './blocklist.slice';
 export type { BlocklistListName, BlocklistState } from './blocklist.slice';
-export { createScoreSlice, selectScoreLevel, selectDistractionRatio } from './score.slice';
+export {
+  createSessionHistorySlice,
+  appendSessionSummary,
+  MAX_SESSION_HISTORY,
+  selectSessionHistory,
+  selectSessionHistoryState,
+} from './session-history.slice';
+export type {
+  SessionHistorySlice,
+  SessionHistoryState,
+} from './session-history.slice';
+export {
+  createScoreSlice,
+  selectScoreLevel,
+  selectDistractionRatio,
+  selectPopulation,
+} from './score.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';
 export type { BlocklistSlice } from './blocklist.slice';

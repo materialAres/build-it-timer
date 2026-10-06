@@ -83,6 +83,10 @@ export function createTimerSlice(
       // session's alarm can never be confused with this one.
       const startedAt = now();
       const sessionId = generateSessionId(startedAt, random);
+      // Every focus session starts from a brand-new city (roadmap M2.T11): the
+      // reset is invoked here, on the idle → running transition only, never on a
+      // resume, so pausing/resuming keeps the city the user has already built.
+      get().resetCityForNewSession(sessionId);
       set({
         timer: {
           status: 'running',

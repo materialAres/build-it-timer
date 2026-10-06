@@ -12,7 +12,11 @@ export function getRegistrableDomain(url: string): Result<string> {
     return err(new Error('URL must be a non-empty string'));
   }
 
-  const parsed = parse(url);
+  // `allowPrivateDomains` makes tldts honour the PSL *private* section, so a
+  // bare private suffix (`github.io`, `blogspot.com`) is treated like any other
+  // public suffix and rejected as not registrable (M2.T21; the M1.T2 card
+  // already listed `github.io` among the invalid inputs).
+  const parsed = parse(url, { allowPrivateDomains: true });
   const domain = parsed.domain;
 
   if (!domain || !parsed.publicSuffix) {

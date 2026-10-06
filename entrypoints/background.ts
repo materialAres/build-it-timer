@@ -19,11 +19,21 @@ import {
   createBrowserRuleApplier,
   type RuleApplier,
 } from '@/lib/blocking/apply-rules';
-import { onMessage, type MessageType } from '@/lib/messaging/bus';
+import { onMessage, sendMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
   type MutationMessage,
+  type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
+import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
+import { normalizeEntry } from '@/lib/blocking/normalize-entry';
+import {
+  createBrowserTabEventSource,
+  createTabDistractionTracker,
+  type TabDistractionTracker,
+  type TabEventSource,
+} from '@/lib/timer/tab-distraction-tracker';
+import type { CityLayers } from '@/components/city/city.types';
 import type { Tag } from '@/store/store.types';
 
 /**
@@ -50,6 +60,8 @@ export interface BackgroundDependencies {
   readonly now?: () => number;
   /** Dynamic-rules applier (M2.T7). Injectable for tests. */
   readonly ruleApplier?: RuleApplier;
+  /** Tab event source for distraction tracking (M2.T10/M2.T16). */
+  readonly tabEventSource?: TabEventSource;
 }
 
 export interface BackgroundHandle {
@@ -137,6 +149,188 @@ function handleMutation(store: AppStore) {
 }
 
 /**
+ * Growth wiring (M2.T15): the fine-grained character-insertion tick arrives as
+ * the typed `TIMER_TICK` message from the active context (popup) — the 2s tick
+ * of the §1 "two distinct clocks" note, deliberately separate from the 60s
+ * `browser.alarms` countdown clock (M1.T5).
+ *
+ * On each tick the *undistracted* focus time elapsed since the previous tick is
+ * measured with the injected clock and handed to `citySlice.growCity` (M2.T11),
+ * which delegates to the session-seeded engine (M2.T12). A tick that arrives
+ * while the timer is not `running` neither grows the city nor moves the
+ * baseline, so paused/idle time is never counted as focus time. The baseline is
+ * set to "now" on the first tick of a running stretch (never to
+ * `sessionStartedAt`), so a service-worker restart cannot replay the whole
+ * session into the city a second time.
+ */
+export interface GrowthTickHandle {
+  /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
+  handleTick(): void;
+  /** Detach the status subscription owned by the tracker. */
+  dispose(): void;
+}
+
+function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
+  let lastGrowthAt: number | null = null;
+  let status = store.getState().timer.status;
+
+  // Detect the transitions into/out of `running` even when no tick arrives:
+  // resuming must start measuring from the resume moment, not from the last
+  // running tick before the pause (otherwise the paused gap would count as focus).
+  const unsubscribe = store.subscribe(() => {
+    const next = store.getState().timer.status;
+    if (next === status) return;
+    status = next;
+    lastGrowthAt = next === 'running' ? now() : null;
+  });
+
+  const handleTick = (): void => {
+    const { timer } = store.getState();
+    if (timer.status !== 'running') {
+      lastGrowthAt = null;
+      return;
+    }
+    const current = now();
+    const baseline = lastGrowthAt ?? current;
+    lastGrowthAt = current;
+    const elapsed = current - baseline;
+    if (elapsed <= 0) return;
+    store.getState().growCity(elapsed);
+  };
+
+  return { handleTick, dispose: unsubscribe };
+}
+
+/**
+ * How many characters the three layers currently hold. Used only to report how
+ * many characters a malus application actually removed (a pending tick against
+ * an already-empty city removes none).
+ */
+function countOccupied(layers: CityLayers): number {
+  return [layers.background, layers.middleground, layers.foreground].reduce(
+    (total, grid) =>
+      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
+    0,
+  );
+}
+
+/**
+ * Whether an open tab is a distraction right now: a blocked, canonical domain
+ * while a focus session is running. The navigation URL is untrusted, so it is
+ * canonicalized with `normalizeEntry` (M2.T21) — the same function the entry
+ * path uses — before matching; a URL that cannot be normalized does not match
+ * any list (no crash, no erroneous block). Reuses `isDomainBlocked` (M2.T8) so
+ * the allowlist-wins precedence (M2.T6) is not reimplemented.
+ */
+export function createDistractionPredicate(
+  store: AppStore,
+): (url: string | undefined) => boolean {
+  return (url) => {
+    if (url === undefined) return false;
+    const { timer, blocklist } = store.getState();
+    if (timer.status !== 'running') return false;
+    const normalized = normalizeEntry(url);
+    if (!normalized.ok) return false;
+    return isDomainBlocked(blocklist, normalized.value);
+  };
+}
+
+export interface MalusWiring {
+  /** React to the overlay's answer (M2.T8): only `proceed` starts the malus. */
+  handleAttempt(message: Extract<RuntimeMessage, { type: 'SITE_BLOCKED_ATTEMPT' }>): void;
+  /** Apply the distraction ticks accrued since the previous call. */
+  handleTick(): void;
+  /** Detach the session subscription owned by the wiring. */
+  dispose(): void;
+}
+
+export interface MalusWiringDependencies {
+  readonly store: AppStore;
+  /** Distraction clock source; only the tick count is consumed. */
+  readonly tracker: Pick<TabDistractionTracker, 'getTicks'>;
+  /** Message sink, injectable so the wiring is testable without the bus. */
+  readonly send?: (message: RuntimeMessage) => void;
+}
+
+const defaultSend = (message: RuntimeMessage): void => {
+  void sendMessage(message);
+};
+
+/**
+ * Malus wiring (M2.T16): connect the `SITE_BLOCKED_ATTEMPT` ("proceed") event
+ * (M2.T8) and the accumulated distraction ticks (M2.T10) to the city store
+ * (M2.T11), instead of the pure `applyMalus` model.
+ *
+ * The malus is one continuous stretch per focus session: choosing "proceed"
+ * removes the first character immediately (the store must reflect the
+ * destruction in the same update cycle, roadmap M2.T16); every subsequent 2s
+ * distraction tick removes one more. A second `proceed` in close succession —
+ * e.g. the overlay re-mounting on a blocked navigation (M2.T8) — does **not**
+ * double-apply, because the stretch is already active. A new session resets the
+ * stretch so the previous session's malus cannot bleed into the new city.
+ *
+ * The pre-`proceed` open time of the blocked tab is deliberately forgiven: the
+ * baseline is captured at the "proceed" choice, because the malus starts only
+ * after the user decides to enter (roadmap M2.T10).
+ */
+export function createMalusWiring({
+  store,
+  tracker,
+  send = defaultSend,
+}: MalusWiringDependencies): MalusWiring {
+  let active = false;
+  let baselineTicks = 0;
+  let applied = 0;
+  let domain = '';
+  let sessionId = store.getState().city.sessionId;
+
+  const unsubscribe = store.subscribe(() => {
+    const next = store.getState().city.sessionId;
+    if (next === sessionId) return;
+    sessionId = next;
+    active = false;
+    baselineTicks = 0;
+    applied = 0;
+  });
+
+  // The remove rule lives in `applyMalus` (M2.T10): this only decides how many
+  // ticks are due and hands them to the slice, which never computes.
+  const pump = (): void => {
+    if (!active) return;
+    const expected = 1 + (tracker.getTicks() - baselineTicks);
+    const pending = expected - applied;
+    if (pending <= 0) return;
+
+    const before = countOccupied(store.getState().city.layers);
+    store.getState().applyMalusToCity(pending);
+    applied += pending;
+
+    const charactersRemoved = before - countOccupied(store.getState().city.layers);
+    if (charactersRemoved <= 0) return;
+    send({ type: 'MALUS_APPLIED', payload: { domain, charactersRemoved } });
+  };
+
+  return {
+    handleAttempt(message): void {
+      if (message.payload.choice !== 'proceed') return;
+      if (store.getState().timer.status !== 'running') return;
+      if (active) return;
+      active = true;
+      domain = message.payload.domain;
+      baselineTicks = tracker.getTicks();
+      applied = 0;
+      pump();
+    },
+    handleTick(): void {
+      pump();
+    },
+    dispose(): void {
+      unsubscribe();
+    },
+  };
+}
+
+/**
  * Wiring-only orchestrator (M1.T7): it creates the background's writable store
  * and alarm provider and registers the typed message listeners. It deliberately
  * contains no business logic, so the background can start cleanly and be tested
@@ -153,7 +347,10 @@ export function startBackground(
   // subscribes to: two providers would mean the alarm fires into a void.
   const alarmProvider =
     dependencies.alarmProvider ?? createBrowserAlarmProvider(dependencies.now);
-  const store = dependencies.store ?? createAppStore({ dependencies: { alarmProvider } });
+  const now = dependencies.now ?? Date.now;
+  const store =
+    dependencies.store ??
+    createAppStore({ dependencies: { alarmProvider, now } });
 
   // Dynamic DNR rules (M2.T7): the browser's ruleset is a projection of the
   // store, so it is recomputed from *state* rather than patched at each call
@@ -176,8 +373,47 @@ export function startBackground(
   // background's store rehydrates whenever the persisted key changes (M1.T8).
   disposers.push(attachStoreSync(store));
 
+  // Growth across the timer ticks (M2.T15): the tracker owns the running/idle
+  // baseline used to size each `growCity` delta.
+  const growthTick = createGrowthTick(store, now);
+  disposers.push(() => {
+    growthTick.dispose();
+  });
+
+  // Malus across the distraction ticks (M2.T16): the tab tracker (M2.T10)
+  // accumulates how long blocked tabs stay open while a session is running, and
+  // the wiring routes the overlay's "proceed" choice plus those ticks to the
+  // city store.
+  const distractionTracker = createTabDistractionTracker({
+    eventSource: dependencies.tabEventSource ?? createBrowserTabEventSource(),
+    isDistractedUrl: createDistractionPredicate(store),
+    now,
+  });
+  // The tracker's initial tab read is best-effort: a failure must not become an
+  // unhandled rejection that kills the service worker (§1.4).
+  void distractionTracker.ready.catch((error: unknown) => {
+    console.error('[background] tab distraction tracker failed to start', error);
+  });
+  const malus = createMalusWiring({ store, tracker: distractionTracker });
+  disposers.push(() => {
+    malus.dispose();
+    distractionTracker.dispose();
+  });
+
+  // Passive variants: the malus consumes `SITE_BLOCKED_ATTEMPT` and the same
+  // 2s `TIMER_TICK` that drives growth; every other variant stays a placeholder
+  // until its owning task (M2.T2/M2.T7) lands.
+  const handlePassiveMessage = (message: RuntimeMessage): void => {
+    if (message.type === 'TIMER_TICK') {
+      growthTick.handleTick();
+      malus.handleTick();
+    } else if (message.type === 'SITE_BLOCKED_ATTEMPT') {
+      malus.handleAttempt(message);
+    }
+  };
+
   for (const type of MESSAGE_TYPES) {
-    disposers.push(onMessage(type, handlePlaceholder));
+    disposers.push(onMessage(type, handlePassiveMessage));
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
@@ -205,7 +441,7 @@ export function startBackground(
     const { timer } = store.getState();
     const restored = await restoreTimer(timer, {
       alarmProvider,
-      now: dependencies.now ?? Date.now,
+      now,
     });
     if (restored.changed) store.setState({ timer: restored.timer });
     // Awaited so `ready` also means "the dynamic ruleset reflects the restored

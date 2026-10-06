@@ -4,7 +4,7 @@ import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { BlockedOverlay } from '@/components/common/BlockedOverlay';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { parseStoreSnapshot, STORE_STORAGE_KEY, type StoreSnapshot } from '@/lib/blocking/store-snapshot';
-import { getRegistrableDomain } from '@/lib/url/domain';
+import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { sendMessage } from '@/lib/messaging/bus';
 
 /**
@@ -163,7 +163,9 @@ export function startBlockedOverlay(
       return;
     }
 
-    const domain = getRegistrableDomain(url);
+    // The tab URL is untrusted; `normalizeEntry` (M2.T21) is the same
+    // canonicalizer the background navigation check and the entry path use.
+    const domain = normalizeEntry(url);
     if (!domain.ok) return;
     if (!isDomainBlocked(snapshot, domain.value)) {
       unmount();

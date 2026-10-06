@@ -35,8 +35,11 @@ export default defineConfig({
     // renders, leaving the popup blank; without `alarms` the background's
     // `createBrowserAlarmProvider` fails the same way. `declarativeNetRequest`
     // is what the background's rule sync (M2.T7) needs to install the
-    // blocklist rules; the `tabs` permission is not needed for that.
-    permissions: ['storage', 'alarms', 'declarativeNetRequest'],
+    // blocklist rules. `tabs` (M2.T10) makes the tab's URL available to the
+    // distraction tracker regardless of host-permission timing: the tracker
+    // reads the URL from `tabs.onUpdated`/`tabs.query`, and host permissions
+    // alone can leave it undefined on a restricted page.
+    permissions: ['storage', 'alarms', 'declarativeNetRequest', 'tabs'],
     // The overlay (M2.T8) must be able to run on any page, because the
     // blocklist is user-defined and therefore unknown at build time. Declared
     // both as a host permission (so the script may be injected) and as a
