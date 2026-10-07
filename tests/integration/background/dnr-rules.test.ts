@@ -275,7 +275,7 @@ describe('background DNR rule application (M2.T7)', () => {
     expect(callsAfterStart).toBe(callsAfterStartup + 1);
 
     // A volatile UI change must not re-evaluate the ruleset.
-    handle.store.setState({ ui: { ...handle.store.getState().ui, malusAlertVisible: true } });
+    handle.store.setState({ ui: { ...handle.store.getState().ui, activeTab: 'score' } });
     await flush();
     expect(dnr.updates).toHaveLength(callsAfterStart);
 

@@ -13,6 +13,13 @@ timer:
   pause: Pausa
   reset: Reimposta
 
+tabs:
+  ariaLabel: Sezioni del popup
+  timer: Timer
+  city: Città
+  blocklist: Blocchi
+  score: Punteggio
+
 city:
   canvasAriaLabel: Città in costruzione durante la concentrazione
   exportAriaLabel: Esporta città

@@ -12,6 +12,13 @@ timer:
   pause: Pause
   reset: Reset
 
+tabs:
+  ariaLabel: Popup sections
+  timer: Timer
+  city: City
+  blocklist: Blocklist
+  score: Score
+
 city:
   canvasAriaLabel: Focus city under construction
   exportAriaLabel: Export city

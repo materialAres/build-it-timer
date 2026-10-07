@@ -30,8 +30,14 @@ export interface UiSlice {
   readonly ui: {
     readonly activeTab: PopupTab;
     readonly liveRemainingSeconds: number;
-    readonly malusAlertVisible: boolean;
   };
+  /**
+   * Switch the visible popup section (M3.T4). The field is volatile, so the
+   * popup always opens on the default tab; the action writes only the in-memory
+   * state, which is why a read-only context (the popup, M1.T9) may call it —
+   * `ui` is never persisted, so the single-writer rule is not involved.
+   */
+  setActiveTab(tab: PopupTab): void;
 }
 
 export type AppState = 
@@ -59,7 +65,6 @@ export const STORE_NAME = 'timer-focus-store';
 const initialUiState: UiSlice['ui'] = {
   activeTab: 'timer',
   liveRemainingSeconds: 0,
-  malusAlertVisible: false,
 };
 
 // Collaborators the slices need to act (principle D). Injected through
@@ -91,13 +96,16 @@ const defaultDependencies = (): StoreDependencies => ({
 
 const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
-  (...args) => ({
-    ...createTimerSlice(dependencies)(...args),
-    ...createCitySlice(dependencies)(...args),
-    ...createBlocklistSlice(dependencies)(...args),
-    ...createScoreSlice(...args),
-    ...createSessionHistorySlice(...args),
+  (set, get, ...rest) => ({
+    ...createTimerSlice(dependencies)(set, get, ...rest),
+    ...createCitySlice(dependencies)(set, get, ...rest),
+    ...createBlocklistSlice(dependencies)(set, get, ...rest),
+    ...createScoreSlice(set, get, ...rest),
+    ...createSessionHistorySlice(set, get, ...rest),
     ui: initialUiState,
+    setActiveTab(tab: PopupTab): void {
+      set({ ui: { ...get().ui, activeTab: tab } });
+    },
   });
 
 export const partialize = (state: AppState): PersistedState => ({
