@@ -11,7 +11,7 @@ const CRT_GREEN = '#7dfba0';
  * Renderable fallback for a theme id that is not in the registry. It is kept as
  * a module constant (not built per render) so the palette reference is stable.
  */
-const FALLBACK_THEME: Theme = {
+export const FALLBACK_THEME: Theme = {
   id: DEFAULT_THEME_ID,
   name: 'Neon Metropolis',
   palette: [CRT_GREEN],
