@@ -129,7 +129,7 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - No type uses `any`.
   - `RuntimeMessage` is a discriminated union on the `type` field, with at least these variants: `TIMER_TICK`, `TIMER_STARTED`, `TIMER_PAUSED`, `SITE_BLOCKED_ATTEMPT`, `MALUS_APPLIED`, `SESSION_ENDED`.
-  - `SessionSummary` includes at least `score`, `population`, `endedAt`; it is the type the last-5-sessions history (M2.T19) is based on.
+  - `SessionSummary` includes at least `score`, `population`, `endedAt`; it is the type the last-5-sessions history (M2.T19) is based on and is surfaced in the popup by M3.T7.
   - The types compile (`tsc --noEmit`) without errors.
 
 #### M1.T2 — `lib/url/domain.ts` module (`tldts` wrapper)
@@ -381,6 +381,17 @@ Each task is a standalone card, with this fixed format:
   - Same normalized domain → same color, always (test with repeated calls).
   - Reasonably uniform distribution over a sample of N test domains (no gross bias toward a single color) — verifiable with a simple, non-rigorous statistical test.
 
+#### M2.T13b — `lib/city/theme-registry.ts` — color themes/biomes per session
+* **Objective**: define the available color themes/biomes as **data** (Open/Closed principle, Section 1.1) and assign one to each session **deterministically**, so the same session always renders in the same biome across a service-worker restart while different sessions vary. A biome supplies the palette the M2.T13 domain hash draws from and the CRT backdrop color, without changing the hash logic itself.
+* **Files**: `lib/city/theme-registry.ts`, `utils/hash.ts` (shared FNV-1a hash), `store/city.slice.ts` (re-export of `DEFAULT_THEME_ID`), `store/index.ts` (wiring of the `selectThemeId` port).
+* **Dependencies**: M1.T1
+* **Acceptance criteria**:
+  - Themes are defined as an array of data entries (at least two), each with a non-empty `palette` and `backgroundColor`; adding a new biome requires only adding an entry, never modifying the selection logic.
+  - `selectThemeId(sessionId)` is pure and deterministic: the same session id always maps to the same theme id (verified with repeated calls), and a sample of sessions spreads over more than one biome (no gross bias).
+  - The documented default theme id is a real member of the registry, so the fallback is always renderable; an empty/unknown session id degrades to it instead of throwing (untrusted boundary, Section 1.4).
+  - The palette remains a parameter of `getBuildingColor` (M2.T13), so applying a biome's palette is the renderer's job (M2.T14).
+  - No internal `Date.now()`/`Math.random()` (Dependency Inversion principle).
+
 #### M2.T14 — `CityCanvas` + `CityCell` (ASCII render + CRT glow)
 * **Objective**: React components that render the city grid as monospace `<pre>`/`<span>` with green CRT `text-shadow`, applying colors from `palette.ts`.
 * **Files**: `components/city/CityCanvas.tsx`, `components/city/CityCell.tsx`
@@ -411,6 +422,28 @@ Each task is a standalone card, with this fixed format:
 * **Dependencies**: M2.T9
 * **Acceptance criteria**:
   - Correctly renders the three variants based on the store value (test with the three states forced).
+
+#### M2.T18 — `PopulationCounter` + `lib/score/calculate-population.ts`
+* **Objective**: derive the session population from the focused time — **+5 per house** (an unlocked building base) and **+15 per building floor** — and expose it in the UI. Because population is a function of elapsed focus time, it keeps evolving even after the grid is visually full (see the M2.T12 note): the cap is on rendering, not on session progress.
+* **Files**: `lib/score/calculate-population.ts` (pure), `components/score/PopulationCounter.tsx`, `store/score.slice.ts` (the `population` field + `setPopulation`), `store/index.ts` (selector re-export).
+* **Dependencies**: M2.T11c
+* **Acceptance criteria**:
+  - The formula is derived from the M2.T11c unlock schedule rather than duplicating its minute thresholds, so the value agrees with what `composeBuilding` actually unlocks for the same focused time, and is independent of the randomly chosen module variant (only categories count).
+  - Decorative `top` elements add no inhabitants.
+  - Pure and total (Section 1.4): no internal `Date.now()`/`Math.random()`; `NaN`, negative and `-Infinity` inputs yield `0`, `+Infinity` yields the maximum.
+  - `PopulationCounter` reads the value through the store selector and performs no calculation itself (Separation of Concerns principle).
+  - Population lives in the persisted `score` slice (M2.T9) so it survives a service-worker restart and can feed `SessionSummary.population` (M1.T1/M2.T19).
+
+#### M2.T19 — `session-history.slice.ts` — history of the last 5 sessions
+* **Objective**: keep the history of the last 5 completed sessions in the persisted state (Section 1.3), so the popup can show past scores and populations (M3.T7).
+* **Files**: `store/session-history.slice.ts`, `store/index.ts` (slice combination, `partialize`, selectors).
+* **Dependencies**: M2.T9
+* **Acceptance criteria**:
+  - The slice holds `ReadonlyArray<SessionSummary>` (the M1.T1 type: `sessionId`, `score`, `population`, `endedAt`) plus a `recordSession(summary)` action.
+  - A pure helper (e.g. `appendSessionSummary`) inserts the new summary **newest first**, **dedups by `sessionId`** (a re-emitted `SESSION_ENDED` replaces the existing entry instead of growing the history) and **caps at 5** entries, dropping the oldest. It never mutates its input; a no-op returns the same reference so the caller can skip persisting/re-rendering (Section 1.4).
+  - The slice is a thin store layer that computes nothing: it delegates to the pure helper and writes only when the array reference changed.
+  - The history is part of `PersistedState`/`partialize`, so it survives a service-worker restart; `ui` is still excluded.
+  - Runtime population of the slice is owned by the task that implements session completion (the `SESSION_ENDED` event), not by this task.
 
 #### M2.T20 — Allowlist/blocklist mutual-exclusion validation
 * **Objective**: prevent the same canonical domain from ending up in both allowlist and blocklist simultaneously, and explicitly establish the resolution rule for when the conflict exists anyway (import, preset, pre-existing state).
@@ -479,6 +512,28 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - `wxt build -b chrome` and `wxt build -b firefox` produce working extensions (verified at least manually for the first pass, then covered by M4.T5).
 
+#### M3.T7 — `SessionHistory` (5-session history UI)
+* **Objective**: show the last 5 completed sessions (score and population) in the popup, reading them from the persisted `sessionHistory` slice (M2.T19).
+* **Files**: `components/score/SessionHistory.tsx`, `store/session-history.slice.ts` (consumption via `selectSessionHistory` only), `entrypoints/popup/App.tsx` (composition, M3.T4).
+* **Dependencies**: M2.T19
+* **Acceptance criteria**:
+  - The component is presentational: it reads the history through the M2.T19 selector and computes nothing (Separation of Concerns principle); the score level is rendered from the stored value, never recalculated.
+  - Renders correctly with an **empty history** (no crash, explicit empty state) and with a full 5-entry history, showing the sessions newest first (the slice's order is preserved, not re-sorted).
+  - The displayed order and cap match the slice's contract (max 5, newest first) rather than being re-implemented in the component.
+  - Strings are hardcoded in EN here and moved to `i18n.t(...)` in M3.T9, like the other components.
+  - Test: rendering with an empty history and with 5 entries, and the transition when a new session is recorded.
+
+#### M3.T8 — `ExportCityButton` — export city as JPEG/PNG at end of focus
+* **Objective**: let the user export the city of a finished session as an image, so the "one city per session" result can be kept outside the extension.
+* **Files**: `lib/city/export-image.ts` (DOM/canvas serialization → JPEG/PNG), `components/city/ExportCityButton.tsx`, `entrypoints/popup/App.tsx` (composition, M3.T4).
+* **Dependencies**: M2.T14
+* **Acceptance criteria**:
+  - The export renders the current three layers exactly as `CityCanvas` (M2.T14) displays them, including the active theme's palette and `backgroundColor` (M2.T13/M2.T13b), so the image matches what the user sees.
+  - The serialization logic lives in `lib/city/export-image.ts` and is kept separate from the component, which only triggers the export and handles the download (Separation of Concerns principle).
+  - Both JPEG and PNG outputs are available.
+  - A failure during export is handled at a known boundary and does not break the popup (Section 1.4).
+  - Test: the serialization function is unit-tested against a known grid (deterministic output dimensions/content); the component test asserts that triggering the export calls it with the current grid and theme.
+
 #### M3.T9 — Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default)
 * **Objective**: configure the official WXT `@wxt-dev/i18n` module (a type-safe, synchronous wrapper around `browser.i18n`) for all visible popup strings and content script messages, with **English as the default language** (and as the fallback for missing keys). The actual language is determined **automatically from the browser's language**: if the browser is set to Italian, the extension shows Italian; in every other case it shows English. **There is no manual language selector** nor any persisted user preference: changing language requires changing the browser's language (an intrinsic limitation of the `browser.i18n` API, accepted at design time in exchange for lightness, synchronous loading, and native caching). Translations live in `locales/<lang>.yml` files with nested keys, compiled at build time into the `_locales/<lang>/messages.json` files expected by the browser: no async fetch, no duplicated translation bundle per entrypoint.
 * **Files**: `wxt.config.ts` (registration of the `'@wxt-dev/i18n/module'` module + `manifest.default_locale: 'en'`), `locales/en.yml` (default EN strings, grouped by area: `timer`, `city`, `score`, `blocklist`, `overlay`, `common`), `components/**` components and `entrypoints/popup/App.tsx` (use of `i18n.t(...)`), `entrypoints/blocked-overlay.content.ts` (use of `i18n.t(...)` for overlay messages).
@@ -530,7 +585,7 @@ Each task is a standalone card, with this fixed format:
 #### M4.T4 — Popup accessibility polish
 * **Objective**: a pass on color contrast (particularly the CRT glow effect), keyboard focus, and ARIA labels on timer/blocklist controls.
 * **Files**: components in `components/` involved.
-* **Dependencies**: M3.T7
+* **Dependencies**: M3.T4
 * **Acceptance criteria**:
   - All interactive controls reachable via keyboard (sensible tab order).
   - No interactive element without an accessible label.
