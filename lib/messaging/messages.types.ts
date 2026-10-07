@@ -71,6 +71,27 @@ interface TagRemoveMessage {
   readonly payload: { readonly tagId: string };
 }
 
+// Tag assignment (M3.T2): attach/detach a custom tag to a single site. `site`
+// is untrusted (it may be a full URL) and goes through `normalizeEntry` on the
+// background side, exactly like every other entry mutation (M2.T4/M2.T21).
+interface TagAssignMessage {
+  readonly type: 'TAG_ASSIGN';
+  readonly payload: {
+    readonly list: 'allowlist' | 'blocklist';
+    readonly site: string;
+    readonly tagId: string;
+  };
+}
+
+interface TagUnassignMessage {
+  readonly type: 'TAG_UNASSIGN';
+  readonly payload: {
+    readonly list: 'allowlist' | 'blocklist';
+    readonly site: string;
+    readonly tagId: string;
+  };
+}
+
 export type RuntimeMessage =
   | TimerTickMessage
   | TimerStartedMessage
@@ -82,7 +103,9 @@ export type RuntimeMessage =
   | BlocklistRemoveSiteMessage
   | BlocklistApplyPresetMessage
   | TagUpsertMessage
-  | TagRemoveMessage;
+  | TagRemoveMessage
+  | TagAssignMessage
+  | TagUnassignMessage;
 
 /** The mutation variants a read-only context may send to the background. */
 export type MutationMessage = Extract<
@@ -97,4 +120,6 @@ export const MUTATION_TYPES = [
   'BLOCKLIST_APPLY_PRESET',
   'TAG_UPSERT',
   'TAG_REMOVE',
+  'TAG_ASSIGN',
+  'TAG_UNASSIGN',
 ] as const satisfies ReadonlyArray<MutationMessage['type']>;

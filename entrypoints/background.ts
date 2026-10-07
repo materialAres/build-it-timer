@@ -3,6 +3,8 @@ import {
   attachStoreSync,
   addSiteToList,
   addPresetToList,
+  assignTagToSite,
+  unassignTagFromSite,
   removeSiteFromList,
   upsertTag,
   removeTag,
@@ -133,6 +135,20 @@ function applyMutation(state: BlocklistState, message: MutationMessage): Blockli
       const { tagId } = message.payload;
       if (typeof tagId !== 'string' || tagId.length === 0) return state;
       return removeTag(state, tagId);
+    }
+    case 'TAG_ASSIGN': {
+      const { list, site, tagId } = message.payload;
+      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
+        return state;
+      }
+      return assignTagToSite(state, list, site, tagId);
+    }
+    case 'TAG_UNASSIGN': {
+      const { list, site, tagId } = message.payload;
+      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
+        return state;
+      }
+      return unassignTagFromSite(state, list, site, tagId);
     }
     default:
       return state;

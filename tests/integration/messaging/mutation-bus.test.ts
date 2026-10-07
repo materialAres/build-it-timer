@@ -88,6 +88,55 @@ describe('cross-context mutation path (M1.T10)', () => {
     handle.dispose();
   });
 
+  it('applies TAG_ASSIGN and TAG_UNASSIGN to a site (M3.T2)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'facebook.com' },
+    });
+    await sendMessage({ type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } });
+    await sendMessage({
+      type: 'TAG_ASSIGN',
+      payload: { list: 'blocklist', site: 'https://m.facebook.com/x', tagId: 'focus' },
+    });
+    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
+
+    await sendMessage({
+      type: 'TAG_UNASSIGN',
+      payload: { list: 'blocklist', site: 'facebook.com', tagId: 'focus' },
+    });
+    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
+
+    handle.dispose();
+  });
+
+  it('ignores a TAG_ASSIGN with an invalid payload without persisting (M3.T2)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    const forged = {
+      type: 'TAG_ASSIGN',
+      payload: { list: 'nonsense', site: 'facebook.com', tagId: 'focus' },
+    } as unknown as RuntimeMessage;
+
+    await sendMessage(forged);
+
+    expect(store.getState().blocklist).toEqual({
+      allowlist: [],
+      blocklist: [],
+      customTags: [],
+    });
+    expect(setSpy).not.toHaveBeenCalled();
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+
   it('applies BLOCKLIST_REMOVE_SITE', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();

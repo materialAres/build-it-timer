@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M3.T1** (Milestone 3 in progress).
+> Updated to: **M3.T2** (Milestone 3 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -14,8 +14,8 @@ description: Rules for updating the changelog
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
-- Milestone 3 (secondary features) — **in progress**: M3.T1 done; M3.T2, M3.T3, M3.T4, M3.T5, M3.T6, M3.T7, M3.T9, M3.T10 remaining.
-- Tests: `bun run test` → **436 passing tests** across 50 files (unit + integration + component).
+- Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2 done; M3.T3, M3.T4, M3.T5, M3.T6, M3.T7, M3.T9, M3.T10 remaining.
+- Tests: `bun run test` → **464 passing tests** across 52 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -65,6 +65,7 @@ description: Rules for updating the changelog
 | M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | — (to be committed) |
 | M2.T21 | Defensive blocklist input normalization (entry + navigation check) | completed | — (to be committed) |
 | M3.T1 | `PresetPicker` (preset selection UI) | completed | — (to be committed) |
+| M3.T2 | `TagEditor` — custom categories via tags | completed | — (to be committed) |
 
 ---
 
@@ -563,6 +564,18 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/store/blocklist-preset.test.ts` (10 tests, unit with `fakeBrowser`) — every Social domain is added; the preset tag is attached to each contributed domain; two synthetic overlapping presets produce no duplicate and merge both tags; a domain already on the allowlist is moved onto the blocklist preserving its tags (M2.T20); an empty preset is a same-reference no-op; re-applying the same preset is idempotent (same reference); purity (input untouched); every declared preset expands without leftovers; the `applyPreset` action performs exactly one store update and sends exactly one mutation with the right payload; an unknown id neither mutates nor sends. `tests/unit/components/blocklist/PresetPicker.test.tsx` (4 tests, component with Testing Library + `user-event`) — one button per preset; clicking Social invokes `applyPreset` once (spy) and adds all four domains; clicking it twice creates no duplicates; the component carries its stylesheet. `tests/integration/messaging/mutation-bus.test.ts` (updated, integration with `fakeBrowser`) — the old `BLOCKLIST_APPLY_PRESET` no-op test now asserts the whole preset is applied and persisted exactly once, plus a new unknown-id no-op case.
 - Relevant notes/decisions: the acceptance criterion ("single store action, not N") is met at two levels — the popup does one `set` + one mutation, and the background does one `setState`/persist. The M1.T9 single-writer rule is preserved: the read-only popup applies the identical, idempotent expansion in memory for immediate feedback and asks the background to persist it, then converges through the M1.T8 bridge. Attaching `Preset.tag` realises the M2.T5 intent; tag *management* UI stays in M3.T2. The §3.3 edge case ("two overlapping presets") is covered with synthetic presets because the shipped M2.T5 catalogue has no overlap.
 - Acceptance criteria: verified — selecting "Social" adds all of its domains to the blocklist in a single store action/update, verified at unit, component and integration level (one persist).
+
+### M3.T2 — `TagEditor` — custom categories via tags
+- `components/blocklist/TagEditor.tsx` (new) — presentational editor for custom tags: a form to create a tag (the Create button is disabled while the trimmed input is blank or its label already exists), a chip per custom tag whose label toggles a **filter** (`aria-pressed`) and whose `×` deletes the tag, and a row per blocklisted site with one checkbox per tag to assign/unassign it. It holds no tag logic — creation goes through `createTag`, assignment through `assignTag`/`unassignTag`, deletion through `deleteTag` (coupling rule §1.3). The filter uses the pure `filterEntriesByTag`, so clicking a tag shows only the sites carrying it (the card's "custom preset" view).
+- `store/blocklist.slice.ts` — new pure helpers shared by the popup and the background: `generateTagId(now, random)` (id minting from injected clock/entropy, never in the component), `hasTagLabel(tags, label)` (case-insensitive on trimmed labels), `assignTagToSite`/`unassignTagFromSite` (both normalize the site with `normalizeEntry` — M2.T4/M2.T21 — and return the *same* reference on an invalid/absent/already-in-that-state site) and `filterEntriesByTag(entries, tagId)`. The slice now exposes four actions: `createTag` (rejects blank/duplicate labels with no write and no mutation, then optimistically `upsertTag`s and sends one `TAG_UPSERT`), `deleteTag` (no-op on an unknown id, otherwise `removeTag` + `TAG_REMOVE`), and `assignTag`/`unassignTag` (identity-checked update + one message). `BlocklistDependencies` gained injectable `now`/`random`.
+- `lib/messaging/messages.types.ts` — two mutation variants added to `RuntimeMessage` (`TAG_ASSIGN` / `TAG_UNASSIGN`, both `{ list, site, tagId }`) and to `MUTATION_TYPES`, so the compile-time completeness guard covers them.
+- `entrypoints/background.ts` — `applyMutation` handles `TAG_ASSIGN`/`TAG_UNASSIGN` with runtime guards (`isListName`, string checks); an invalid payload returns the same state, so the single-writer background neither mutates nor persists it.
+- `store/index.ts` — re-exports the new helpers (`generateTagId`, `hasTagLabel`, `assignTagToSite`, `unassignTagFromSite`, `filterEntriesByTag`).
+- Files created/modified: `components/blocklist/TagEditor.tsx` (new), `store/blocklist.slice.ts`, `lib/messaging/messages.types.ts`, `entrypoints/background.ts`, `store/index.ts`, `tests/unit/store/blocklist-tags.test.ts` (new), `tests/unit/components/blocklist/TagEditor.test.tsx` (new), `tests/integration/messaging/mutation-bus.test.ts`.
+- Dependencies added: none (reuses the M2.T4/M2.T21 normalization, the M1.T10 mutation transport and the existing M1.T6 bus).
+- Tests: `tests/unit/store/blocklist-tags.test.ts` (20 tests, unit with `fakeBrowser`) — `generateTagId` determinism/difference; `hasTagLabel` case-insensitive/trimmed and blank/absent rejection; `assignTagToSite` attaches, normalizes a full URL, targets one list, is a same-reference no-op when already tagged/absent/invalid and is pure; `unassignTagFromSite` detaches and is a no-op otherwise; `filterEntriesByTag` selects only the tagged sites (empty when none); the `createTag` action adds locally and sends one `TAG_UPSERT`, trims and rejects blank/duplicate names; `deleteTag` removes + detaches and sends `TAG_REMOVE`, and is silent on an unknown id; `assignTag`/`unassignTag` update the entry and send their message, and an already-tagged assign sends nothing. `tests/unit/components/blocklist/TagEditor.test.tsx` (6 tests, component with Testing Library + `user-event`) — a row per site; creating a tag updates the store and renders the filter chip; a case-insensitive duplicate disables Create and creates no second tag; assigning a tag to two sites then filtering shows only those two; deleting a tag detaches it from the sites; it carries its stylesheet. `tests/integration/messaging/mutation-bus.test.ts` (+2 tests, integration with `fakeBrowser`) — `TAG_ASSIGN` (with a full-URL site) then `TAG_UNASSIGN` mutate the background store; an invalid `TAG_ASSIGN` payload is ignored without persisting.
+- Relevant notes/decisions: the card's dependency list is only M2.T4, but the acceptance criterion ("assigning it to ≥2 sites") had no transport — M1.T10 had defined tag **CRUD** (`TAG_UPSERT`/`TAG_REMOVE`) but not assignment — so this task additively introduces `TAG_ASSIGN`/`TAG_UNASSIGN` and their pure helpers, following the M1.T10 pattern (no behavior of other tasks is changed). The duplicate-name edge case from the testing strategy is resolved as **case-insensitive** on trimmed labels. The editor operates on the blocklist (the "custom preset" scope of the card); allowlist tags are still handled generically by the `list`-parameterised helpers. Dangling references are impossible when a tag is deleted because `removeTag` detaches it from every entry.
+- Acceptance criteria: verified — creating a tag and assigning it to two sites, then filtering by that tag, shows only those sites; covered by the component test and underpinned by the pure-helper and slice unit tests plus the background integration test.
 
 ---
 

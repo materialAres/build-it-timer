@@ -17,6 +17,18 @@ export interface BlocklistSlice {
    * persisted and propagates back through the M1.T8 sync bridge.
    */
   readonly applyPreset: (presetId: string) => void;
+  /**
+   * Create a custom tag (M3.T2) after a case-insensitive duplicate-label check.
+   * The id is minted from the injected clock/entropy (never in the component),
+   * so the UI stays presentational. Locally optimistic update + one mutation.
+   */
+  readonly createTag: (label: string) => void;
+  /** Delete a tag and detach it from every site (M3.T2). */
+  readonly deleteTag: (tagId: string) => void;
+  /** Assign an existing tag to a single site (M3.T2). */
+  readonly assignTag: (list: BlocklistListName, site: string, tagId: string) => void;
+  /** Remove a tag from a single site (M3.T2). */
+  readonly unassignTag: (list: BlocklistListName, site: string, tagId: string) => void;
 }
 
 export interface BlocklistState {
@@ -33,6 +45,10 @@ export interface BlocklistState {
 export interface BlocklistDependencies {
   /** Ask the background to apply/persist a mutation. */
   readonly sendMutation?: (message: MutationMessage) => void;
+  /** Clock used to mint tag ids (M3.T2); injectable for determinism. */
+  readonly now?: () => number;
+  /** Entropy source for tag ids (M3.T2); injectable for determinism. */
+  readonly random?: () => number;
 }
 
 export const createBlocklistSlice =
@@ -57,7 +73,58 @@ export const createBlocklistSlice =
         payload: { presetId },
       });
     },
+    createTag(label) {
+      const trimmed = label.trim();
+      const current = get().blocklist;
+      // Reject blank and case-insensitive duplicate labels with no write and no
+      // mutation: the label is the tag's user-facing identity (M3.T2).
+      if (trimmed.length === 0 || hasTagLabel(current.customTags, trimmed)) return;
+
+      const now = dependencies.now ?? Date.now;
+      const random = dependencies.random ?? Math.random;
+      const tag: Tag = { id: generateTagId(now(), random()), label: trimmed };
+      set({ blocklist: upsertTag(current, tag) });
+      dependencies.sendMutation?.({ type: 'TAG_UPSERT', payload: tag });
+    },
+    deleteTag(tagId) {
+      const current = get().blocklist;
+      if (!current.customTags.some((tag) => tag.id === tagId)) return;
+      set({ blocklist: removeTag(current, tagId) });
+      dependencies.sendMutation?.({ type: 'TAG_REMOVE', payload: { tagId } });
+    },
+    assignTag(list, site, tagId) {
+      applyBlocklistMutation(set, get, dependencies, {
+        type: 'TAG_ASSIGN',
+        payload: { list, site, tagId },
+      }, (current) => assignTagToSite(current, list, site, tagId));
+    },
+    unassignTag(list, site, tagId) {
+      applyBlocklistMutation(set, get, dependencies, {
+        type: 'TAG_UNASSIGN',
+        payload: { list, site, tagId },
+      }, (current) => unassignTagFromSite(current, list, site, tagId));
+    },
   });
+
+/**
+ * Shared optimistic-update plumbing for the tag assignment actions (M3.T2):
+ * apply the pure transformation, `set` only when something actually changed
+ * (identity check, the same no-op discipline as M1.T10/M3.T1) and forward the
+ * mutation to the background only in that case.
+ */
+function applyBlocklistMutation(
+  set: (partial: { blocklist: BlocklistState }) => void,
+  get: () => AppState,
+  dependencies: BlocklistDependencies,
+  message: MutationMessage,
+  transform: (state: BlocklistState) => BlocklistState,
+): void {
+  const current = get().blocklist;
+  const next = transform(current);
+  if (next === current) return;
+  set({ blocklist: next });
+  dependencies.sendMutation?.(message);
+}
 
 // --- Pure mutation helpers (M1.T10, normalization M2.T4) -------------------
 // The background is the single writer (M1.T9); the popup only *requests* a
@@ -215,6 +282,88 @@ export function removeTag(state: BlocklistState, tagId: string): BlocklistState 
 
 function withoutTag(entry: BlocklistEntry, tagId: string): BlocklistEntry {
   return { ...entry, tagIds: entry.tagIds.filter((id) => id !== tagId) };
+}
+
+/**
+ * Mint a tag id from the injected clock and entropy (M3.T2). Kept in the store
+ * layer, never in the component, so the UI remains presentational (coupling
+ * rule §1.3) and tags stay deterministic under an injected seed in tests.
+ */
+export function generateTagId(now: number, random: number): string {
+  return `tag-${now.toString(36)}-${Math.floor(random * 1_000_000).toString(36)}`;
+}
+
+/**
+ * Whether a tag with the same label already exists, compared
+ * **case-insensitively** on trimmed labels (M3.T2): "Focus" and "focus" are the
+ * same category to a user, so the editor must not create a second one.
+ */
+export function hasTagLabel(tags: ReadonlyArray<Tag>, label: string): boolean {
+  const target = label.trim().toLowerCase();
+  return (
+    target.length > 0 &&
+    tags.some((tag) => tag.label.trim().toLowerCase() === target)
+  );
+}
+
+/**
+ * Attach a tag to a single site (M3.T2). The site is normalized with the shared
+ * `normalizeEntry` (M2.T4/M2.T21), so a full URL and a canonical domain address
+ * the same entry. Returns the *same* reference when the site is invalid, absent,
+ * or already carries the tag — the caller then skips the write/mutation.
+ */
+export function assignTagToSite(
+  state: BlocklistState,
+  list: BlocklistListName,
+  site: string,
+  tagId: string,
+): BlocklistState {
+  if (tagId.length === 0) return state;
+  const normalized = normalizeEntry(site);
+  if (!normalized.ok) return state;
+
+  const domain = normalized.value;
+  const entries = state[list].map((entry) =>
+    entry.domain.value === domain && !entry.tagIds.includes(tagId)
+      ? { ...entry, tagIds: [...entry.tagIds, tagId] }
+      : entry,
+  );
+  const changed = entries.some((entry, index) => entry !== state[list][index]);
+  return changed ? { ...state, [list]: entries } : state;
+}
+
+/**
+ * Detach a tag from a single site (M3.T2). Symmetric to `assignTagToSite`:
+ * normalizes the site and returns the same reference when nothing changes.
+ */
+export function unassignTagFromSite(
+  state: BlocklistState,
+  list: BlocklistListName,
+  site: string,
+  tagId: string,
+): BlocklistState {
+  const normalized = normalizeEntry(site);
+  if (!normalized.ok) return state;
+
+  const domain = normalized.value;
+  const entries = state[list].map((entry) =>
+    entry.domain.value === domain && entry.tagIds.includes(tagId)
+      ? withoutTag(entry, tagId)
+      : entry,
+  );
+  const changed = entries.some((entry, index) => entry !== state[list][index]);
+  return changed ? { ...state, [list]: entries } : state;
+}
+
+/**
+ * The "custom preset" view of a tag (M3.T2): the sites that carry it. Pure, so
+ * the filter can be asserted without mounting the component.
+ */
+export function filterEntriesByTag(
+  entries: ReadonlyArray<BlocklistEntry>,
+  tagId: string,
+): ReadonlyArray<BlocklistEntry> {
+  return entries.filter((entry) => entry.tagIds.includes(tagId));
 }
 
 export const selectAllowlist = (
