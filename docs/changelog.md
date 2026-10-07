@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M3.T3** (Milestone 3 in progress).
+> Updated to: **M3.T5** (Milestone 3 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -14,8 +14,8 @@ description: Rules for updating the changelog
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
-- Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2, M3.T3 done; M3.T4, M3.T5, M3.T6, M3.T7, M3.T9, M3.T10 remaining.
-- Tests: `bun run test` → **480 passing tests** across 54 files (unit + integration + component).
+- Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2, M3.T3, M3.T5 done; M3.T4, M3.T6, M3.T7, M3.T9, M3.T10 remaining.
+- Tests: `bun run test` → **484 passing tests** across 55 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -67,6 +67,7 @@ description: Rules for updating the changelog
 | M3.T1 | `PresetPicker` (preset selection UI) | completed | — (to be committed) |
 | M3.T2 | `TagEditor` — custom categories via tags | completed | — (to be committed) |
 | M3.T3 | `SiteList` — site CRUD in allow/blocklist | completed | — (to be committed) |
+| M3.T5 | `framer-motion` animations on building growth/deletion | completed | — (to be committed) |
 
 ---
 
@@ -590,6 +591,18 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the component is generic over `list` so App.tsx (M3.T4) can mount one instance per list rather than a monolithic two-column widget; validation happens on the popup side with `normalizeEntry`, exactly as open issue #15 anticipated (a read-only popup cannot learn the background's rejection through the fire-and-forget mutation). The feedback strings are hardcoded in EN here and move to `i18n.t(...)` in M3.T9, like the other components. The `removeSiteFromList` identity change is a small correctness improvement in a helper owned by M1.T10/M2.T20; existing tests assert on content and remain green.
 - Acceptance criteria: verified — (1) entering a full URL yields a single normalized `facebook.com` entry (component + store tests); (2) a duplicate add does not duplicate and shows explicit feedback; (3) an invalid input (bare public suffix / malformed) shows "Enter a valid URL" and is not added, without throwing; (4) the allowlist > blocklist precedence is respected in the feedback through the M2.T20 move semantics (never a double entry).
 
+### M3.T5 — `framer-motion` animations on building growth/deletion
+- `components/city/CityCell.tsx` — the cell is now wrapped in `framer-motion`: the occupied character renders as a `motion.span` that fades/scales in when the cell becomes occupied (growing → building) and fades/scales out when it is destroyed, under an `AnimatePresence initial={false} mode="popLayout"`.
+  - `initial={false}` prevents the whole city from replaying every building's growth on first paint (e.g. after a service-worker restart); only *transitions* (mount/unmount of the occupied character) animate.
+  - `mode="popLayout"` takes the exiting character out of the inline flow, so the monospace grid does not shift while the destroyed character fades away, and a blank `.city-cell--empty` placeholder keeps the column width.
+  - The character is keyed by a constant (`"building"`), so a character swap (decoration) does not remount the cell: growth and destruction are the only transitions.
+- `tests/setup.ts` — `framer-motion` is mocked globally for tests (the roadmap §3.3 explicitly allows mocking/disabling it): `AnimatePresence` becomes a passthrough rendering only the current state and `motion.span` becomes a plain `<span>` with the animation-only props stripped. This makes the rendered DOM deterministic regardless of animation timing, so assertions always observe the settled state. Production still uses the real `framer-motion`.
+- Files created/modified: `components/city/CityCell.tsx`, `tests/setup.ts`, `tests/unit/components/city/CityCell.test.tsx` (new).
+- Dependencies added: `framer-motion` `^14.0.0` (building growth/destruction animations, roadmap stack; the exact version is the one resolved by `bun add`).
+- Tests: `tests/unit/components/city/CityCell.test.tsx` (4 tests, component with Testing Library) — a cell that just became occupied renders character + color and is not `--empty`; empty → occupied settles on the new character (growth); occupied → empty settles on the empty placeholder and no longer exposes the character (destruction); exactly one cell is rendered per state (grid alignment). No test asserts on real animation timing (roadmap §3.3). The M2.T14 tests in `tests/unit/components/city/CityCanvas.test.tsx` remain green (10 tests) — no regression.
+- Relevant notes/decisions: the transition duration (`0.25s`) and the fade/scale keyframes live as module constants in `CityCell.tsx`, so the animation is presentational and does not touch the grid state (Separation of Concerns, §1.1). The pre-existing open issue (framer-motion not installed) is resolved by this task: it is now a runtime dependency and is exercised by the real component, not only by the mocked test.
+- Acceptance criteria: verified — (1) transitions do not block rendering in tests (framer-motion is mocked to a passthrough, so the settled DOM is observed synchronously); (2) no regression in the M2.T14 tests.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -599,6 +612,7 @@ description: Rules for updating the changelog
 | `react` / `react-dom` | `^19.2.4` | M0.T1 | popup UI |
 | `tldts` | `^7.4.13` | M1.T2 | domain parsing/normalization |
 | `zustand` | `5.0.15` | M1.T3 | store + `persist` middleware |
+| `framer-motion` | `^14.0.0` | M3.T5 | building growth/destruction animations |
 
 Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v8`, `happy-dom`, `@testing-library/{react,user-event,jest-dom}`, `@playwright/test`, `eslint`/`@eslint/js`/`typescript-eslint`/`eslint-plugin-react`/`eslint-plugin-react-hooks`, `prettier`, `web-ext`.
 
@@ -607,7 +621,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 ## Open issues and points to clarify
 
 1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
-2. **`framer-motion`** not yet installed (will be needed from M3.T5).
+2. **Resolved (M3.T5)** — `framer-motion` was not installed; it is now a runtime dependency (`^14.0.0`) used by `CityCell.tsx` and mocked in `tests/setup.ts`.
 3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
 4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix, `declarativeNetRequest` in M2.T7, `host_permissions: ['<all_urls>']` in M2.T8, `tabs` in M2.T10). `fakeBrowser` does **not** mask a missing permission the way a hand-written mock would: it exposes the API *namespaces* but leaves every method unimplemented (each throws `MockNotImplementedError`), so a background test that reaches an unimplemented API fails at that boundary rather than silently succeeding. What the suite still cannot verify is the manifest itself — `fakeBrowser` never reads it, so a permission declared in code but missing from `wxt.config.ts` stays invisible to vitest; only a real-browser run (dev/e2e) can catch that. (Corrected during the DNR test-noise fix: `declarativeNetRequest` is now backed by the shared in-memory fake in `tests/helpers/fake-declarative-net-request.ts`, installed from `tests/setup.ts`.)
 5. **`urlFilter` escaping (M5.T3)** — `buildDnrRules` (M2.T6) interpolates the domain into `urlFilter` as-is, trusting the canonical form produced by M2.T4. A domain containing `*`/`|`/`^`/`||` would be interpreted as DNR syntax; M5.T3 adds the escaping/validation. Tracked as a follow-up, not a defect of M2.T6 (entries are canonical by construction).
