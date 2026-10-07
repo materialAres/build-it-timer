@@ -68,7 +68,6 @@ const initialUiState: UiSlice['ui'] = {
 // touching the browser APIs. The timer slice (M2.T1) and the city slice
 // (M2.T11) share this object; later slices extend it.
 export type StoreDependencies = TimerDependencies & CityDependencies & BlocklistDependencies;
-
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
@@ -83,7 +82,8 @@ const defaultDependencies = (): StoreDependencies => ({
   width: DEFAULT_CITY_WIDTH,
   height: DEFAULT_CITY_HEIGHT,
   // A read-only context changes configuration only by asking the background
-  // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) uses this sender.
+  // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) and the timer
+  // commands (M3.T3b) both use this sender.
   sendMutation: (message: MutationMessage): void => {
     void sendMessage(message);
   },

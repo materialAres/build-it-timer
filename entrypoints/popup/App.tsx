@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import reactLogo from '@/assets/react.svg';
 import wxtLogo from '/wxt.svg';
+import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import './App.css';
 
 function App() {
   const [count, setCount] = useState<number>(0);
+
+  // The popup owns the fine-grained 2s tick (M3.T3b): it is the context that is
+  // active while the user watches the city. M3.T4 keeps this call when it
+  // replaces the starter UI.
+  useTimerTickEmitter();
 
   return (
     <>

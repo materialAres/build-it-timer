@@ -59,33 +59,39 @@ describe('TimerControls (M2.T3)', () => {
     vi.restoreAllMocks();
   });
 
-  it('invokes the store startTimer action when Start is clicked', async () => {
-    const startTimer = vi.spyOn(useAppStore.getState(), 'startTimer').mockResolvedValue();
+  it('requests the start transition when Start is clicked (M3.T3b)', async () => {
+    const requestStartTimer = vi
+      .spyOn(useAppStore.getState(), 'requestStartTimer')
+      .mockImplementation(() => {});
 
     render(<TimerControls />);
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
 
-    expect(startTimer).toHaveBeenCalledTimes(1);
+    expect(requestStartTimer).toHaveBeenCalledTimes(1);
   });
 
-  it('invokes the store pauseTimer action when Pause is clicked', async () => {
+  it('requests the pause transition when Pause is clicked (M3.T3b)', async () => {
     setTimer({ status: 'running', sessionId: 'session-1' });
-    const pauseTimer = vi.spyOn(useAppStore.getState(), 'pauseTimer').mockResolvedValue();
+    const requestPauseTimer = vi
+      .spyOn(useAppStore.getState(), 'requestPauseTimer')
+      .mockImplementation(() => {});
 
     render(<TimerControls />);
     await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
 
-    expect(pauseTimer).toHaveBeenCalledTimes(1);
+    expect(requestPauseTimer).toHaveBeenCalledTimes(1);
   });
 
-  it('invokes the store resetTimer action when Reset is clicked', async () => {
+  it('requests the reset transition when Reset is clicked (M3.T3b)', async () => {
     setTimer({ status: 'paused', sessionId: 'session-1' });
-    const resetTimer = vi.spyOn(useAppStore.getState(), 'resetTimer').mockResolvedValue();
+    const requestResetTimer = vi
+      .spyOn(useAppStore.getState(), 'requestResetTimer')
+      .mockImplementation(() => {});
 
     render(<TimerControls />);
     await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
 
-    expect(resetTimer).toHaveBeenCalledTimes(1);
+    expect(requestResetTimer).toHaveBeenCalledTimes(1);
   });
 
   it('disables Start while running and Pause/Reset while idle', () => {

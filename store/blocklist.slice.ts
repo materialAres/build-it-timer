@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { getPresetById } from '@/lib/blocking/presets';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
+import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
 import type { BlocklistEntry, Preset, Tag } from './store.types';
 import type { AppState } from '.';
 
@@ -51,9 +52,7 @@ export interface BlocklistState {
  * (M1.T10). Injectable (principle D) so the slice stays unit-testable without
  * the message bus; the store barrel supplies the real `sendMessage`.
  */
-export interface BlocklistDependencies {
-  /** Ask the background to apply/persist a mutation. */
-  readonly sendMutation?: (message: MutationMessage) => void;
+export interface BlocklistDependencies extends MessagingDependencies {
   /** Clock used to mint tag ids (M3.T2); injectable for determinism. */
   readonly now?: () => number;
   /** Entropy source for tag ids (M3.T2); injectable for determinism. */

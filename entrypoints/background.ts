@@ -1,18 +1,8 @@
 import {
   createAppStore,
   attachStoreSync,
-  addSiteToList,
-  addPresetToList,
-  assignTagToSite,
-  unassignTagFromSite,
-  removeSiteFromList,
-  upsertTag,
-  removeTag,
   type AppStore,
-  type BlocklistListName,
-  type BlocklistState,
 } from '@/store';
-import { getPresetById } from '@/lib/blocking/presets';
 import {
   createBrowserAlarmProvider,
   type AlarmProvider,
@@ -26,9 +16,9 @@ import {
 import { onMessage, sendMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
-  type MutationMessage,
   type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
+import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import {
@@ -39,18 +29,19 @@ import {
 } from '@/lib/timer/tab-distraction-tracker';
 import type { CityLayers } from '@/components/city/city.types';
 import { malusForDistractionTicks } from '@/lib/score/apply-malus';
-import type { Tag } from '@/store/store.types';
 
 /**
  * The passive `RuntimeMessage` variants defined in M1.T1. The background
  * registers one listener per type, so the wiring is complete before the
  * business logic lands in M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth,
  * M2.T16 malus).
+ *
+ * The timer *commands* (`TIMER_STARTED`/`TIMER_PAUSED`/`TIMER_RESET`) are not
+ * here: they are mutations (M3.T3b) and are registered through `MUTATION_TYPES`,
+ * so each type still has exactly one listener.
  */
 export const MESSAGE_TYPES = [
   'TIMER_TICK',
-  'TIMER_STARTED',
-  'TIMER_PAUSED',
   'SITE_BLOCKED_ATTEMPT',
   'MALUS_APPLIED',
   'SESSION_ENDED',
@@ -86,90 +77,6 @@ export interface BackgroundHandle {
 // still registering a distinct listener per message type.
 function handlePlaceholder(): void {
   // Intentionally empty: the background skeleton only wires the listeners.
-}
-
-function isListName(value: unknown): value is BlocklistListName {
-  return value === 'allowlist' || value === 'blocklist';
-}
-
-function isTag(value: unknown): value is Tag {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as { id?: unknown; label?: unknown };
-  return typeof candidate.id === 'string' && typeof candidate.label === 'string';
-}
-
-/**
- * Apply one mutation to the blocklist state. Returns the *same* reference when
- * the payload is malformed or unknown, so an invalid message neither mutates the
- * store nor triggers a persist (forward-compatible with M5.T1 hardening).
- *
- * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
- * dedup and allowlist precedence (M2.T20), preset expansion (M2.T5) and the DNR
- * side-effect (M2.T7) are owned by those tasks.
- */
-function applyMutation(state: BlocklistState, message: MutationMessage): BlocklistState {
-  switch (message.type) {
-    case 'BLOCKLIST_ADD_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return addSiteToList(state, list, site);
-    }
-    case 'BLOCKLIST_REMOVE_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return removeSiteFromList(state, list, site);
-    }
-    case 'BLOCKLIST_APPLY_PRESET': {
-      const { presetId } = message.payload;
-      if (typeof presetId !== 'string' || presetId.length === 0) return state;
-      const preset = getPresetById(presetId);
-      if (preset === undefined) return state;
-      // The whole preset is expanded in a single state update (M3.T1), so the
-      // mutation persists once no matter how many domains it contains.
-      return addPresetToList(state, 'blocklist', preset);
-    }
-    case 'TAG_UPSERT': {
-      if (!isTag(message.payload)) return state;
-      return upsertTag(state, message.payload);
-    }
-    case 'TAG_REMOVE': {
-      const { tagId } = message.payload;
-      if (typeof tagId !== 'string' || tagId.length === 0) return state;
-      return removeTag(state, tagId);
-    }
-    case 'TAG_ASSIGN': {
-      const { list, site, tagId } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return assignTagToSite(state, list, site, tagId);
-    }
-    case 'TAG_UNASSIGN': {
-      const { list, site, tagId } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return unassignTagFromSite(state, list, site, tagId);
-    }
-    default:
-      return state;
-  }
-}
-
-/**
- * Mutation handler for the cross-context path (M1.T10): the popup sends a typed
- * mutation, the background applies it to its single writable store (M1.T9) and
- * the change propagates back to the popup through the M1.T8 sync bridge.
- */
-function handleMutation(store: AppStore) {
-  return (message: MutationMessage): void => {
-    const current = store.getState().blocklist;
-    const next = applyMutation(current, message);
-    // Identity check: an invalid or no-op payload must not persist (one write
-    // per accepted mutation, none for a rejected one).
-    if (next === current) return;
-    store.setState({ blocklist: next });
-  };
 }
 
 /**
@@ -445,8 +352,12 @@ export function startBackground(
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
+  // The timer commands (M3.T3b) travel the same path and are applied to the
+  // background's own timer slice, so the alarm lives on the background's
+  // provider.
+  const handleMutation = createMutationHandler(store);
   for (const type of MUTATION_TYPES) {
-    disposers.push(onMessage(type, handleMutation(store)));
+    disposers.push(onMessage(type, handleMutation));
   }
 
   // Any change to the blocklist/allowlist or to the timer status re-evaluates

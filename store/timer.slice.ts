@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { AlarmProvider } from '@/lib/timer/alarm-adapter';
 import { generateSessionId, timerAlarmName } from '@/lib/timer/session';
+import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
 import type { TimerState, TimerStatus } from './store.types';
 import type { AppState } from '.';
 
@@ -13,7 +14,7 @@ export const DEFAULT_FOCUS_SECONDS = 25 * 60;
  * or `Math.random()` on its own, so it stays pure and testable in isolation
  * (§1.4).
  */
-export interface TimerDependencies {
+export interface TimerDependencies extends MessagingDependencies {
   /** Scheduler that owns the countdown's persistence (M1.T5). */
   readonly alarmProvider: AlarmProvider;
   /** Clock used to stamp `sessionStartedAt` and the alarm's due time. */
@@ -33,6 +34,18 @@ export interface TimerSlice {
   pauseTimer(): Promise<void>;
   /** Return to the initial idle state and cancel any pending alarm. */
   resetTimer(): Promise<void>;
+  /**
+   * Ask the background to start/resume the session (M3.T3b). A read-only
+   * context (the popup, M1.T9) must not run `startTimer` locally: that would
+   * mutate only its own in-memory copy and schedule the alarm on its own
+   * provider, while the background — which owns the timer, the alarms and the
+   * DNR rules — would never learn about the session.
+   */
+  requestStartTimer(): void;
+  /** Ask the background to pause the session (M3.T3b). */
+  requestPauseTimer(): void;
+  /** Ask the background to reset the session (M3.T3b). */
+  requestResetTimer(): void;
 }
 
 const initialTimerState: TimerState = {
@@ -55,7 +68,7 @@ const initialTimerState: TimerState = {
 export function createTimerSlice(
   dependencies: TimerDependencies,
 ): StateCreator<AppState, [], [], TimerSlice> {
-  const { alarmProvider, now, random } = dependencies;
+  const { alarmProvider, now, random, sendMutation } = dependencies;
 
   return (set, get) => ({
     timer: { ...initialTimerState },
@@ -123,6 +136,21 @@ export function createTimerSlice(
       if (sessionId !== null) {
         await alarmProvider.clear(timerAlarmName(sessionId));
       }
+    },
+
+    // The request actions never touch the local state: the popup's copy is
+    // read-only (M1.T9) and the background's answer arrives through the M1.T8
+    // sync bridge, so the UI converges on the state the owner actually applied.
+    requestStartTimer(): void {
+      sendMutation?.({ type: 'TIMER_STARTED', payload: {} });
+    },
+
+    requestPauseTimer(): void {
+      sendMutation?.({ type: 'TIMER_PAUSED', payload: {} });
+    },
+
+    requestResetTimer(): void {
+      sendMutation?.({ type: 'TIMER_RESET', payload: {} });
     },
   });
 }

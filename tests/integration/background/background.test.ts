@@ -31,9 +31,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
 
     const handle = startBackground();
 
-    // Passive M1.T1 variants plus the M1.T10 mutation variants.
+    // Passive M1.T1 variants plus the M1.T10/M3.T3b mutation variants.
     expect(addListener).toHaveBeenCalledTimes(MESSAGE_TYPES.length + MUTATION_TYPES.length);
-    expect(MESSAGE_TYPES).toHaveLength(6);
+    expect(MESSAGE_TYPES).toHaveLength(4);
 
     handle.dispose();
     addListener.mockRestore();
@@ -55,8 +55,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
 
     const messages: RuntimeMessage[] = [
       { type: 'TIMER_TICK', payload: { remainingSeconds: 60 } },
-      { type: 'TIMER_STARTED', payload: { sessionId: 'session-1' } },
+      { type: 'TIMER_STARTED', payload: {} },
       { type: 'TIMER_PAUSED', payload: {} },
+      { type: 'TIMER_RESET', payload: {} },
       {
         type: 'SITE_BLOCKED_ATTEMPT',
         payload: { domain: 'facebook.com', choice: 'proceed' },
