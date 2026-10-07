@@ -12,6 +12,7 @@ const runningTimer: TimerState = {
   remainingSeconds: 1500,
   sessionStartedAt: T0,
   sessionId: SESSION_ID,
+  endsAt: T0 + 1_500_000,
 };
 
 describe('restoreTimer (M2.T2)', () => {
@@ -22,6 +23,7 @@ describe('restoreTimer (M2.T2)', () => {
       remainingSeconds: 1500,
       sessionStartedAt: null,
       sessionId: null,
+      endsAt: null,
     };
 
     const result = await restoreTimer(idle, { alarmProvider, now: () => T0 });
@@ -57,14 +59,36 @@ describe('restoreTimer (M2.T2)', () => {
 
   it('reports no change when the persisted value already matches the alarm', async () => {
     const alarmProvider = new FakeAlarmProvider(T0);
-    const now = T0 + 300 * 1000;
-    // Due in exactly the persisted 1500s, so the recomputed value is identical.
-    await alarmProvider.schedule(timerAlarmName(SESSION_ID), now + 1500 * 1000);
+    // The alarm is due exactly at the persisted end time, and no time has
+    // elapsed, so both the recomputed countdown and the projected end time are
+    // identical to the persisted ones.
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1500 * 1000);
 
-    const result = await restoreTimer(runningTimer, { alarmProvider, now: () => now });
+    const result = await restoreTimer(runningTimer, { alarmProvider, now: () => T0 });
 
     expect(result.timer).toBe(runningTimer);
     expect(result.changed).toBe(false);
+  });
+
+  it('re-derives the projected end time from the pending alarm (I001)', async () => {
+    const alarmProvider = new FakeAlarmProvider(T0);
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1500 * 1000);
+    const now = T0 + 300 * 1000;
+
+    const result = await restoreTimer(runningTimer, { alarmProvider, now: () => now });
+
+    // The alarm is authoritative: the popup's estimate must project from it,
+    // not from the stale persisted value.
+    expect(result.timer.endsAt).toBe(T0 + 1500 * 1000);
+  });
+
+  it('clears the projected end time when reverting to paused', async () => {
+    const alarmProvider = new FakeAlarmProvider(T0);
+
+    const result = await restoreTimer(runningTimer, { alarmProvider, now: () => T0 });
+
+    expect(result.timer.status).toBe('paused');
+    expect(result.timer.endsAt).toBeNull();
   });
 
   it('clamps to zero when the alarm is already due', async () => {

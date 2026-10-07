@@ -12,6 +12,7 @@ const idleTimer: TimerState = {
   remainingSeconds: 1500,
   sessionStartedAt: null,
   sessionId: null,
+  endsAt: null,
 };
 
 /**

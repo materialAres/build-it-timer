@@ -49,18 +49,21 @@ export async function restoreTimer(
   const { sessionId } = timer;
 
   if (sessionId === null) {
-    return { timer: { ...timer, status: 'paused' }, changed: true };
+    return { timer: { ...timer, status: 'paused', endsAt: null }, changed: true };
   }
 
   const dueAt = await alarmProvider.getScheduledTime(timerAlarmName(sessionId));
   if (dueAt === undefined) {
-    return { timer: { ...timer, status: 'paused' }, changed: true };
+    return { timer: { ...timer, status: 'paused', endsAt: null }, changed: true };
   }
 
   const remainingSeconds = Math.max(0, Math.round((dueAt - now()) / 1000));
-  if (remainingSeconds === timer.remainingSeconds) {
+  // The pending alarm is the authoritative deadline, so the projected end time
+  // is re-derived from it (I001) rather than trusted from the stale persisted
+  // value: the popup's estimate then resumes from the correct instant.
+  if (remainingSeconds === timer.remainingSeconds && dueAt === timer.endsAt) {
     return { timer, changed: false };
   }
 
-  return { timer: { ...timer, remainingSeconds }, changed: true };
+  return { timer: { ...timer, remainingSeconds, endsAt: dueAt }, changed: true };
 }

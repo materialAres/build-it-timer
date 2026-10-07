@@ -63,6 +63,7 @@ const initialTimerState: TimerState = {
   remainingSeconds: DEFAULT_FOCUS_SECONDS,
   sessionStartedAt: null,
   sessionId: null,
+  endsAt: null,
 };
 
 /**
@@ -92,12 +93,12 @@ export function createTimerSlice(
 
       if (timer.status === 'paused') {
         const { sessionId } = timer;
-        set({ timer: { ...timer, status: 'running' } });
+        // Resuming re-arms the countdown from *now*, so the projected end time
+        // moves with it (I001): the popup estimates from this value.
+        const endsAt = now() + timer.remainingSeconds * 1000;
+        set({ timer: { ...timer, status: 'running', endsAt } });
         if (sessionId !== null) {
-          await alarmProvider.schedule(
-            timerAlarmName(sessionId),
-            now() + timer.remainingSeconds * 1000,
-          );
+          await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
         }
         return;
       }
@@ -106,6 +107,7 @@ export function createTimerSlice(
       // session's alarm can never be confused with this one.
       const startedAt = now();
       const sessionId = generateSessionId(startedAt, random);
+      const endsAt = startedAt + timer.remainingSeconds * 1000;
       // Every focus session starts from a brand-new city (roadmap M2.T11): the
       // reset is invoked here, on the idle → running transition only, never on a
       // resume, so pausing/resuming keeps the city the user has already built.
@@ -116,12 +118,10 @@ export function createTimerSlice(
           remainingSeconds: timer.remainingSeconds,
           sessionStartedAt: startedAt,
           sessionId,
+          endsAt,
         },
       });
-      await alarmProvider.schedule(
-        timerAlarmName(sessionId),
-        startedAt + timer.remainingSeconds * 1000,
-      );
+      await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
     },
 
     async pauseTimer(): Promise<void> {
@@ -132,7 +132,16 @@ export function createTimerSlice(
       if (timer.status !== 'running') return;
 
       const { sessionId } = timer;
-      set({ timer: { ...timer, status: 'paused' } });
+      // Pausing freezes the countdown: the alarm is cleared, so there is no
+      // deadline left to project from (I001). The *actual* remaining time is
+      // persisted here, otherwise the frozen display would jump back to the
+      // session's full duration (the background never rewrites the countdown
+      // while it runs).
+      const remainingSeconds =
+        timer.endsAt === null
+          ? timer.remainingSeconds
+          : Math.max(0, Math.ceil((timer.endsAt - now()) / 1000));
+      set({ timer: { ...timer, status: 'paused', remainingSeconds, endsAt: null } });
       if (sessionId !== null) {
         await alarmProvider.clear(timerAlarmName(sessionId));
       }
@@ -162,6 +171,7 @@ export function createTimerSlice(
           remainingSeconds: 0,
           sessionStartedAt: timer.sessionStartedAt,
           sessionId,
+          endsAt: null,
         },
       });
       // The alarm has already fired, but clearing is idempotent and keeps the

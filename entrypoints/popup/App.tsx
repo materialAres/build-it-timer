@@ -8,6 +8,7 @@ import { PopupTabs, tabButtonId, tabPanelId } from '@/components/common/PopupTab
 import { TimerDisplay } from '@/components/timer/TimerDisplay';
 import { TimerControls } from '@/components/timer/TimerControls';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
+import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
 import { CityCanvas } from '@/components/city/CityCanvas';
 import { ExportCityButton } from '@/components/city/ExportCityButton';
 import { ScoreBadge } from '@/components/score/ScoreBadge';
@@ -86,6 +87,9 @@ function App() {
   // The popup owns the fine-grained 2s tick (M3.T3b): it is the context that is
   // active while the user watches the city.
   useTimerTickEmitter();
+  // The popup also owns the displayed countdown estimate (I001): the background
+  // never rewrites `remainingSeconds` while the session runs.
+  useCountdownEstimate();
 
   return (
     <div className="popup">

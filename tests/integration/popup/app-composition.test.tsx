@@ -79,6 +79,26 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 
+  it('counts the displayed timer down while the session runs (I001)', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await flushAsync();
+    expect(screen.getByText('00:25:00')).toBeInTheDocument();
+
+    // The popup projects the countdown from the session's end time, so moving
+    // the deadline (as a background reconciliation would) immediately changes
+    // the display without waiting for a background write.
+    act(() => {
+      const { timer } = useAppStore.getState();
+      useAppStore.setState({
+        timer: { ...timer, endsAt: Date.now() + 1495 * 1000 },
+      });
+    });
+
+    expect(screen.getByText('00:24:55')).toBeInTheDocument();
+  });
+
   it('shows one section at a time behind the tab bar', async () => {
     render(<App />);
 

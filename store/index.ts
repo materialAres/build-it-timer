@@ -38,6 +38,13 @@ export interface UiSlice {
    * `ui` is never persisted, so the single-writer rule is not involved.
    */
   setActiveTab(tab: PopupTab): void;
+  /**
+   * Publish the popup-side countdown estimate (I001). The value is derived from
+   * the session's end time by the pure `estimateRemainingSeconds` and written
+   * here so `TimerDisplay` can read it through a granular selector; the field is
+   * volatile, so this is a local write even in a read-only context.
+   */
+  setLiveRemainingSeconds(seconds: number): void;
 }
 
 export type AppState = 
@@ -105,6 +112,14 @@ const createAppState =
     ui: initialUiState,
     setActiveTab(tab: PopupTab): void {
       set({ ui: { ...get().ui, activeTab: tab } });
+    },
+    setLiveRemainingSeconds(seconds: number): void {
+      // Guard the untrusted boundary (§1.4): a non-finite estimate would leak
+      // `NaN` into the rendered countdown.
+      const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+      const { ui } = get();
+      if (ui.liveRemainingSeconds === safe) return;
+      set({ ui: { ...ui, liveRemainingSeconds: safe } });
     },
   });
 

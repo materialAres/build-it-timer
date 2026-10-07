@@ -11,6 +11,7 @@ const idleTimer: TimerState = {
   remainingSeconds: DEFAULT_FOCUS_SECONDS,
   sessionStartedAt: null,
   sessionId: null,
+  endsAt: null,
 };
 
 function setTimer(partial: Partial<TimerState>): void {
@@ -20,12 +21,13 @@ function setTimer(partial: Partial<TimerState>): void {
 describe('TimerDisplay (M2.T3)', () => {
   beforeEach(() => {
     useAppStore.setState({ timer: { ...idleTimer } });
+    useAppStore.getState().setLiveRemainingSeconds(DEFAULT_FOCUS_SECONDS);
   });
 
   afterEach(cleanup);
 
-  it('renders remainingSeconds as hh:mm:ss', () => {
-    setTimer({ remainingSeconds: 65 });
+  it('renders the live countdown estimate as hh:mm:ss', () => {
+    useAppStore.getState().setLiveRemainingSeconds(65);
 
     render(<TimerDisplay />);
 
@@ -33,7 +35,7 @@ describe('TimerDisplay (M2.T3)', () => {
   });
 
   it('renders 00:00:00 when the countdown reaches zero', () => {
-    setTimer({ remainingSeconds: 0 });
+    useAppStore.getState().setLiveRemainingSeconds(0);
 
     render(<TimerDisplay />);
 
@@ -41,7 +43,7 @@ describe('TimerDisplay (M2.T3)', () => {
   });
 
   it('renders values beyond one hour', () => {
-    setTimer({ remainingSeconds: 3661 });
+    useAppStore.getState().setLiveRemainingSeconds(3661);
 
     render(<TimerDisplay />);
 

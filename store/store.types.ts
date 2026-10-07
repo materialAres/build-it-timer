@@ -7,6 +7,17 @@ export interface TimerState {
   readonly remainingSeconds: number;
   readonly sessionStartedAt: number | null; // epoch ms, null if idle
   readonly sessionId: string | null;
+  /**
+   * Absolute epoch ms at which the running countdown reaches zero, or `null`
+   * when no countdown is in flight (idle/paused/completed).
+   *
+   * This is what lets a read-only context (the popup) *estimate* the countdown
+   * between reconciliations (I001): `remainingSeconds` alone is only updated by
+   * the background at session boundaries, so the UI would otherwise show a
+   * frozen value. The background's alarm remains the source of truth — this
+   * field is a projection of it, recomputed on every start/resume.
+   */
+  readonly endsAt: number | null;
 }
 
 // derived from remainingSeconds from a formatting function
