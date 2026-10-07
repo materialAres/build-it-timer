@@ -61,7 +61,9 @@ Each task is a standalone card, with this fixed format:
 | M3.T1 | `PresetPicker` (preset selection UI) | 3 | M2.T5, M2.T4 |
 | M3.T2 | `TagEditor` — custom categories via tags | 3 | M2.T4 |
 | M3.T3 | `SiteList` — site CRUD in allow/blocklist | 3 | M2.T4, M1.T2, M2.T20, M2.T21 |
-| M3.T4 | Popup `App.tsx` — full UI composition | 3 | M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1–M3.T3 |
+| M3.T3b | Popup → background timer path (commands + 2s tick emitter) | 3 | M2.T1, M2.T2, M2.T3, M1.T10, M2.T15 |
+| M3.T3c | Session completion (`SESSION_ENDED` → history + population) | 3 | M2.T2, M2.T18, M2.T19 |
+| M3.T4 | Popup `App.tsx` — full UI composition | 3 | M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1–M3.T3, M3.T3b, M3.T3c, M3.T7, M3.T8 |
 | M3.T5 | `framer-motion` animations on building growth/deletion | 3 | M2.T14 |
 | M3.T6 | Multi-browser persistence: Firefox/Chrome build verification | 3 | M3.T4 |
 | M3.T7 | `SessionHistory` (5-session history UI) | 3 | M2.T19 |
@@ -489,13 +491,42 @@ Each task is a standalone card, with this fixed format:
   - If the input is not a valid registrable domain — for example a "bare" public suffix (`co.uk`, `com`, `github.io`) or a malformed URL — the error message **"Enter a valid URL"** appears and the entry is not added (no exception, see M2.T21 and M1.T2).
   - The **allowlist > blocklist** precedence (M2.T6, M2.T20) is respected in the feedback too: adding to the allowlist a domain already in the blocklist (or vice versa) never creates a double entry.
 
-#### M3.T4 — Popup `App.tsx` — full UI composition
-* **Objective**: compose all components (timer, city, score, blocklist) in the main popup, with routing/tabs if needed.
-* **Files**: `entrypoints/popup/App.tsx`
-* **Dependencies**: M2.T3, M2.T14, M2.T17, M3.T1, M3.T2, M3.T3
+#### M3.T3b — Popup → background timer path (commands + 2s tick emitter)
+* **Objective**: close the popup → background timer path so the UI can actually drive the session the background owns: route the timer commands through the mutation bus (the popup store is read-only, M1.T9) and emit the fine-grained 2s `TIMER_TICK` that the background already consumes for growth (M2.T15) and malus (M2.T16).
+* **Files**: `lib/messaging/messages.types.ts` (add the timer variants to `MutationMessage`/`MUTATION_TYPES`), `entrypoints/background.ts` (handle the timer mutations), `components/timer/TimerControls.tsx` (route through `sendMutation` instead of mutating the read-only store), `entrypoints/popup/App.tsx` (start/stop the tick emitter with the popup's lifetime), `store/index.ts` (the `ui.liveRemainingSeconds` field, if the popup-side countdown is implemented here).
+* **Dependencies**: M2.T1, M2.T2, M2.T3, M1.T10, M2.T15
 * **Acceptance criteria**:
-  - All sections are reachable and functional from a single entry point.
+  - `TIMER_STARTED`/`TIMER_PAUSED` (and the reset transition, if it needs a variant) are part of `MutationMessage` and handled by the background's mutation path, so `startTimer()`/`pauseTimer()`/`resetTimer()` invoked from the popup change the **background's** timer state and schedule/clear the alarm on the background's provider — not on the popup's own in-memory copy (closes changelog issue #6).
+  - The popup emits `TIMER_TICK` on the 2s cadence while a session is `running`, and the background's existing growth/malus wiring consumes it unchanged (closes changelog issue #9).
+  - The emitter is tied to the popup's lifetime and stops on unmount; a tick arriving while `status !== 'running'` neither grows the city nor accrues malus (M2.T15 behaviour preserved).
+  - The popup-side estimated countdown (the §1 "two distinct clocks" note) is either implemented here through `ui.liveRemainingSeconds` or explicitly deferred, with the decision recorded in the changelog.
+  - Integration test (`fakeBrowser`): a command sent from the popup updates the background store exactly once; a sequence of simulated ticks produces the expected city growth.
+* **Notes/decisions**: the popup closes when the user clicks away, so a popup-owned emitter means the city only grows while the popup is open. The §1 technical note ("lives on the popup/background side only while the context is active") is ambiguous about which side owns the tick; the chosen side must be documented with a "why" comment (§1.4) and reported in the changelog.
+
+#### M3.T3c — Session completion (`SESSION_ENDED` → history + population)
+* **Objective**: implement the end-of-session path so the timer actually reaches zero and the session's outcome is recorded: emit `SESSION_ENDED` and populate the session history (M2.T19) and the population counter (M2.T18).
+* **Files**: `entrypoints/background.ts` (replace the empty `handlePlaceholder` on alarm fire with the real completion handler), `store/session-history.slice.ts` (consumption via `recordSession`), `store/score.slice.ts` (consumption via `setPopulation`), `lib/score/calculate-population.ts` (consumption).
+* **Dependencies**: M2.T2, M2.T18, M2.T19
+* **Acceptance criteria**:
+  - The alarm firing at the end of a session transitions the timer out of `running` and emits `SESSION_ENDED` with a `SessionSummary` (`sessionId`, `score`, `population`, `endedAt`) — the M1.T1 variant that is currently declared but never emitted (closes changelog issue #13).
+  - The background records the summary through `recordSession` (newest first, dedup by `sessionId`, capped at 5 — the M2.T19 contract) and computes the session population from the elapsed focus time through `calculatePopulation`, writing it with `setPopulation` (closes changelog issue #12).
+  - A re-emitted `SESSION_ENDED` for the same `sessionId` replaces the existing entry instead of growing the history.
+  - Integration test (`fakeBrowser` + fake alarms): a session that runs to completion records exactly one history entry with the expected score/population; a session that is paused/reset before completion records none.
+* **Notes/decisions**: the exact `distractionRatio` formula remains the roadmap §4 open point; this task consumes whatever ratio the existing score slice holds rather than defining the formula.
+
+#### M3.T4 — Popup `App.tsx` — full UI composition
+* **Objective**: compose all components (timer, city, score, blocklist) in the main popup behind a **tab bar** (one section visible at a time), replacing the WXT starter UI.
+* **Files**: `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css` + `entrypoints/popup/style.css` (replace the WXT starter styles), `locales/en.yml` + `locales/it.yml` (new composition strings), `store/index.ts` (a `setActiveTab` action for the existing `ui.activeTab` field)
+* **Dependencies**: M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1, M3.T2, M3.T3, M3.T3b, M3.T3c, M3.T7, M3.T8
+* **Acceptance criteria**:
+  - All sections are reachable and functional from a single entry point: `TimerDisplay` + `TimerControls` (M2.T3), `CityCanvas` (M2.T14), `ScoreBadge` (M2.T17) + `PopulationCounter` (M2.T18) + `SessionHistory` (M3.T7), `PresetPicker` (M3.T1) + `TagEditor` (M3.T2) + `SiteList` (M3.T3), and `ExportCityButton` (M3.T8).
+  - **Layout decision (tabs)**: the popup shows one section at a time behind a tab bar driven by the existing `ui.activeTab` field (`PopupTab`, M1.T4) through a new `setActiveTab` action; the field is volatile, so the popup always opens on the default tab. The tab bar is keyboard-navigable with the correct ARIA roles (`tablist`/`tab`/`tabpanel`), which M4.T4 then polishes.
+  - **Sizing decision (content-sized)**: the popup is sized by its content and must not scroll; the city canvas and the blocklist sections are laid out to fit the popup's natural width rather than forcing a fixed viewport.
+  - **Visual decision (CRT)**: the black-and-green CRT look is kept, consistent with the components' own inline styles (M2.T14/M2.T17/M2.T18); `App.css`/`style.css` provide the reset, the dark background and the tab-bar/section layout, and drop the starter's `#root { max-width: 1280px }` and `body { min-height: 100vh }`.
+  - `ExportCityButton` is visible at session end, not during the session.
+  - Every string in `App.tsx` goes through `i18n.t(...)` (M3.T9), with the new keys added to **both** `locales/en.yml` and `locales/it.yml` so the M3.T10 drift test stays green (closes changelog issue #17).
   - End-to-end integration test at the component level (not a real browser): starting a timer from the UI updates both `TimerDisplay` and (indirectly) the city state after a simulated tick.
+* **Notes/decisions**: the composition is deliberately split from the timer path (M3.T3b) and session completion (M3.T3c) so this card stays a pure composition task; its acceptance criteria depend on those two landing first. **Test seam (decision: option A)**: the integration test starts the real background in-process with `fakeBrowser` (the pattern of `tests/integration/messaging/mutation-bus.test.ts`) and renders `<App />` against the module-level `useAppStore` singleton, letting the background's writes reach the popup through `attachStoreSync` (M1.T8) — no injectable-store refactor of the components. The dead `ui.malusAlertVisible` field is dropped here: the malus alert is the content-script overlay (M2.T8), not a popup element, so the flag has no consumer.
 
 #### M3.T5 — `framer-motion` animations on building growth/destruction
 * **Objective**: animated transitions when a cell moves from `growing→building` or is destroyed.

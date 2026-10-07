@@ -120,12 +120,12 @@ Conventions:
 * **Persisted store** (`persist` middleware, `browser.storage.local` backend via a custom adapter): everything that must survive a browser restart and represents "historical" data or user configuration —
   * the city state **of the current, in-progress session** (grid/layers, buildings, palettes assigned to domains, active theme) — needed to survive a service worker restart during a still-active session; it is instead reset and regenerated from scratch when a new focus session starts (one city per session, see Section 2);
   * allowlist/blocklist configuration, custom presets and their tags;
-  * history of the last 5 completed sessions (score and, if applicable, city screenshot/reference — see M2.T18);
+  * history of the last 5 completed sessions (score and, if applicable, city screenshot/reference — see M2.T19);
   * user preferences (e.g. Good/Bad thresholds if made configurable).
 * **Volatile store** (not persisted, reset on every service worker/popup startup): everything that is derived or transient —
   * the fine-grained "in progress" timer (current seconds not yet rounded to the 60s tick — still needs to be reconciled with `browser.alarms`, which is the source of truth for actual countdown persistence, see §3.4, and with the 2s character-insertion tick, see the technical note at the start of Section 1);
-  * UI state (active tab in the popup, open modals, hover on a city cell);
-  * temporary flags (e.g. "currently showing the malus alert").
+  * UI state (active tab in the popup — consumed by the M3.T4 tab bar — open modals, hover on a city cell);
+  * temporary flags. Note: the malus alert is **not** popup state — it is the content-script overlay in Shadow DOM (M2.T8), so the `ui.malusAlertVisible` flag created in M1.T4 is dead code and is dropped in M3.T4.
 * **Coupling rule**: React components never call chrome.*/browser.* APIs directly and **never** contain computation logic (score, growth, blocklist matching). A component reads state via dedicated Zustand selectors (e.g. useTimerStore(selectRemainingSeconds)) and **only invokes** actions exposed by the store (e.g. useTimerStore.getState().pauseTimer()); the action internally delegates to a pure function in lib/ and/or sends a message to the background. This decouples the UI from the implementation and makes slices testable without mounting components.
 * Each slice exposes granular selectors (not a single selector returning the whole slice) to minimize unnecessary re-renders in a context where animations (framer-motion) are already expensive.
 
@@ -294,21 +294,31 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M2.T9 (calculate score) | Unit | vitest | Values exactly on the boundaries (0, 0.2, 0.5, 1.0); values out of range [0,1] (defensive input). |
 | M2.T10 (apply malus) | Unit | vitest | Malus applied when the city is already "empty" (no building to destroy: behavior must be explicit, not a crash). |
 | M2.T11 (`citySlice`) | Unit | vitest | `destroyBuilding` on out-of-grid coordinates. |
+| M2.T11b (tile library) | Unit | vitest | Every module declares its own width; all modules in the same category have mutually compatible widths (no misalignment when stacked); no duplicate module ids. |
+| M2.T11c (building composer) | Unit | vitest | The unlock schedule is respected for the same focused time; the same seed always composes the same building (determinism); the composer never calls `Math.random()` internally. |
 | M2.T12 (growth engine) | Unit | vitest | Zero time delta (no-op); very large delta (beyond grid capacity: behavior to be clarified, see §4); grid already completely full. |
+| M2.T12b (decoration engine) | Unit | vitest | Deterministic output for the same seed; decorations never overwrite an occupied cell; no internal `Math.random()`. |
 | M2.T13 (palette) | Unit | vitest | Empty domain string; domain with Unicode characters (IDN). |
+| M2.T13b (theme registry) | Unit | vitest | Deterministic theme selection from the session id; every registered theme has a non-empty palette; an unknown theme id falls back to the default. |
 | M2.T14 (CityCanvas/CityCell) | Component | Testing Library | Empty grid (no buildings); grid with all cells `destroyed`. |
 | M2.T15 (growth ↔ tick) | Integration | vitest + `wxt/testing` | A tick occurring while `status === 'paused'` (must not make the city grow). |
 | M2.T16 (malus ↔ destruction) | Integration | vitest + `wxt/testing` | Two malus events in close succession (no double application unless intentional). |
 | M2.T17 (ScoreBadge) | Component | Testing Library | State transition from `excellent` to `bad` between two consecutive renders. |
+| M2.T18 (population) | Unit + Component | vitest, Testing Library | Formula agrees with the M2.T11c unlock schedule for the same focused time and is independent of the random module variant; decorative `top` elements add no inhabitants; `NaN`/negative/`-Infinity` → `0`, `+Infinity` → maximum; `PopulationCounter` reads via the selector and computes nothing. |
+| M2.T19 (session history slice) | Unit | vitest | Newest-first insertion; dedup by `sessionId` (a re-emitted `SESSION_ENDED` replaces, not grows); cap at 5 dropping the oldest; a no-op returns the same reference; the history survives a simulated "restart" while `ui` does not. |
+| M2.T20 (allow/block mutual exclusion) | Unit + Component | vitest, Testing Library | Adding a domain already in the opposite list never creates a double entry; the allowlist wins on a residual conflict (import/preset/pre-existing state); the UI shows the move/duplicate feedback. |
 | M3.T1 (PresetPicker) | Component | Testing Library | Applying two presets with overlapping domains (no resulting duplicate, reuses the M2.T4 logic). |
 | M3.T2 (TagEditor) | Component | Testing Library | Tag with a duplicate name (case-insensitive?); removing a tag still assigned to sites. |
 | M3.T3 (SiteList) | Component | Testing Library | Empty/whitespace input; input that `tldts` cannot parse or a "bare" public suffix (`co.uk`) → "Enter a valid URL" message (visible error feedback). |
-| M3.T4 (App.tsx) | Integration (component-level) | Testing Library | Full flow: open popup → apply preset → start timer → simulate tick → verify that both the timer and the city update in the same render tree. |
+| M3.T3b (timer path: commands + tick emitter) | Integration | vitest + `wxt/testing` | A timer command sent from the popup updates the background store exactly once (not the popup's own copy); a sequence of simulated `TIMER_TICK`s produces the expected city growth; the emitter stops on unmount; a tick while `status !== 'running'` neither grows the city nor accrues malus. |
+| M3.T3c (session completion) | Integration | vitest + `wxt/testing` (fake alarms) | A session run to completion records exactly one history entry with the expected score/population and emits `SESSION_ENDED`; a session paused/reset before completion records none; a re-emitted `SESSION_ENDED` for the same `sessionId` replaces the entry. |
+| M3.T4 (App.tsx) | Integration (component-level) | Testing Library + `wxt/testing` (real in-process background, option A) | Full flow: open popup → apply preset → start timer → simulate tick → verify that both the timer and the city update in the same render tree; tab switching shows one section at a time; `ExportCityButton` only at session end. |
 | M3.T5 (animations) | Component | Testing Library (with `framer-motion` mocked/disabled if needed for determinism) | No assertions on real animation timings in unit/component tests (fragile); only that the final state is correct. |
+| M3.T6 (multi-browser) | Manual + preparation for M4.T5 | — | — |
+| M3.T7 (SessionHistory) | Component | Testing Library | Empty history (explicit empty state, no crash) and a full 5-entry history; the stored order is preserved (newest first, never re-sorted or re-sliced); the transition when a new session is recorded. |
+| M3.T8 (ExportCityButton) | Component | Testing Library | Triggering the export calls the injected exporter with the current grid and theme; the button is only rendered at session end; an export failure surfaces the error without crashing. |
 | M3.T9 (i18n setup `@wxt-dev/i18n`) | Component (+ Integration) | Testing Library, vitest + `wxt/testing` | A component using `i18n.t(key)` renders the expected EN string; with the browser locale forced to IT it renders the IT string. |
 | M3.T10 (IT translation, auto from browser) | Component + Unit (drift detection) | Testing Library, vitest | All EN keys have an IT counterpart (comparing the `en.yml`/`it.yml` trees, fails if an IT key is missing); no manual selector nor persisted preference present. |
-| M3.T6 (multi-browser) | Manual + preparation for M4.T5 | — | — |
-| M3.T7 (mobile layout) | Component (snapshot/viewport) | Testing Library with forced viewport, or manual verification | — |
 | M4.T1 (proportional malus) | Unit | vitest | Monotonic property tested with several increasing time values (simple property-based test or case table). |
 | M4.T2 (TexturePacker) | Component (manual visual regression) | — | — |
 | M4.T3 (logging) | Unit + Integration | vitest | An error thrown at a known point is actually logged (spy on the logger) and does not propagate up to crash the listener. |
