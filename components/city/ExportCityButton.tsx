@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useState } from 'react';
 import { selectCityLayers, selectCityThemeId, useAppStore } from '@/store';
 import {
@@ -27,9 +28,6 @@ export type CityImageExporter = (
 export interface ExportCityButtonProps {
   readonly exporter?: CityImageExporter;
 }
-
-/** Shared failure message; the popup keeps working, it just reports the error. */
-const EXPORT_ERROR_MESSAGE = 'Could not export the city image.';
 
 const EXPORT_CITY_STYLES = `
   .export-city {
@@ -72,8 +70,9 @@ function triggerDownload(dataUrl: string, filename: string): void {
  * presentational: it reads the current layers and active theme from the store,
  * then delegates serialization to `lib/city/export-image.ts` and only handles
  * the download and the error state (Separation of Concerns, §1.1). Because the
- * exporter returns a `Result`, a failed export shows a message instead of
- * breaking the popup. Strings are hardcoded in EN for now (M3.T9).
+ * exporter returns a `Result`, a failed export shows a localized message
+ * instead of breaking the popup. Strings are resolved through `i18n.t(...)`
+ * (M3.T9).
  */
 export function ExportCityButton({
   exporter = exportCityImage,
@@ -88,18 +87,22 @@ export function ExportCityButton({
     void exporter(layers, theme, format)
       .then((result) => {
         if (!result.ok) {
-          setError(EXPORT_ERROR_MESSAGE);
+          setError(i18n.t('city.exportError'));
           return;
         }
         triggerDownload(result.value.dataUrl, `focus-city.${format}`);
       })
       .catch(() => {
-        setError(EXPORT_ERROR_MESSAGE);
+        setError(i18n.t('city.exportError'));
       });
   };
 
   return (
-    <div className="export-city" role="group" aria-label="Export city">
+    <div
+      className="export-city"
+      role="group"
+      aria-label={i18n.t('city.exportAriaLabel')}
+    >
       <style>{EXPORT_CITY_STYLES}</style>
       <button
         type="button"
@@ -108,7 +111,7 @@ export function ExportCityButton({
           handleExport('png');
         }}
       >
-        Export PNG
+        {i18n.t('city.exportPng')}
       </button>
       <button
         type="button"
@@ -117,7 +120,7 @@ export function ExportCityButton({
           handleExport('jpeg');
         }}
       >
-        Export JPEG
+        {i18n.t('city.exportJpeg')}
       </button>
       {error !== null && (
         <p className="export-city__error" role="alert">

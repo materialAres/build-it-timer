@@ -1,6 +1,7 @@
+import { i18n } from '#i18n';
 import { useAppStore, selectSessionHistory } from '@/store';
 import type { SessionSummary } from '@/store/store.types';
-import { SCORE_BADGE_LABELS } from './ScoreBadge';
+import { SCORE_LEVEL_LABEL_KEYS, scoreLevelLabel } from './ScoreBadge';
 
 /**
  * The history's own stylesheet, consistent with the city (M2.T14) and the score
@@ -52,16 +53,14 @@ const SESSION_HISTORY_STYLES = `
 `;
 
 /**
- * Resolve the stored score level to its display label without recalculating it
+ * Resolve the stored score level to its localized label without recalculating it
  * (the level is never derived from a ratio here, Separation of Concerns §1.1).
- * Widened to `Record<string, string>` so a stale/unknown persisted level
- * degrades to its raw string instead of rendering `undefined` at the untrusted
- * storage boundary (§1.4).
+ * A stale/unknown persisted level degrades to its raw string instead of
+ * rendering `undefined` at the untrusted storage boundary (§1.4).
  */
-const SCORE_LABELS: Readonly<Record<string, string>> = SCORE_BADGE_LABELS;
-
 function scoreLabel(summary: SessionSummary): string {
-  return SCORE_LABELS[summary.score] ?? summary.score;
+  const known = Object.hasOwn(SCORE_LEVEL_LABEL_KEYS, summary.score);
+  return known ? scoreLevelLabel(summary.score) : summary.score;
 }
 
 /**
@@ -77,18 +76,20 @@ function safePopulation(summary: SessionSummary): number {
  * it reads the slice through the granular `selectSessionHistory` selector (M2.T19)
  * and computes nothing. Order and cap are the slice's contract (newest first,
  * max 5), so the list is rendered in the stored order — never re-sorted or
- * re-sliced here. Strings are hardcoded in EN for now and move to `i18n.t(...)`
- * in M3.T9, like the other components.
+ * re-sliced here. Visible strings are resolved through `i18n.t(...)` (M3.T9).
  */
 export function SessionHistory() {
   const sessions = useAppStore(selectSessionHistory);
 
   return (
-    <section className="session-history" aria-label="Session history">
+    <section
+      className="session-history"
+      aria-label={i18n.t('score.historyAriaLabel')}
+    >
       <style>{SESSION_HISTORY_STYLES}</style>
-      <h2 className="session-history__title">Last sessions</h2>
+      <h2 className="session-history__title">{i18n.t('score.lastSessions')}</h2>
       {sessions.length === 0 ? (
-        <p className="session-history__empty">No completed sessions yet.</p>
+        <p className="session-history__empty">{i18n.t('score.noSessions')}</p>
       ) : (
         <ol className="session-history__list">
           {sessions.map((session) => (
@@ -105,7 +106,7 @@ export function SessionHistory() {
                 {scoreLabel(session)}
               </span>
               <span className="session-history__population">
-                {safePopulation(session)} pop.
+                {`${String(safePopulation(session))} ${i18n.t('score.populationShort')}`}
               </span>
             </li>
           ))}

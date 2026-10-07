@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { ScoreBadge, SCORE_BADGE_LABELS } from '@/components/score/ScoreBadge';
+import { ScoreBadge, scoreLevelLabel } from '@/components/score/ScoreBadge';
 import { useAppStore } from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
@@ -69,7 +69,7 @@ describe('ScoreBadge (M2.T17)', () => {
   it('gives each level a distinct label and modifier class', () => {
     const levels: readonly ScoreLevel[] = ['excellent', 'good', 'bad'];
 
-    const labels = levels.map((level) => SCORE_BADGE_LABELS[level]);
+    const labels = levels.map((level) => scoreLevelLabel(level));
 
     expect(new Set(labels).size).toBe(levels.length);
     expect(labels).toEqual(['Excellent', 'Good', 'Bad']);

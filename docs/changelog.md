@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M3.T8** (Milestone 3 in progress).
+> Updated to: **M3.T9** (Milestone 3 in progress).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -14,8 +14,8 @@ description: Rules for updating the changelog
 - Milestone 0 (setup) — **completed**
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
-- Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2, M3.T3, M3.T5, M3.T6, M3.T7, M3.T8 done; M3.T4, M3.T9, M3.T10 remaining.
-- Tests: `bun run test` → **509 passing tests** across 59 files (unit + integration + component).
+- Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2, M3.T3, M3.T5, M3.T6, M3.T7, M3.T8, M3.T9 done; M3.T4, M3.T10 remaining.
+- Tests: `bun run test` → **512 passing tests** across 60 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -71,6 +71,7 @@ description: Rules for updating the changelog
 | M3.T6 | Multi-browser persistence: Firefox/Chrome build verification | completed | — (to be committed) |
 | M3.T7 | `SessionHistory` (5-session history UI) | completed | — (to be committed) |
 | M3.T8 | `ExportCityButton` — export city as JPEG/PNG at end of focus | completed | — (to be committed) |
+| M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | — (to be committed) |
 
 ---
 
@@ -641,6 +642,18 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the SVG option (instead of rasterizing the live DOM) keeps the `CityCanvas` markup untouched and gives a **pure, deterministic** serialization that can be unit-tested against a known grid, as the card requires; the canvas is only the final SVG→raster step, isolated in its own module and returning a `Result`. Splitting `export-image.ts`/`rasterize-image.ts` is a separation-of-concerns choice that also respects the ≤200-line guideline; the card's single-file wording is preserved in spirit (all serialization lives under `lib/city/`). The export is available whenever the button is mounted (the card's "at end of focus" is the objective context, not an enforced gate, and no session-completion state exists yet — open issues #13); strings are hardcoded in EN for now and move to `i18n.t(...)` in M3.T9. `FALLBACK_THEME` being exported is the only touch to a module owned by another task; it is an additive export with no behaviour change.
 - Acceptance criteria: verified — (1) `buildCityImage` renders the three layers with the active theme's palette and `backgroundColor`, matching `CityCanvas` (unit tests assert the layer colors, opacity ordering and background); (2) the serialization lives in `lib/city/export-image.ts` and the component only triggers it and handles the download/errors; (3) both JPEG and PNG are offered and mapped to their MIME types; (4) a failed/rejected export is handled at the boundary and shows an alert without breaking the popup; (5) the serializer is unit-tested against a known grid (deterministic dimensions/content) and the component test asserts the export is invoked with the current grid and theme.
 
+### M3.T9 — Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default)
+- `wxt.config.ts` — registered the official `'@wxt-dev/i18n/module'` alongside `@wxt-dev/module-react`, and set `manifest.default_locale: 'en'` (without it the module disables itself). The module compiles `locales/<lang>.yml` into the browser-standard `_locales/<lang>/messages.json` at build time, auto-imports the shared type-safe `i18n` instance from `#i18n`, and generates the key types on `wxt prepare`.
+- `locales/en.yml` (new) — the default EN strings, grouped by area (`timer`, `city`, `score`, `blocklist`, `overlay`, `common`) with nested keys and `$1`..`$9` positional substitutions. It is the single source of truth: the `_locales/en/messages.json` shipped in both builds and the EN-fallback of every other locale derive from it, so a new language only needs a sibling `<lang>.yml` with the same tree (M3.T10) — no component or config change.
+- Every visible string of the popup components and the overlay now goes through `i18n.t(...)` (explicitly imported from `#i18n`): `components/timer/TimerDisplay.tsx` (countdown aria-label) and `TimerControls.tsx` (Start/Pause/Reset); `components/score/ScoreBadge.tsx` (per-level label + `Focus score: $1` aria-label), `PopulationCounter.tsx` (`population`, `Population: $1`) and `SessionHistory.tsx` (title, empty state, per-session score/population); `components/blocklist/PresetPicker.tsx` (`Presets`, `Apply $1 preset`), `TagEditor.tsx` (form, chips, assignment/filter/delete labels) and `SiteList.tsx` (titles, add/remove, live preview, duplicate/moved/added feedback, the `Enter a valid URL` error and the `example.com` placeholder); `components/city/CityCanvas.tsx` (canvas aria-label) and `ExportCityButton.tsx` (group, PNG/JPEG buttons, failure message); `components/common/BlockedOverlay.tsx` (title, Yes/No, encouragement, and the question split into `questionPrefix`/`questionSuffix` so the domain stays a highlighted `<span>` while the sentence remains one translatable unit).
+  - `ScoreBadge` now exports `SCORE_LEVEL_LABEL_KEYS` (`ScoreLevel` → key, as data — Open/Closed) and `scoreLevelLabel(level)`, replacing the old hardcoded `SCORE_BADGE_LABELS` map; `SessionHistory` reuses it (DRY) and still degrades an unknown persisted level to its raw string. `SiteList` maps the pure `normalizeEntry` failure to the localized `blocklist.invalidUrl` key instead of reading the EN literal out of `Error.message` (the pure `lib/` layer keeps no i18n dependency).
+- `tests/helpers/i18n.ts` (new) — a test-only `browser.i18n.getMessage` backend. Because `fakeBrowser` leaves `i18n.getMessage` unimplemented, the helper parses the **real** `locales/*.yml` sources (via `@wxt-dev/i18n/build`'s `parseMessagesFile`/`generateChromeMessages`) and reproduces the browser's lookup (including `$1` substitutions and the `default_locale` EN fallback). This keeps tests honest: a component renders a string only if the key exists in the locale file. `installI18nBackend()` is called from `tests/setup.ts`; `setTestLocale`/`resetTestLocale` are the seam that simulates a browser language, ready for M3.T10.
+- Files created/modified: `wxt.config.ts`, `locales/en.yml` (new), `tests/helpers/i18n.ts` (new), `tests/setup.ts`, `tests/unit/i18n/i18n.test.tsx` (new), all the components listed above, `tests/unit/components/score/ScoreBadge.test.tsx`, `package.json`/`bun.lock`.
+- Dependencies added: `@wxt-dev/i18n` `^0.2.7` (runtime; resolved to `0.2.8`) — the official WXT module, a synchronous type-safe wrapper around `browser.i18n` (roadmap M3.T9).
+- Tests: `tests/unit/i18n/i18n.test.tsx` (3 tests, component + integration with Testing Library) — the shared `#i18n` instance resolves EN strings and positional substitutions from `locales/en.yml`; `TimerControls` renders its visible strings through `i18n.t`; `BlockedOverlay` renders the question from its translatable parts around the highlighted domain and the Yes/No choices. The existing component suites (ScoreBadge, SessionHistory, TimerControls, PopulationCounter, PresetPicker, TagEditor, SiteList, ExportCityButton, BlockedOverlay) now assert the same EN text resolved through the real locale file, so a missing/renamed key fails them; `ScoreBadge.test.tsx` was updated for the `scoreLevelLabel`/`SCORE_LEVEL_LABEL_KEYS` refactor. Full suite: 512 tests across 60 files.
+- Relevant notes/decisions: **the card's dependency M3.T4 (popup `App.tsx` composition) is still open**, so `entrypoints/popup/App.tsx` remains the WXT starter and is deliberately not translated here — its placeholder copy will be replaced by M3.T4, and that task must route its composition strings through `i18n.t` (same "not modified, M3.T4 owns it" approach already recorded for `ScoreBadge`/`PopulationCounter`/`SessionHistory`/`ExportCityButton`). There is intentionally **no** language selector and no `language` field in any slice: the language follows the browser's own via the native API. The shared `i18n` instance is the same `#i18n` import in both the popup components and the content-script overlay (no second instance). The IT-rendering half of the roadmap criterion belongs to **M3.T10**, which adds `locales/it.yml`; the test backend already exposes the `setTestLocale` seam for it.
+- Acceptance criteria: verified — (1) `wxt.config.ts` registers `@wxt-dev/i18n/module` and sets `manifest.default_locale: 'en'` (confirmed in both generated manifests and `_locales/en/messages.json`); (2) all visible popup/overlay strings in the implemented components resolve through `i18n.t(...)` — none is a hardcoded literal except the not-yet-composed `App.tsx` starter (M3.T4); (3) no language selector nor persisted language preference exists; (4) translations load synchronously (native `browser.i18n`, no `await`/fetch); (5) the popup and the content script share the single `#i18n` instance; (6) adding a language only requires `locales/<lang>.yml`; (7) the EN test renders the expected strings through `i18n.t` (the IT half is covered by M3.T10). `bun run compile`, `bun run lint`, `bun run test` (512) and both builds are green.
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -651,6 +664,7 @@ description: Rules for updating the changelog
 | `tldts` | `^7.4.13` | M1.T2 | domain parsing/normalization |
 | `zustand` | `5.0.15` | M1.T3 | store + `persist` middleware |
 | `framer-motion` | `^14.0.0` | M3.T5 | building growth/destruction animations |
+| `@wxt-dev/i18n` | `^0.2.7` | M3.T9 | EN-default internationalization (synchronous `browser.i18n` wrapper) |
 
 Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v8`, `happy-dom`, `@testing-library/{react,user-event,jest-dom}`, `@playwright/test`, `eslint`/`@eslint/js`/`typescript-eslint`/`eslint-plugin-react`/`eslint-plugin-react-hooks`, `prettier`, `web-ext`.
 
@@ -674,6 +688,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 14. **Resolved (M3.T3) — M2.T20 UI feedback** — `components/blocklist/SiteList.tsx` (M3.T3) now renders the explicit feedback: a duplicate add shows "`<domain>` is already in the `<list>`", and adding a domain present in the opposite list is reported as "Moved `<domain>` from the `<other list>`", backed by the M2.T20 store-level mutual exclusion. The feedback is derived on the popup side from the already-normalized entries.
 15. **Resolved (M3.T3) — entry-rejection feedback transport** — as anticipated, `SiteList` validates the input on the popup side with `normalizeEntry` before dispatching, so an unparseable input or a bare public suffix shows `INVALID_URL_MESSAGE` ("Enter a valid URL") and is never sent; the fire-and-forget `BLOCKLIST_ADD_SITE` limitation is thus avoided without adding a mutation ack.
 16. **The test/task mapping table in the agent instructions is out of sync with the roadmap** — `.github/copilot-instructions.md` §3.3 (mirrored in `.continue/rules/`) lists neither M2.T13b, M2.T18, M2.T19 nor M3.T8, and its `M3.T7 (mobile layout)` row refers to a task that does not exist in the roadmap (M3.T7 is `SessionHistory`; no mobile-layout task is defined anywhere). This is the same drift documented in issue #11 and is left untouched because the instructions are the agent's own contract rather than project documentation — updating them is a separate decision.
+17. **M3.T9 leaves `App.tsx` untranslated because its dependency M3.T4 is still open (M3.T9)** — the i18n infrastructure, `locales/en.yml` and every implemented popup/overlay component are internationalized, but `entrypoints/popup/App.tsx` is still the WXT starter (M3.T4 has not composed the real UI), so its placeholder copy is not routed through `i18n.t`. When M3.T4 lands it must translate its composition strings (and the popup must be the app's real entry), which is the remaining work for M3.T9's "all popup strings" criterion. The IT rendering half of the criterion is M3.T10, which adds `locales/it.yml`; the new `setTestLocale` seam in `tests/helpers/i18n.ts` is ready for it.
 
 ---
 

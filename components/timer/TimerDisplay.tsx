@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useAppStore, selectRemainingSeconds } from '@/store';
 import { formatDuration } from '@/utils/format-duration';
 
@@ -10,7 +11,10 @@ export function TimerDisplay() {
   const remainingSeconds = useAppStore(selectRemainingSeconds);
 
   return (
-    <output className="timer-display" aria-label="Time remaining">
+    <output
+      className="timer-display"
+      aria-label={i18n.t('timer.timeRemaining')}
+    >
       {formatDuration(remainingSeconds)}
     </output>
   );

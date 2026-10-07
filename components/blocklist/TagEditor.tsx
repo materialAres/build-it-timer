@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useState, type SyntheticEvent } from 'react';
 import {
   filterEntriesByTag,
@@ -95,7 +96,7 @@ function TagSiteRow({ domain, tagIds, tags }: TagSiteRowProps) {
             <input
               type="checkbox"
               checked={assigned}
-              aria-label={`Assign ${tag.label} to ${domain}`}
+              aria-label={i18n.t('blocklist.assignTag', [tag.label, domain])}
               onChange={() => {
                 const action = useAppStore.getState();
                 if (assigned) action.unassignTag('blocklist', domain, tag.id);
@@ -139,32 +140,35 @@ export function TagEditor() {
   };
 
   return (
-    <section className="tag-editor" aria-label="Tags">
+    <section className="tag-editor" aria-label={i18n.t('blocklist.tags')}>
       <style>{TAG_EDITOR_STYLES}</style>
       <form className="tag-editor__form" onSubmit={handleSubmit}>
         <input
           className="tag-editor__input"
           type="text"
           value={label}
-          aria-label="New tag name"
-          placeholder="New tag"
+          aria-label={i18n.t('blocklist.newTagName')}
+          placeholder={i18n.t('blocklist.newTag')}
           onChange={(event) => {
             setLabel(event.target.value);
           }}
         />
         <button type="submit" disabled={!canCreate}>
-          Create tag
+          {i18n.t('blocklist.createTag')}
         </button>
       </form>
 
-      <ul className="tag-editor__tags" aria-label="Custom tags">
+      <ul
+        className="tag-editor__tags"
+        aria-label={i18n.t('blocklist.customTags')}
+      >
         {tags.map((tag) => (
           <li key={tag.id} className="tag-editor__chip">
             <button
               type="button"
               className="tag-editor__filter"
               aria-pressed={filterTagId === tag.id}
-              aria-label={`Filter by ${tag.label}`}
+              aria-label={i18n.t('blocklist.filterByTag', [tag.label])}
               onClick={() => {
                 setFilterTagId(filterTagId === tag.id ? null : tag.id);
               }}
@@ -173,7 +177,7 @@ export function TagEditor() {
             </button>
             <button
               type="button"
-              aria-label={`Delete ${tag.label}`}
+              aria-label={i18n.t('blocklist.deleteTag', [tag.label])}
               onClick={() => {
                 useAppStore.getState().deleteTag(tag.id);
                 if (filterTagId === tag.id) setFilterTagId(null);
@@ -185,7 +189,7 @@ export function TagEditor() {
         ))}
       </ul>
 
-      <ul className="tag-editor__sites" aria-label="Sites">
+      <ul className="tag-editor__sites" aria-label={i18n.t('blocklist.sites')}>
         {visibleSites.map((entry) => (
           <TagSiteRow
             key={entry.domain.value}

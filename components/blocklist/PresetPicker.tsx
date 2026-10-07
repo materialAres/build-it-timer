@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { PRESETS } from '@/lib/blocking/presets';
 import { useAppStore } from '@/store';
 
@@ -37,7 +38,11 @@ const PRESET_PICKER_STYLES = `
  */
 export function PresetPicker() {
   return (
-    <div className="preset-picker" role="group" aria-label="Presets">
+    <div
+      className="preset-picker"
+      role="group"
+      aria-label={i18n.t('blocklist.presets')}
+    >
       <style>{PRESET_PICKER_STYLES}</style>
       {PRESETS.map((preset) => (
         <button
@@ -45,7 +50,7 @@ export function PresetPicker() {
           type="button"
           className="preset-picker__button"
           data-preset-id={preset.id}
-          aria-label={`Apply ${preset.name} preset`}
+          aria-label={i18n.t('blocklist.applyPreset', [preset.name])}
           onClick={() => {
             useAppStore.getState().applyPreset(preset.id);
           }}

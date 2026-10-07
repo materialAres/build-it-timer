@@ -27,7 +27,12 @@ const chromeBinary = resolveChromeBinary();
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
+  // `@wxt-dev/i18n/module` (M3.T9) wires the type-safe, synchronous wrapper
+  // around `browser.i18n`, compiles `locales/<lang>.yml` into the
+  // `_locales/<lang>/messages.json` the browser expects, and auto-imports the
+  // shared `i18n` instance from `#i18n`. Registration requires
+  // `manifest.default_locale` (set below), otherwise the module disables itself.
+  modules: ['@wxt-dev/module-react', '@wxt-dev/i18n/module'],
   // Firefox defaults to MV2 in WXT, but `declarativeNetRequest` — the engine
   // behind in-session blocking (M2.T6/M2.T7) — only exists in MV3 on Firefox.
   // Forcing MV3 on every target keeps the manifest, DNR, `browser.alarms` and
@@ -36,6 +41,11 @@ export default defineConfig({
   // Firefox requires (it has no service-worker background).
   manifestVersion: 3,
   manifest: ({ browser }) => ({
+    // English is the default language and the fallback for every missing key
+    // (M3.T9): `@wxt-dev/i18n` reads the browser's own language and serves the
+    // matching `_locales/<lang>/messages.json`, so there is no language selector
+    // nor a persisted preference.
+    default_locale: 'en',
     // WXT does not infer permissions from the APIs a module imports, so they
     // must be declared explicitly. Without `storage` the popup's
     // `attachStoreSync` throws (`browser.storage` is undefined) before React

@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useAppStore, selectPopulation } from '@/store';
 
 /**
@@ -44,11 +45,13 @@ export function PopulationCounter() {
       className="population-counter"
       data-population={safePopulation}
       role="status"
-      aria-label={`Population: ${populationLabel}`}
+      aria-label={i18n.t('score.populationAriaLabel', [populationLabel])}
     >
       <style>{POPULATION_COUNTER_STYLES}</style>
       <span className="population-counter__value">{safePopulation}</span>
-      <span className="population-counter__label">population</span>
+      <span className="population-counter__label">
+        {i18n.t('score.population')}
+      </span>
     </span>
   );
 }

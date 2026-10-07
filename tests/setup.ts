@@ -3,6 +3,7 @@ import { beforeEach, vi } from 'vitest';
 import React from 'react';
 import type * as FramerMotion from 'framer-motion';
 import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
+import { installI18nBackend, resetTestLocale } from '@/tests/helpers/i18n';
 
 // The city's grow/destroy transitions (M3.T5, `components/city/CityCell.tsx`)
 // are purely visual. In tests they would keep an exiting character mounted
@@ -76,9 +77,18 @@ vi.mock('framer-motion', async (importOriginal) => {
 // through a caught rejection instead of a successful sync.
 installFakeDynamicRules();
 
+// `@wxt-dev/i18n` (M3.T9) resolves every string through `browser.i18n.getMessage`,
+// which `fakeBrowser` leaves unimplemented. Install the real `locales/*.yml`
+// dictionary as the backend so component tests render the same EN strings a
+// browser would serve.
+installI18nBackend();
+
 beforeEach(() => {
   // The fake's ruleset is process-wide, while `fakeBrowser.reset()` (called by
   // the test files themselves) does not know about it: clear it per test so
   // rules cannot leak from one test to the next.
   installFakeDynamicRules().reset();
+  // A test may force the locale (M3.T10); return to the EN default so it cannot
+  // leak into the next test.
+  resetTestLocale();
 });

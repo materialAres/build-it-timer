@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useState, type SyntheticEvent } from 'react';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import {
@@ -74,13 +75,21 @@ const SITE_LIST_STYLES = `
   }
 `;
 
-const LIST_LABELS: Record<
+const LIST_KEYS = {
+  blocklist: {
+    title: 'blocklist.blockedSites',
+    name: 'blocklist.blocklistName',
+    otherName: 'blocklist.allowlistName',
+  },
+  allowlist: {
+    title: 'blocklist.allowedSites',
+    name: 'blocklist.allowlistName',
+    otherName: 'blocklist.blocklistName',
+  },
+} as const satisfies Record<
   BlocklistListName,
-  { readonly title: string; readonly plural: string; readonly other: string }
-> = {
-  blocklist: { title: 'Blocked sites', plural: 'blocklist', other: 'allowlist' },
-  allowlist: { title: 'Allowed sites', plural: 'allowlist', other: 'blocklist' },
-};
+  { readonly title: string; readonly name: string; readonly otherName: string }
+>;
 
 interface Feedback {
   readonly kind: 'error' | 'info';
@@ -98,11 +107,12 @@ export interface SiteListProps {
  * granular selectors and never computes list state itself. The input is
  * canonicalized live with `normalizeEntry` (M1.T2/M2.T21) both to preview the
  * registrable domain and to validate: an unparseable input or a "bare" public
- * suffix is rejected with the shared `INVALID_URL_MESSAGE` ("Enter a valid
- * URL") and is never dispatched. Duplicates and appends to the opposite list are
- * detected here only to produce the visible feedback; the authoritative dedup
- * and allowlist/blocklist mutual exclusion stay in the store's pure helpers
- * (M2.T4/M2.T20), so the UI cannot create a double entry even if it tried.
+ * suffix is rejected with the localized `blocklist.invalidUrl` message ("Enter a
+ * valid URL" in the EN default) and is never dispatched. Duplicates and appends
+ * to the opposite list are detected here only to produce the visible feedback;
+ * the authoritative dedup and allowlist/blocklist mutual exclusion stay in the
+ * store's pure helpers (M2.T4/M2.T20), so the UI cannot create a double entry
+ * even if it tried.
  */
 export function SiteList({ list }: SiteListProps) {
   const entries = useAppStore(list === 'allowlist' ? selectAllowlist : selectBlocklist);
@@ -110,7 +120,10 @@ export function SiteList({ list }: SiteListProps) {
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const labels = LIST_LABELS[list];
+  const keys = LIST_KEYS[list];
+  const title = i18n.t(keys.title);
+  const listName = i18n.t(keys.name);
+  const otherListName = i18n.t(keys.otherName);
   const preview = normalizeEntry(value.trim());
   const previewDomain = preview.ok ? preview.value : null;
 
@@ -118,12 +131,15 @@ export function SiteList({ list }: SiteListProps) {
     event.preventDefault();
     const result = normalizeEntry(value);
     if (!result.ok) {
-      setFeedback({ kind: 'error', text: result.error.message });
+      setFeedback({ kind: 'error', text: i18n.t('blocklist.invalidUrl') });
       return;
     }
     const domain = result.value;
     if (entries.some((entry) => entry.domain.value === domain)) {
-      setFeedback({ kind: 'info', text: `${domain} is already in the ${labels.plural}.` });
+      setFeedback({
+        kind: 'info',
+        text: i18n.t('blocklist.alreadyInList', [domain, listName]),
+      });
       return;
     }
     const moved = otherEntries.some((entry) => entry.domain.value === domain);
@@ -131,30 +147,30 @@ export function SiteList({ list }: SiteListProps) {
     setFeedback({
       kind: 'info',
       text: moved
-        ? `Moved ${domain} from the ${labels.other}.`
-        : `Added ${domain}.`,
+        ? i18n.t('blocklist.movedFromList', [domain, otherListName])
+        : i18n.t('blocklist.added', [domain]),
     });
     setValue('');
   };
 
   return (
-    <section className="site-list" aria-label={labels.title}>
+    <section className="site-list" aria-label={title}>
       <style>{SITE_LIST_STYLES}</style>
-      <h3 className="site-list__title">{labels.title}</h3>
+      <h3 className="site-list__title">{title}</h3>
 
       <form className="site-list__form" onSubmit={handleSubmit}>
         <input
           className="site-list__input"
           type="text"
           value={value}
-          aria-label={`Add to ${labels.title}`}
-          placeholder="example.com"
+          aria-label={i18n.t('blocklist.addTo', [title])}
+          placeholder={i18n.t('blocklist.exampleDomain')}
           onChange={(event) => {
             setValue(event.target.value);
             setFeedback(null);
           }}
         />
-        <button type="submit">Add</button>
+        <button type="submit">{i18n.t('common.add')}</button>
       </form>
 
       {previewDomain !== null && previewDomain !== value.trim() ? (
@@ -172,13 +188,16 @@ export function SiteList({ list }: SiteListProps) {
         </p>
       ) : null}
 
-      <ul className="site-list__entries" aria-label={`${labels.title} entries`}>
+      <ul
+        className="site-list__entries"
+        aria-label={i18n.t('blocklist.entriesAriaLabel', [title])}
+      >
         {entries.map((entry) => (
           <li key={entry.domain.value} className="site-list__entry">
             <span className="site-list__domain">{entry.domain.value}</span>
             <button
               type="button"
-              aria-label={`Remove ${entry.domain.value}`}
+              aria-label={i18n.t('common.remove', [entry.domain.value])}
               onClick={() => {
                 useAppStore.getState().removeSite(list, entry.domain.value);
               }}

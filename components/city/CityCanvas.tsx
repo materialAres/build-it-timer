@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { selectCityLayers, selectCityThemeId, useAppStore } from '@/store';
 import { getBuildingColor } from '@/lib/city/palette';
 import { DEFAULT_THEME_ID, getThemeById } from '@/lib/city/theme-registry';
@@ -93,7 +94,7 @@ export function CityCanvas() {
     <div
       className="city-canvas"
       role="img"
-      aria-label="Focus city under construction"
+      aria-label={i18n.t('city.canvasAriaLabel')}
       data-theme={theme.id}
       style={{
         width: `${layers.background.width.toString()}ch`,

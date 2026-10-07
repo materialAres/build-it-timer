@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useAppStore, selectTimerStatus } from '@/store';
 
 /**
@@ -19,21 +20,21 @@ export function TimerControls() {
         onClick={() => void useAppStore.getState().startTimer()}
         disabled={status === 'running'}
       >
-        Start
+        {i18n.t('timer.start')}
       </button>
       <button
         type="button"
         onClick={() => void useAppStore.getState().pauseTimer()}
         disabled={status !== 'running'}
       >
-        Pause
+        {i18n.t('timer.pause')}
       </button>
       <button
         type="button"
         onClick={() => void useAppStore.getState().resetTimer()}
         disabled={status === 'idle'}
       >
-        Reset
+        {i18n.t('timer.reset')}
       </button>
     </div>
   );
