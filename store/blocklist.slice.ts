@@ -18,6 +18,15 @@ export interface BlocklistSlice {
    */
   readonly applyPreset: (presetId: string) => void;
   /**
+   * Add a single site to one list (M3.T3). Normalization (M2.T4/M2.T21), dedup
+   * and allow/block mutual exclusion (M2.T20) live in the pure helper; the
+   * action only applies it and forwards one mutation. A duplicate add or an
+   * invalid site is a silent no-op (same reference), so nothing is persisted.
+   */
+  readonly addSite: (list: BlocklistListName, site: string) => void;
+  /** Remove a single site from one list (M3.T3). */
+  readonly removeSite: (list: BlocklistListName, site: string) => void;
+  /**
    * Create a custom tag (M3.T2) after a case-insensitive duplicate-label check.
    * The id is minted from the injected clock/entropy (never in the component),
    * so the UI stays presentational. Locally optimistic update + one mutation.
@@ -72,6 +81,24 @@ export const createBlocklistSlice =
         type: 'BLOCKLIST_APPLY_PRESET',
         payload: { presetId },
       });
+    },
+    addSite(list, site) {
+      applyBlocklistMutation(
+        set,
+        get,
+        dependencies,
+        { type: 'BLOCKLIST_ADD_SITE', payload: { list, site } },
+        (current) => addSiteToList(current, list, site),
+      );
+    },
+    removeSite(list, site) {
+      applyBlocklistMutation(
+        set,
+        get,
+        dependencies,
+        { type: 'BLOCKLIST_REMOVE_SITE', payload: { list, site } },
+        (current) => removeSiteFromList(current, list, site),
+      );
     },
     createTag(label) {
       const trimmed = label.trim();
@@ -259,7 +286,11 @@ export function removeSiteFromList(
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  return { ...state, [list]: state[list].filter((entry) => entry.domain.value !== domain) };
+  const next = state[list].filter((entry) => entry.domain.value !== domain);
+  // Same reference when nothing matched, so a removal of an absent site skips
+  // the write/mutation (identity pattern of M1.T10/M2.T20) instead of persisting
+  // a new-but-equal state.
+  return next.length === state[list].length ? state : { ...state, [list]: next };
 }
 
 export function upsertTag(state: BlocklistState, tag: Tag): BlocklistState {
