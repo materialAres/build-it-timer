@@ -35,6 +35,16 @@ export interface TimerSlice {
   /** Return to the initial idle state and cancel any pending alarm. */
   resetTimer(): Promise<void>;
   /**
+   * Mark the session as finished (M3.T3c): the countdown reached zero, so the
+   * timer leaves `running` for `completed` and the pending alarm is cleared.
+   *
+   * `completed` is deliberately distinct from `paused` (a finished session is
+   * not resumable — `remainingSeconds` is zero) and from `idle` (which is
+   * indistinguishable from "never started" and would leave the popup unable to
+   * tell that a session just ended, M3.T4).
+   */
+  completeTimer(): Promise<void>;
+  /**
    * Ask the background to start/resume the session (M3.T3b). A read-only
    * context (the popup, M1.T9) must not run `startTimer` locally: that would
    * mutate only its own in-memory copy and schedule the alarm on its own
@@ -133,6 +143,29 @@ export function createTimerSlice(
       set({ timer: { ...initialTimerState } });
       // Cancel by the *previous* session's name: after the reset the store no
       // longer remembers which alarm was pending.
+      if (sessionId !== null) {
+        await alarmProvider.clear(timerAlarmName(sessionId));
+      }
+    },
+
+    async completeTimer(): Promise<void> {
+      const { timer } = get();
+
+      // Only a running session can complete: a stale alarm firing after a pause
+      // or a reset must not resurrect a finished state.
+      if (timer.status !== 'running') return;
+
+      const { sessionId } = timer;
+      set({
+        timer: {
+          status: 'completed',
+          remainingSeconds: 0,
+          sessionStartedAt: timer.sessionStartedAt,
+          sessionId,
+        },
+      });
+      // The alarm has already fired, but clearing is idempotent and keeps the
+      // "no pending alarm outside a running session" invariant (M2.T2) true.
       if (sessionId !== null) {
         await alarmProvider.clear(timerAlarmName(sessionId));
       }

@@ -168,6 +168,50 @@ describe('timerSlice (M2.T1)', () => {
     expect(create).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
   });
+
+  it('completeTimer moves running to completed, zeroes the countdown and clears the alarm (M3.T3c)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    const sessionId = requireSessionId(store.getState().timer.sessionId);
+
+    await store.getState().completeTimer();
+
+    const { timer } = store.getState();
+    expect(timer.status).toBe('completed');
+    expect(timer.remainingSeconds).toBe(0);
+    // The session id is kept: the completion handler needs it for the summary.
+    expect(timer.sessionId).toBe(sessionId);
+    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+  });
+
+  it('completeTimer while idle is a safe no-op', async () => {
+    const store = createStore();
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer.status).toBe('idle');
+  });
+
+  it('completeTimer while paused is a no-op (a stale alarm cannot complete it)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    await store.getState().pauseTimer();
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer.status).toBe('paused');
+  });
+
+  it('completeTimer while already completed is a no-op', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    await store.getState().completeTimer();
+    const completed = store.getState().timer;
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer).toBe(completed);
+  });
 });
 
 describe('session helpers (M2.T1)', () => {

@@ -21,6 +21,9 @@ import {
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
+import { calculatePopulation } from '@/lib/score/calculate-population';
+import { timerAlarmName } from '@/lib/timer/session';
+import type { SessionSummary } from '@/store/store.types';
 import {
   createBrowserTabEventSource,
   createTabDistractionTracker,
@@ -72,13 +75,6 @@ export interface BackgroundHandle {
   dispose(): void;
 }
 
-// Wiring only (M1.T7): the concrete behavior of each listener is owned by the
-// M2 tasks. Keeping a single placeholder avoids six near-identical no-ops while
-// still registering a distinct listener per message type.
-function handlePlaceholder(): void {
-  // Intentionally empty: the background skeleton only wires the listeners.
-}
-
 /**
  * Growth wiring (M2.T15): the fine-grained character-insertion tick arrives as
  * the typed `TIMER_TICK` message from the active context (popup) — the 2s tick
@@ -93,16 +89,24 @@ function handlePlaceholder(): void {
  * set to "now" on the first tick of a running stretch (never to
  * `sessionStartedAt`), so a service-worker restart cannot replay the whole
  * session into the city a second time.
+ *
+ * The tracker also accumulates the same running-only elapsed time as
+ * `focusedMs`, which is what session completion (M3.T3c) feeds to
+ * `calculatePopulation` (M2.T18). Sharing the measure is deliberate: the
+ * population then always agrees with the city that was actually built, instead
+ * of being derived from a second, differently-clocked quantity.
  */
 export interface GrowthTickHandle {
   /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
-  handleTick(): void;
+  readonly handleTick: () => void;
+  /** Running-only focus time accumulated so far, in ms (M3.T3c). */
+  readonly getFocusedMs: () => number;
   /** Detach the status subscription owned by the tracker. */
-  dispose(): void;
+  readonly dispose: () => void;
 }
-
 function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
   let lastGrowthAt: number | null = null;
+  let focusedMs = 0;
   let status = store.getState().timer.status;
 
   // Detect the transitions into/out of `running` even when no tick arrives:
@@ -126,12 +130,12 @@ function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle 
     lastGrowthAt = current;
     const elapsed = current - baseline;
     if (elapsed <= 0) return;
+    focusedMs += elapsed;
     store.getState().growCity(elapsed);
   };
 
-  return { handleTick, dispose: unsubscribe };
+  return { handleTick, getFocusedMs: () => focusedMs, dispose: unsubscribe };
 }
-
 /**
  * How many characters the three layers currently hold. Used only to report how
  * many characters a malus application actually removed (a pending tick against
@@ -143,6 +147,64 @@ function countOccupied(layers: CityLayers): number {
       total + grid.cells.flat().filter((cell) => cell.char !== null).length,
     0,
   );
+}
+
+export interface SessionCompletionDependencies {
+  readonly store: AppStore;
+  /** Running-only focus time accumulated by the growth tracker (M2.T15). */
+  readonly getFocusedMs: () => number;
+  /** Clock used to stamp `endedAt`; injectable for determinism. */
+  readonly now: () => number;
+  /** Message sink, injectable so the handler is testable without the bus. */
+  readonly send?: (message: RuntimeMessage) => void;
+}
+
+export interface SessionCompletion {
+  /** Handle one alarm firing; a non-session or stale alarm is ignored. */
+  readonly handleAlarm: (name: string) => void;
+}
+/**
+ * Session completion (M3.T3c): the alarm scheduled at the end of the countdown
+ * fires, the timer leaves `running` and the session's outcome is recorded.
+ *
+ * The alarm name is the only thing the firing carries, so it is matched against
+ * the *current* session's alarm name: a stale alarm left over from a previous
+ * session (or a firing that arrives after a pause/reset) must not complete the
+ * session that is running now.
+ *
+ * The population is derived from the focus time the growth tracker accumulated
+ * (M2.T15) rather than from the wall clock, so it agrees with the city that was
+ * actually built and excludes paused gaps. The score is whatever the score
+ * slice holds: the `distractionRatio` formula is still the roadmap §4 open
+ * point, and this task deliberately consumes the value instead of defining it.
+ */
+export function createSessionCompletion({
+  store,
+  getFocusedMs,
+  now,
+  send = defaultSend,
+}: SessionCompletionDependencies): SessionCompletion {
+  return {
+    handleAlarm: (name: string): void => {
+      const { timer } = store.getState();
+      if (timer.status !== 'running') return;
+      if (timer.sessionId === null) return;
+      if (name !== timerAlarmName(timer.sessionId)) return;
+
+      const population = calculatePopulation(getFocusedMs() / 60_000);
+      store.getState().setPopulation(population);
+      void store.getState().completeTimer();
+
+      const summary: SessionSummary = {
+        sessionId: timer.sessionId,
+        score: store.getState().score.level,
+        population,
+        endedAt: now(),
+      };
+      store.getState().recordSession(summary);
+      send({ type: 'SESSION_ENDED', payload: summary });
+    },
+  };
 }
 
 /**
@@ -366,9 +428,14 @@ export function startBackground(
 
   // The alarm provider is wired now so the background owns a single instance for
   // the whole session: the timer slice (M2.T1) schedules the session alarm on it
-  // and this subscription receives the firing. Rebuilding the countdown from the
-  // persisted state when that happens is M2.T2.
-  disposers.push(alarmProvider.onFire(handlePlaceholder));
+  // and this subscription receives the firing. The firing is the end of the
+  // countdown, so it drives session completion (M3.T3c).
+  const completion = createSessionCompletion({
+    store,
+    getFocusedMs: growthTick.getFocusedMs,
+    now,
+  });
+  disposers.push(alarmProvider.onFire(completion.handleAlarm));
 
   // Startup reconciliation (M2.T2): the persisted store may say `running` while
   // the worker was asleep, so the countdown is rebuilt from the still-pending
