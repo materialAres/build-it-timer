@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M3.T10** (Milestone 3 in progress).
+> Updated to: **M4.T1** (Milestone 3 in progress, Milestone 4 started).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -15,7 +15,8 @@ description: Rules for updating the changelog
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **in progress**: M3.T1, M3.T2, M3.T3, M3.T5, M3.T6, M3.T7, M3.T8, M3.T9, M3.T10 done; M3.T4 remaining.
-- Tests: `bun run test` → **519 passing tests** across 61 files (unit + integration + component).
+- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); M4.T2 … M4.T5 remaining.
+- Tests: `bun run test` → **528 passing tests** across 61 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -73,6 +74,7 @@ description: Rules for updating the changelog
 | M3.T8 | `ExportCityButton` — export city as JPEG/PNG at end of focus | completed | — (to be committed) |
 | M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | — (to be committed) |
 | M3.T10 | IT translation (language auto-detected from browser) | completed | — (to be committed) |
+| M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | — (to be committed) |
 
 ---
 
@@ -664,6 +666,22 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/i18n/locales.test.ts` (4 tests, unit) — every EN key translated in IT; identical key tree in both locales; every IT value non-empty; no language property on the store state or slices. `tests/unit/i18n/i18n.test.tsx` (+3 tests, component + integration) — IT strings/substitutions via `i18n.t`; `TimerControls` in Italian; `BlockedOverlay` in Italian through the shared instance. Full suite: 519 tests across 61 files.
 - Relevant notes/decisions: the drift test compares the **key trees of the source files**, not the compiled output, so a key added to `en.yml` fails CI until `it.yml` is updated — the untranslated key would otherwise silently fall back to English at runtime (the `default_locale` behaviour the M3.T9 helper already mirrors). The IT `blocklist` list names are phrased in the feminine (`lista dei bloccati`/`lista dei consentiti`) so the `alreadyInList`/`movedFromList`/`addTo` substitutions read naturally (`nella lista dei bloccati`). As with M3.T9, `entrypoints/popup/App.tsx` is still the WXT starter (M3.T4 open) and is not translated here.
 - Acceptance criteria: verified — (1) every key in `locales/en.yml` has an IT counterpart in `locales/it.yml` with the same tree, guarded by the drift test; (2) language selection is automatic only (no selector, no persisted preference, no dedicated store action), asserted by the store-shape test and by the absence of any config/component change; (3) the content-script overlay renders Italian when the browser is set to Italian via the same shared `#i18n` instance (component test); (4) EN/IT key coverage is verified by the tree-comparison test that fails if an IT key is missing. `bun run compile`, `bun run lint`, `bun run test` (519) and both builds are green; both generated `_locales/it/messages.json` are present.
+
+---
+
+## Milestone 4 — Polish and Nice-to-have
+
+### M4.T1 — *(Nice to have)* Malus proportional to time spent on the blocked site
+- `lib/score/apply-malus.ts` — the M2.T10 module is extended with a **time-proportional** malus on top of the existing one-character-per-tick deletion:
+  - `malusForDistractionTicks(ticksOfDistraction): number` (new, pure) — the *additional* characters owed for the whole 2s ticks spent on a blocked site (on top of the single character removed the moment the user chose to proceed), so the malus is a function of the time spent and not just of the single event. It is cumulative and **monotonic non-decreasing** (every tick contributes a non-negative cost), total and pure (non-finite/negative input normalises to `0`, mirroring `applyMalus`).
+  - `MALUS_ESCALATION_SCHEDULE` / `MalusEscalationRule` (new, exported data — Open/Closed §1.1): each rule means "from this many whole 2s ticks onwards, every further tick costs this many characters". The shipped schedule is `1`/`1`, `6`/`2`, `12`/`3` — the first stage preserves the M2.T10 base cadence, so short stays behave exactly as before and only longer stays become harsher. Making the penalty harder/softer is an array edit, never a change to the calculation.
+  - `applyMalus(city, ticksOfDistraction)` is **unchanged**: it remains the pure deletion primitive (one character per tick) with its M2.T10 signature and tests intact, so the new escalation is additive rather than a rewrite of the primitive.
+- `entrypoints/background.ts` — the M2.T16 malus pump (`createMalusWiring`) now derives the cumulative characters owed from `1 + malusForDistractionTicks(elapsedTicks)` instead of the linear `1 + elapsedTicks`, so the running app actually escalates the punishment with time while the immediate character on "proceed" is unchanged. All M2.T16 behaviour is preserved for short stays (the shipped schedule keeps ticks 1–5 at one character each), and the existing M2.T16 unit/integration tests remain green.
+- Files created/modified: `lib/score/apply-malus.ts` (extension), `entrypoints/background.ts` (uses the new pure function), `tests/unit/lib/score/apply-malus.test.ts`, `tests/unit/background/malus-wiring.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/unit/lib/score/apply-malus.test.ts` (+8 tests, unit) — no additional malus before a tick elapses (`0`); grows strictly once time is spent; **monotonic non-decreasing over an increasing case table** (`0,1,2,3,5,6,7,11,12,20,60,300`) — the acceptance criterion's monotonic property; no dip over a dense range `0..240` (more time never yields a smaller malus); escalation is real and not merely linear (known values `11 → 17`, `17 → 35`; marginal cost increases across the schedule stages); total for `NaN`/negative/`Infinity`/fractional input; determinism; the schedule is ordered with positive stages. `tests/unit/background/malus-wiring.test.ts` (+1 test, unit with a stub tracker) — through the real wiring, 12 elapsed ticks remove `malusForDistractionTicks(12)` characters in one update, i.e. more than the linear 12 (end-to-end proof that the app escalates).
+- Relevant notes/decisions: the card lists only `lib/score/apply-malus.ts`, but the malus is already wired (M2.T16), so the extension is also connected to that pump — otherwise the new curve would be dead code and the app would keep the linear behaviour. This is additive: `applyMalus`'s contract and every existing test are untouched, and the escalation only kicks in after 5 ticks (10s), so the M2.T16 acceptance criteria still hold for the durations they exercise. The escalation is driven by the tracker's whole 2s ticks (the same `MALUS_TICK_MS` cadence), so "time spent" is the accumulated distraction time the tracker already measures.
+- Acceptance criteria: verified — the monotonic property is tested both directly (`malusForDistractionTicks`) and through the real malus wiring; more time spent on the blocked site produces a greater-or-equal malus, never a smaller one, and `bun run compile`, `bun run lint`, `bun run test` (528) and both builds are green.
 
 ---
 

@@ -38,6 +38,7 @@ import {
   type TabEventSource,
 } from '@/lib/timer/tab-distraction-tracker';
 import type { CityLayers } from '@/components/city/city.types';
+import { malusForDistractionTicks } from '@/lib/score/apply-malus';
 import type { Tag } from '@/store/store.types';
 
 /**
@@ -317,10 +318,14 @@ export function createMalusWiring({
   });
 
   // The remove rule lives in `applyMalus` (M2.T10): this only decides how many
-  // ticks are due and hands them to the slice, which never computes.
+  // ticks are due and hands them to the slice, which never computes. The number
+  // of characters owed grows with the time spent (M4.T1): `malusForDistractionTicks`
+  // escalates the cost per tick, while the first character is still removed at
+  // the "proceed" instant itself.
   const pump = (): void => {
     if (!active) return;
-    const expected = 1 + (tracker.getTicks() - baselineTicks);
+    const elapsedTicks = tracker.getTicks() - baselineTicks;
+    const expected = 1 + malusForDistractionTicks(elapsedTicks);
     const pending = expected - applied;
     if (pending <= 0) return;
 

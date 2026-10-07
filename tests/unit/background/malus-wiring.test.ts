@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createAppStore } from '@/store';
 import { createMalusWiring } from '@/entrypoints/background';
-import { applyMalus } from '@/lib/score/apply-malus';
+import { applyMalus, malusForDistractionTicks } from '@/lib/score/apply-malus';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import type { CityLayers } from '@/components/city/city.types';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
@@ -130,6 +130,23 @@ describe('malus wiring (M2.T16)', () => {
     // A tick sample without new whole ticks applies nothing.
     wiring.handleTick();
     expect(countOccupied(store.getState().city.layers)).toBe(2);
+  });
+
+  it('escalates the malus with the time spent on the blocked site (M4.T1)', async () => {
+    const { store, wiring, setTicks } = setup();
+    await startSessionWithCharacters(store, 40);
+    setTicks(0);
+    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    const afterProceed = countOccupied(store.getState().city.layers);
+    expect(afterProceed).toBe(39);
+
+    // 12 elapsed ticks cost more than one character each: the wiring removes the
+    // escalated amount in one go, not the linear `1 + 12`.
+    setTicks(12);
+    wiring.handleTick();
+    const removed = afterProceed - countOccupied(store.getState().city.layers);
+    expect(removed).toBe(malusForDistractionTicks(12));
+    expect(removed).toBeGreaterThan(12);
   });
 
   it('forgives the pre-"proceed" open time of the blocked tab', async () => {
