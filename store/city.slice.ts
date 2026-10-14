@@ -8,8 +8,10 @@ import type {
 } from '@/components/city/city.types';
 import type { AppState } from '.';
 
-export const DEFAULT_CITY_WIDTH = 40;
-export const DEFAULT_CITY_HEIGHT = 12;
+export {
+  CITY_WIDTH_CHARS as DEFAULT_CITY_WIDTH,
+  CITY_HEIGHT_ROWS as DEFAULT_CITY_HEIGHT,
+} from '@/lib/city/city-size';
 
 /**
  * The default theme id now lives in the theme registry (M2.T13b); re-exported

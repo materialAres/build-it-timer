@@ -6,7 +6,8 @@
  * The popup is sized by its content and must not scroll (M3.T4 sizing
  * decision), so the starter's `#root { max-width: 1280px }` and
  * `body { min-height: 100vh }` are deliberately gone: a fixed viewport would
- * force a scrollbar on the city section, whose canvas is 40ch wide.
+ * force a scrollbar on the city section, whose canvas is one `ch` per grid
+ * column (`CITY_WIDTH_CHARS` in `lib/city/city-size.ts`).
  */
 
 .popup {

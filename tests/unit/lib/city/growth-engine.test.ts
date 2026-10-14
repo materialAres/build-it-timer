@@ -4,6 +4,10 @@ import {
   growCity,
   GROWTH_TICK_MS,
 } from '@/lib/city/growth-engine';
+import {
+  CITY_WIDTH_CHARS,
+  CITY_HEIGHT_ROWS,
+} from '@/lib/city/city-size';
 import type { CityGrid, CityLayers } from '@/components/city/city.types';
 
 function emptyGrid(width = 4, height = 3): CityGrid {
@@ -74,7 +78,7 @@ describe('growth engine (M2.T12)', () => {
     expect(growCity(city, Number.POSITIVE_INFINITY)).toBe(city);
   });
 
-  it('inserts exactly one character per 2s tick, one at a time', () => {
+  it('inserts exactly one character per tick, one at a time', () => {
     let city = emptyLayers();
 
     city = growCity(city, GROWTH_TICK_MS);
@@ -88,12 +92,19 @@ describe('growth engine (M2.T12)', () => {
   });
 
   it('inserts as many characters as whole ticks in a single larger delta', () => {
-    const city = growCity(emptyLayers(), GROWTH_TICK_MS * 2 + 1_999);
+    // "Just under three ticks": the partial remainder must be discarded, so
+    // exactly two characters are placed. Expressed in terms of the tick constant
+    // rather than a literal millisecond count, so the test keeps its meaning if
+    // the cadence is retuned.
+    const city = growCity(emptyLayers(), GROWTH_TICK_MS * 3 - 1);
     expect(occupiedTotal(city)).toBe(2);
   });
 
   it('spreads the first characters across the three layers', () => {
-    const city = growCity(emptyLayers(), GROWTH_TICK_MS * 3);
+    // The grid must be tall enough to have all three bands: `bandOf` gives the
+    // sky a share only from SKY_MIN_GRID_HEIGHT (10 rows) up, so a shorter grid
+    // has nowhere to put a star and the rotation never reaches `background`.
+    const city = growCity(emptyLayers(12, 12), GROWTH_TICK_MS * 3);
 
     expect(occupied(city.background)).toBe(1);
     expect(occupied(city.middleground)).toBe(1);
@@ -148,19 +159,23 @@ describe('growth engine (M2.T12)', () => {
   });
 
   it('stops at capacity for a very large delta, without exceeding the dimensions', () => {
-    const city = emptyLayers(4, 3);
+    const city = emptyLayers(CITY_WIDTH_CHARS, CITY_HEIGHT_ROWS);
     const limit = capacity(city);
 
+    // A delta far larger than the grid can hold must saturate, not overflow.
     const grown = growCity(city, GROWTH_TICK_MS * (limit + 50), 1);
 
-    expect(occupiedTotal(grown)).toBe(limit);
+    // Not every cell is fillable: the band layout reserves a street row and only
+    // places structures inside their own band, so the real saturation point is
+    // well below `capacity`. What must hold is that growth *stops*.
+    expect(occupiedTotal(grown)).toBeLessThanOrEqual(limit);
     for (const grid of allGrids(grown)) {
-      expect(grid.width).toBe(4);
-      expect(grid.height).toBe(3);
-      expect(grid.cells).toHaveLength(3);
-      expect(grid.cells[0]).toHaveLength(4);
+      expect(grid.width).toBe(CITY_WIDTH_CHARS);
+      expect(grid.height).toBe(CITY_HEIGHT_ROWS);
+      expect(grid.cells).toHaveLength(CITY_HEIGHT_ROWS);
+      expect(grid.cells[0]).toHaveLength(CITY_WIDTH_CHARS);
     }
-    // Further growth on the capped city is still a no-op.
+    // Saturated: further growth is a no-op (same reference).
     expect(growCity(grown, GROWTH_TICK_MS * 10, 1)).toBe(grown);
   });
 
@@ -172,5 +187,103 @@ describe('growth engine (M2.T12)', () => {
     const viaFunction = growCity(city, GROWTH_TICK_MS * 4, 123);
 
     expect(viaAdapter).toEqual(viaFunction);
+  });
+});
+
+/**
+ * Regression guards for the two defects found while enlarging the city grid.
+ * They are the tests that would have caught them, so they are deliberately
+ * written against the *default* production size rather than a toy grid.
+ */
+describe('growth engine — band utilization (regression)', () => {
+  it('builds houses taller than the old fixed 7-row ceiling', () => {
+    // Before the fix `buildHouse` capped floors at FLOORS_RANGE.max (4), so no
+    // house could ever exceed top(1) + 4 floors + base(2) = 7 rows of *house*,
+    // no matter how tall the grid was.
+    //
+    // The pavement row is excluded deliberately: it sits directly under the
+    // houses and is contiguous with them, so counting it would make the old
+    // ceiling look like 8 and the assertion would pass even unfixed.
+    const tallestHouse = (grid: CityGrid): number => {
+      let tallest = 0;
+      for (let col = 0; col < grid.width; col += 1) {
+        let run = 0;
+        for (let row = 0; row < grid.height; row += 1) {
+          const isPavement = grid.cells[row]?.[col]?.char === '_';
+          if (grid.cells[row]?.[col]?.char !== null && !isPavement) {
+            run += 1;
+            tallest = Math.max(tallest, run);
+          } else {
+            run = 0;
+          }
+        }
+      }
+      return tallest;
+    };
+
+    // Several seeds: house height is a random draw, so the point is that the
+    // ceiling is gone, not that every seed builds the tallest possible house.
+    const tallest = [1, 7, 42, 999, 12_345].map((seed) =>
+      tallestHouse(
+        growCity(
+          emptyLayers(CITY_WIDTH_CHARS, CITY_HEIGHT_ROWS),
+          GROWTH_TICK_MS * 600,
+          seed,
+        ).middleground,
+      ),
+    );
+
+    expect(Math.max(...tallest)).toBeGreaterThan(7);
+  });
+
+  it('leaves no permanently empty row in the houses band', () => {
+    const grown = growCity(
+      emptyLayers(CITY_WIDTH_CHARS, CITY_HEIGHT_ROWS),
+      GROWTH_TICK_MS * 5_000,
+      1,
+    );
+
+    const usedRows = new Set<number>();
+    grown.middleground.cells.forEach((row, index) => {
+      if (row.some((cell) => cell.char !== null)) usedRows.add(index);
+    });
+
+    // The band spans sky..sky+houses; the pavement row and the houses above it
+    // must reach the top of the band, otherwise the extra grid height bought by
+    // enlarging the city is simply wasted space.
+    const sky = Math.round(CITY_HEIGHT_ROWS * 0.2);
+    const street = 1 + 2; // one road row + the tallest street prop
+    const housesBandHeight = CITY_HEIGHT_ROWS - sky - street;
+
+    expect(usedRows.size).toBeGreaterThanOrEqual(housesBandHeight);
+  });
+
+  it('is still growing past the tick count that used to saturate the city', () => {
+    // The 40×12 grid used to fill up at tick 201 (6.7 minutes of focus at the
+    // production 2s cadence), after which the city was frozen for the remaining
+    // ~18 minutes of a session. Enlarging the grid must push that point out.
+    //
+    // Expressed in *ticks*, not wall-clock minutes, so the guard stays valid
+    // whatever `GROWTH_TICK_MS` is set to: `growCity` converts elapsed time to
+    // whole ticks, so this is exactly 201 characters placed either way.
+    const ticksThatUsedToSaturate = 201;
+    const city = emptyLayers(CITY_WIDTH_CHARS, CITY_HEIGHT_ROWS);
+    const grown = growCity(city, GROWTH_TICK_MS * ticksThatUsedToSaturate, 1);
+
+    expect(growCity(grown, GROWTH_TICK_MS, 1)).not.toBe(grown);
+  });
+
+  it('holds substantially more characters than the previous 40×12 grid', () => {
+    // Capacity is what the enlargement was for; the previous default is kept
+    // here as the baseline this regression compares against.
+    const previousWidth = 40;
+    const previousHeight = 12;
+    const saturate = (width: number, height: number): number =>
+      occupiedTotal(growCity(emptyLayers(width, height), GROWTH_TICK_MS * 5_000, 1));
+
+    const before = saturate(previousWidth, previousHeight);
+    const after = saturate(CITY_WIDTH_CHARS, CITY_HEIGHT_ROWS);
+
+    expect(after).toBeGreaterThan(before * 2);
   });
 });

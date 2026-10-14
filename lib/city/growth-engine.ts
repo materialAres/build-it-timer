@@ -21,7 +21,7 @@ import { TILE_BASE_WIDTH, getModulesByCategory } from './tile-library';
  * (roadmap M2.T12). Distinct from the 60s `browser.alarms` persistence clock
  * (M1.T5): it is recalculated from the elapsed focus time, never alarm-driven.
  */
-export const GROWTH_TICK_MS = 2_000;
+export const GROWTH_TICK_MS = 20;
 
 /**
  * SCENE LAYOUT — three layers stacked vertically, never overlapping, so the
@@ -75,7 +75,13 @@ const ROAD_GLYPH = '=';
 const PAVEMENT_GLYPH = '_';
 
 /** Houses layout. */
-const FLOORS_RANGE = { min: 1, max: 4 } as const; // wanted floors, then clamped to the band
+/**
+ * Floors per house, drawn at random. `max` is a *minimum* ceiling, not an
+ * absolute one: a band tall enough to fit more floors raises it (see
+ * `buildHouse`), so a taller grid yields taller houses instead of leaving the
+ * extra rows permanently empty. It still bounds variety on short bands.
+ */
+const FLOORS_RANGE = { min: 1, max: 4 } as const;
 const HOUSE_GAP = { min: 1, max: 3 } as const;
 const WIDE_GAP_CHANCE = 0.15; // occasional plaza between houses
 const WIDE_GAP_EXTRA = { min: 2, max: 4 } as const;
@@ -242,6 +248,11 @@ function fallbackHouse(): ComposedBuilding {
  * are never cut and never lose their roof: the roof and the base are reserved
  * first and the floors only use the remaining budget.
  *
+ * The draw's ceiling is raised to the whole remaining budget, so a tall band is
+ * filled with tall houses instead of leaving its top rows empty forever.
+ * `FLOORS_RANGE.max` therefore only sets the *minimum* ceiling — the variety
+ * floor for short bands — never a hard cap.
+ *
  * This replaces the previous approach (composeBuilding at a random "stage"),
  * which dropped the roof from every house that was not the tallest one.
  */
@@ -254,7 +265,11 @@ function buildHouse(rng: SeededRandom, maxRows: number): ComposedBuilding {
   if (budget < 0) return fallbackHouse();
 
   const floors: BuildingModule[] = [];
-  const wanted = randInt(rng, FLOORS_RANGE.min, FLOORS_RANGE.max);
+  const wanted = randInt(
+    rng,
+    FLOORS_RANGE.min,
+    Math.max(FLOORS_RANGE.min, budget),
+  );
   const floorVariants = modulesOf('floor');
   for (let i = 0; i < wanted; i += 1) {
     const floor = pickOne(floorVariants, rng);
