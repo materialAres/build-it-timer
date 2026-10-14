@@ -21,23 +21,57 @@ export const TILE_BASE_WIDTH = 8;
  */
 export const TILE_LIBRARY: ReadonlyArray<BuildingModule> = [
   // --- Bases / foundations -------------------------------------------------
+  // Both rows draw ink high in their cell. The previous top row was a bare
+  // `________`, which renders on the baseline only: the upper ~90% of that cell
+  // stayed empty and stacked with the pavement's identical row into a visible
+  // blank band between a house and its base (see I004).
   {
     id: 'base-office',
     category: 'base',
     widthChars: 8,
-    rows: ['________', '|======|'],
+    rows: ['|[====]|', '|======|'],
   },
   {
     id: 'base-residential',
     category: 'base',
     widthChars: 8,
-    rows: ['________', '|[=][=]|'],
+    rows: ['|======|', '|[=][=]|'],
   },
   {
     id: 'base-glass',
     category: 'base',
     widthChars: 8,
-    rows: ['________', '|__||__|'],
+    rows: ['|======|', '|__||__|'],
+  },
+  {
+    id: 'base-door',
+    category: 'base',
+    widthChars: 8,
+    rows: ['|[ || ]|', '|^|==|^|'],
+  },
+  {
+    id: 'base-market',
+    category: 'base',
+    widthChars: 8,
+    rows: ['|Market|', '|[=][=]|'],
+  },
+  {
+    id: 'base-bistro',
+    category: 'base',
+    widthChars: 8,
+    rows: ['|Bistro|', '|[ ][ ]|'],
+  },
+  {
+    id: 'base-studio',
+    category: 'base',
+    widthChars: 8,
+    rows: ['|Studio|', '|[O][O]|'],
+  },
+  {
+    id: 'base-saloon',
+    category: 'base',
+    widthChars: 8,
+    rows: ['|Saloon|', '|[_][_]|'],
   },
 
   // --- Floor sections -------------------------------------------------------
@@ -54,6 +88,36 @@ export const TILE_LIBRARY: ReadonlyArray<BuildingModule> = [
     rows: ['|[#][#]|'],
   },
   {
+    id: 'floor-residential-variant',
+    category: 'floor',
+    widthChars: 8,
+    rows: ['|[#][ ]|'],
+  },
+  {
+    id: 'floor-residential-variant-2',
+    category: 'floor',
+    widthChars: 8,
+    rows: ['|[ ][#]|'],
+  },
+  {
+    id: 'floor-residential-variant-3',
+    category: 'floor',
+    widthChars: 8,
+    rows: ['|[ ][*]|'],
+  },
+    {
+    id: 'floor-residential-variant-4',
+    category: 'floor',
+    widthChars: 8,
+    rows: ['|[*][ ]|'],
+  },
+    {
+    id: 'floor-residential-variant-5',
+    category: 'floor',
+    widthChars: 8,
+    rows: ['|[*][*]|'],
+  },
+  {
     id: 'floor-glass-front',
     category: 'floor',
     widthChars: 8,
@@ -65,7 +129,13 @@ export const TILE_LIBRARY: ReadonlyArray<BuildingModule> = [
     id: 'top-antenna',
     category: 'top',
     widthChars: 8,
-    rows: ['   /\\   '],
+    rows: ['___/\\___'],
+  },
+  {
+    id: 'top-antenna-variant',
+    category: 'top',
+    widthChars: 8,
+    rows: ['______/\\'],
   },
   {
     id: 'top-dome',
@@ -74,10 +144,22 @@ export const TILE_LIBRARY: ReadonlyArray<BuildingModule> = [
     rows: ['  .--.  '],
   },
   {
-    id: 'top-helipad',
+    id: 'top-dome-large',
     category: 'top',
     widthChars: 8,
-    rows: ['  [H]   '],
+    rows: ['.------.'],
+  },
+  {
+    id: 'top-dome-antenna',
+    category: 'top',
+    widthChars: 8,
+    rows: ['.--/\\--.'],
+  },
+  {
+    id: 'top-roof',
+    category: 'top',
+    widthChars: 8,
+    rows: ['/------\\'],
   },
 ];
 

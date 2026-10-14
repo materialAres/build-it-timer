@@ -21,7 +21,7 @@ import { TILE_BASE_WIDTH, getModulesByCategory } from './tile-library';
  * (roadmap M2.T12). Distinct from the 60s `browser.alarms` persistence clock
  * (M1.T5): it is recalculated from the elapsed focus time, never alarm-driven.
  */
-export const GROWTH_TICK_MS = 20;
+export const GROWTH_TICK_MS = 2000;
 
 /**
  * SCENE LAYOUT — three layers stacked vertically, never overlapping, so the
