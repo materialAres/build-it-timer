@@ -1,0 +1,78 @@
+# Italian locale (M3.T10). Same key tree as `locales/en.yml`: Italian is served
+# automatically when the browser's UI language is Italian, English otherwise
+# (the default and the fallback). There is no language selector and no persisted
+# preference — the language follows the browser via the native `browser.i18n`
+# API, so adding another language is just adding a sibling `<lang>.yml`.
+#
+# `$1`..`$9` are positional substitutions (`i18n.t(key, [value])`), the same
+# syntax `browser.i18n` uses.
+
+timer:
+  timeRemaining: Tempo rimanente
+  start: Avvia
+  pause: Pausa
+  reset: Reimposta
+
+tabs:
+  ariaLabel: Sezioni del popup
+  timer: Timer
+  city: Città
+  blocklist: Blocchi
+  score: Punteggio
+
+city:
+  canvasAriaLabel: Città in costruzione durante la concentrazione
+  exportAriaLabel: Esporta città
+  exportPng: Esporta PNG
+  exportJpeg: Esporta JPEG
+  exportError: Impossibile esportare l'immagine della città.
+
+score:
+  excellent: Eccellente
+  good: Buono
+  bad: Scarso
+  badgeAriaLabel: 'Punteggio di concentrazione: $1'
+  population: popolazione
+  populationAriaLabel: 'Popolazione: $1'
+  historyAriaLabel: Cronologia delle sessioni
+  lastSessions: Ultime sessioni
+  noSessions: Nessuna sessione completata.
+  populationShort: pop.
+
+blocklist:
+  presets: Preset
+  applyPreset: 'Applica preset $1'
+  tags: Tag
+  newTagName: Nome del nuovo tag
+  newTag: Nuovo tag
+  createTag: Crea tag
+  customTags: Tag personalizzati
+  assignTag: 'Assegna $1 a $2'
+  filterByTag: 'Filtra per $1'
+  deleteTag: 'Elimina $1'
+  sites: Siti
+  blockedSites: Siti bloccati
+  allowedSites: Siti consentiti
+  blocklistName: lista dei bloccati
+  allowlistName: lista dei consentiti
+  addTo: 'Aggiungi a $1'
+  entriesAriaLabel: '$1 voci'
+  exampleDomain: example.com
+  invalidUrl: Inserisci un URL valido
+  alreadyInList: '$1 è già nella $2.'
+  movedFromList: 'Spostato $1 dalla $2.'
+  added: 'Aggiunto $1.'
+
+overlay:
+  title: Resta concentrato
+  keepFocusing: 'Ottimo! Continua a concentrarti!'
+  # Split around the highlighted domain so the component keeps the colored
+  # `<span>` while the sentence stays translatable as a whole.
+  questionPrefix: 'Hai messo '
+  questionSuffix: ' nella lista dei bloccati. Sei sicuro di voler accedere?'
+  yes: Sì
+  no: No
+
+common:
+  add: Aggiungi
+  remove: 'Rimuovi $1'

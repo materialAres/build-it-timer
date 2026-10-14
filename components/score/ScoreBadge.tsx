@@ -1,16 +1,22 @@
+import { i18n } from '#i18n';
 import { useAppStore, selectScoreLevel } from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
 /**
- * Display label per score level, as data (Open/Closed, §1.1): a new level is an
- * entry here, never an `if/else` chain in the render path. Hardcoded in EN for
- * now; M3.T9 moves these strings to `i18n.t(...)` like the rest of the UI.
+ * i18n key per score level, as data (Open/Closed, §1.1): a new level is an entry
+ * here, never an `if/else` chain in the render path. The keys resolve to the EN
+ * default and fall back to it for any missing translation (M3.T9).
  */
-export const SCORE_BADGE_LABELS: Record<ScoreLevel, string> = {
-  excellent: 'Excellent',
-  good: 'Good',
-  bad: 'Bad',
-};
+export const SCORE_LEVEL_LABEL_KEYS = {
+  excellent: 'score.excellent',
+  good: 'score.good',
+  bad: 'score.bad',
+} as const satisfies Record<ScoreLevel, string>;
+
+/** Localized display label for a score level, resolved at render time. */
+export function scoreLevelLabel(level: ScoreLevel): string {
+  return i18n.t(SCORE_LEVEL_LABEL_KEYS[level]);
+}
 
 /**
  * The badge's own stylesheet. Each level gets a distinct color so the three
@@ -43,14 +49,14 @@ const SCORE_BADGE_STYLES = `
  */
 export function ScoreBadge() {
   const level = useAppStore(selectScoreLevel);
-  const label = SCORE_BADGE_LABELS[level];
+  const label = scoreLevelLabel(level);
 
   return (
     <span
       className={`score-badge score-badge--${level}`}
       data-level={level}
       role="status"
-      aria-label={`Focus score: ${label}`}
+      aria-label={i18n.t('score.badgeAriaLabel', [label])}
     >
       <style>{SCORE_BADGE_STYLES}</style>
       {label}

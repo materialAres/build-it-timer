@@ -5,14 +5,27 @@ interface TimerTickMessage {
   readonly payload: { readonly remainingSeconds: number };
 }
 
+// Timer transitions (M3.T3b). The popup is read-only (M1.T9), so it *requests*
+// the transition and the background — the timer's owner — performs it on its own
+// slice, which schedules/clears the alarm on the background's provider.
+//
+// The payloads are deliberately empty: the session id is minted by the
+// background's `startTimer` (M2.T1), and a caller-supplied id would be untrusted
+// anyway (M5.T1). `Record<string, never>` keeps the variant explicit while
+// forbidding any field.
 interface TimerStartedMessage {
   readonly type: 'TIMER_STARTED';
-  readonly payload: { readonly sessionId: string };
+  readonly payload: Record<string, never>;
 }
 
 interface TimerPausedMessage {
   readonly type: 'TIMER_PAUSED';
-  readonly payload: Record<string, never>; // no payload but explicit
+  readonly payload: Record<string, never>;
+}
+
+interface TimerResetMessage {
+  readonly type: 'TIMER_RESET';
+  readonly payload: Record<string, never>;
 }
 
 // The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
@@ -71,10 +84,32 @@ interface TagRemoveMessage {
   readonly payload: { readonly tagId: string };
 }
 
+// Tag assignment (M3.T2): attach/detach a custom tag to a single site. `site`
+// is untrusted (it may be a full URL) and goes through `normalizeEntry` on the
+// background side, exactly like every other entry mutation (M2.T4/M2.T21).
+interface TagAssignMessage {
+  readonly type: 'TAG_ASSIGN';
+  readonly payload: {
+    readonly list: 'allowlist' | 'blocklist';
+    readonly site: string;
+    readonly tagId: string;
+  };
+}
+
+interface TagUnassignMessage {
+  readonly type: 'TAG_UNASSIGN';
+  readonly payload: {
+    readonly list: 'allowlist' | 'blocklist';
+    readonly site: string;
+    readonly tagId: string;
+  };
+}
+
 export type RuntimeMessage =
   | TimerTickMessage
   | TimerStartedMessage
   | TimerPausedMessage
+  | TimerResetMessage
   | SiteBlockedAttemptMessage
   | MalusAppliedMessage
   | SessionEndedMessage
@@ -82,19 +117,34 @@ export type RuntimeMessage =
   | BlocklistRemoveSiteMessage
   | BlocklistApplyPresetMessage
   | TagUpsertMessage
-  | TagRemoveMessage;
+  | TagRemoveMessage
+  | TagAssignMessage
+  | TagUnassignMessage;
 
-/** The mutation variants a read-only context may send to the background. */
-export type MutationMessage = Extract<
-  RuntimeMessage,
-  { type: `BLOCKLIST_${string}` | `TAG_${string}` }
->;
-
-/** The `type` values of `MutationMessage`, usable as a runtime list. */
+/**
+ * The `type` values of `MutationMessage`, usable as a runtime list. Declared
+ * first so the union below is *derived* from it: a variant added here is
+ * automatically part of `MutationMessage`, and one omitted here can never be
+ * handled by the background's mutation path.
+ *
+ * `TIMER_TICK` is intentionally absent: it is a passive notification the popup
+ * emits on the 2s cadence (M2.T15), not a request to change persisted state.
+ */
 export const MUTATION_TYPES = [
   'BLOCKLIST_ADD_SITE',
   'BLOCKLIST_REMOVE_SITE',
   'BLOCKLIST_APPLY_PRESET',
   'TAG_UPSERT',
   'TAG_REMOVE',
-] as const satisfies ReadonlyArray<MutationMessage['type']>;
+  'TAG_ASSIGN',
+  'TAG_UNASSIGN',
+  'TIMER_STARTED',
+  'TIMER_PAUSED',
+  'TIMER_RESET',
+] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
+
+/** The mutation variants a read-only context may send to the background. */
+export type MutationMessage = Extract<
+  RuntimeMessage,
+  { type: (typeof MUTATION_TYPES)[number] }
+>;

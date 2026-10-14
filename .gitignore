@@ -24,6 +24,7 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+
 # TypeScript
 *.tsbuildinfo
 
@@ -36,3 +37,8 @@ playwright/.cache/
 # OS files
 Thumbs.db
 # Note: docs/ is tracked (contains roadmap and project documentation)
+
+# Miscellaneous
+.repowise/
+.mcp.json
+opencode.jsonc

@@ -61,7 +61,9 @@ Each task is a standalone card, with this fixed format:
 | M3.T1 | `PresetPicker` (preset selection UI) | 3 | M2.T5, M2.T4 |
 | M3.T2 | `TagEditor` — custom categories via tags | 3 | M2.T4 |
 | M3.T3 | `SiteList` — site CRUD in allow/blocklist | 3 | M2.T4, M1.T2, M2.T20, M2.T21 |
-| M3.T4 | Popup `App.tsx` — full UI composition | 3 | M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1–M3.T3 |
+| M3.T3b | Popup → background timer path (commands + 2s tick emitter) | 3 | M2.T1, M2.T2, M2.T3, M1.T10, M2.T15 |
+| M3.T3c | Session completion (`SESSION_ENDED` → history + population) | 3 | M2.T2, M2.T18, M2.T19 |
+| M3.T4 | Popup `App.tsx` — full UI composition | 3 | M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1–M3.T3, M3.T3b, M3.T3c, M3.T7, M3.T8 |
 | M3.T5 | `framer-motion` animations on building growth/deletion | 3 | M2.T14 |
 | M3.T6 | Multi-browser persistence: Firefox/Chrome build verification | 3 | M3.T4 |
 | M3.T7 | `SessionHistory` (5-session history UI) | 3 | M2.T19 |
@@ -129,7 +131,7 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - No type uses `any`.
   - `RuntimeMessage` is a discriminated union on the `type` field, with at least these variants: `TIMER_TICK`, `TIMER_STARTED`, `TIMER_PAUSED`, `SITE_BLOCKED_ATTEMPT`, `MALUS_APPLIED`, `SESSION_ENDED`.
-  - `SessionSummary` includes at least `score`, `population`, `endedAt`; it is the type the last-5-sessions history (M2.T19) is based on.
+  - `SessionSummary` includes at least `score`, `population`, `endedAt`; it is the type the last-5-sessions history (M2.T19) is based on and is surfaced in the popup by M3.T7.
   - The types compile (`tsc --noEmit`) without errors.
 
 #### M1.T2 — `lib/url/domain.ts` module (`tldts` wrapper)
@@ -381,6 +383,17 @@ Each task is a standalone card, with this fixed format:
   - Same normalized domain → same color, always (test with repeated calls).
   - Reasonably uniform distribution over a sample of N test domains (no gross bias toward a single color) — verifiable with a simple, non-rigorous statistical test.
 
+#### M2.T13b — `lib/city/theme-registry.ts` — color themes/biomes per session
+* **Objective**: define the available color themes/biomes as **data** (Open/Closed principle, Section 1.1) and assign one to each session **deterministically**, so the same session always renders in the same biome across a service-worker restart while different sessions vary. A biome supplies the palette the M2.T13 domain hash draws from and the CRT backdrop color, without changing the hash logic itself.
+* **Files**: `lib/city/theme-registry.ts`, `utils/hash.ts` (shared FNV-1a hash), `store/city.slice.ts` (re-export of `DEFAULT_THEME_ID`), `store/index.ts` (wiring of the `selectThemeId` port).
+* **Dependencies**: M1.T1
+* **Acceptance criteria**:
+  - Themes are defined as an array of data entries (at least two), each with a non-empty `palette` and `backgroundColor`; adding a new biome requires only adding an entry, never modifying the selection logic.
+  - `selectThemeId(sessionId)` is pure and deterministic: the same session id always maps to the same theme id (verified with repeated calls), and a sample of sessions spreads over more than one biome (no gross bias).
+  - The documented default theme id is a real member of the registry, so the fallback is always renderable; an empty/unknown session id degrades to it instead of throwing (untrusted boundary, Section 1.4).
+  - The palette remains a parameter of `getBuildingColor` (M2.T13), so applying a biome's palette is the renderer's job (M2.T14).
+  - No internal `Date.now()`/`Math.random()` (Dependency Inversion principle).
+
 #### M2.T14 — `CityCanvas` + `CityCell` (ASCII render + CRT glow)
 * **Objective**: React components that render the city grid as monospace `<pre>`/`<span>` with green CRT `text-shadow`, applying colors from `palette.ts`.
 * **Files**: `components/city/CityCanvas.tsx`, `components/city/CityCell.tsx`
@@ -411,6 +424,28 @@ Each task is a standalone card, with this fixed format:
 * **Dependencies**: M2.T9
 * **Acceptance criteria**:
   - Correctly renders the three variants based on the store value (test with the three states forced).
+
+#### M2.T18 — `PopulationCounter` + `lib/score/calculate-population.ts`
+* **Objective**: derive the session population from the focused time — **+5 per house** (an unlocked building base) and **+15 per building floor** — and expose it in the UI. Because population is a function of elapsed focus time, it keeps evolving even after the grid is visually full (see the M2.T12 note): the cap is on rendering, not on session progress.
+* **Files**: `lib/score/calculate-population.ts` (pure), `components/score/PopulationCounter.tsx`, `store/score.slice.ts` (the `population` field + `setPopulation`), `store/index.ts` (selector re-export).
+* **Dependencies**: M2.T11c
+* **Acceptance criteria**:
+  - The formula is derived from the M2.T11c unlock schedule rather than duplicating its minute thresholds, so the value agrees with what `composeBuilding` actually unlocks for the same focused time, and is independent of the randomly chosen module variant (only categories count).
+  - Decorative `top` elements add no inhabitants.
+  - Pure and total (Section 1.4): no internal `Date.now()`/`Math.random()`; `NaN`, negative and `-Infinity` inputs yield `0`, `+Infinity` yields the maximum.
+  - `PopulationCounter` reads the value through the store selector and performs no calculation itself (Separation of Concerns principle).
+  - Population lives in the persisted `score` slice (M2.T9) so it survives a service-worker restart and can feed `SessionSummary.population` (M1.T1/M2.T19).
+
+#### M2.T19 — `session-history.slice.ts` — history of the last 5 sessions
+* **Objective**: keep the history of the last 5 completed sessions in the persisted state (Section 1.3), so the popup can show past scores and populations (M3.T7).
+* **Files**: `store/session-history.slice.ts`, `store/index.ts` (slice combination, `partialize`, selectors).
+* **Dependencies**: M2.T9
+* **Acceptance criteria**:
+  - The slice holds `ReadonlyArray<SessionSummary>` (the M1.T1 type: `sessionId`, `score`, `population`, `endedAt`) plus a `recordSession(summary)` action.
+  - A pure helper (e.g. `appendSessionSummary`) inserts the new summary **newest first**, **dedups by `sessionId`** (a re-emitted `SESSION_ENDED` replaces the existing entry instead of growing the history) and **caps at 5** entries, dropping the oldest. It never mutates its input; a no-op returns the same reference so the caller can skip persisting/re-rendering (Section 1.4).
+  - The slice is a thin store layer that computes nothing: it delegates to the pure helper and writes only when the array reference changed.
+  - The history is part of `PersistedState`/`partialize`, so it survives a service-worker restart; `ui` is still excluded.
+  - Runtime population of the slice is owned by the task that implements session completion (the `SESSION_ENDED` event), not by this task.
 
 #### M2.T20 — Allowlist/blocklist mutual-exclusion validation
 * **Objective**: prevent the same canonical domain from ending up in both allowlist and blocklist simultaneously, and explicitly establish the resolution rule for when the conflict exists anyway (import, preset, pre-existing state).
@@ -456,13 +491,42 @@ Each task is a standalone card, with this fixed format:
   - If the input is not a valid registrable domain — for example a "bare" public suffix (`co.uk`, `com`, `github.io`) or a malformed URL — the error message **"Enter a valid URL"** appears and the entry is not added (no exception, see M2.T21 and M1.T2).
   - The **allowlist > blocklist** precedence (M2.T6, M2.T20) is respected in the feedback too: adding to the allowlist a domain already in the blocklist (or vice versa) never creates a double entry.
 
-#### M3.T4 — Popup `App.tsx` — full UI composition
-* **Objective**: compose all components (timer, city, score, blocklist) in the main popup, with routing/tabs if needed.
-* **Files**: `entrypoints/popup/App.tsx`
-* **Dependencies**: M2.T3, M2.T14, M2.T17, M3.T1, M3.T2, M3.T3
+#### M3.T3b — Popup → background timer path (commands + 2s tick emitter)
+* **Objective**: close the popup → background timer path so the UI can actually drive the session the background owns: route the timer commands through the mutation bus (the popup store is read-only, M1.T9) and emit the fine-grained 2s `TIMER_TICK` that the background already consumes for growth (M2.T15) and malus (M2.T16).
+* **Files**: `lib/messaging/messages.types.ts` (add the timer variants to `MutationMessage`/`MUTATION_TYPES`), `entrypoints/background.ts` (handle the timer mutations), `components/timer/TimerControls.tsx` (route through `sendMutation` instead of mutating the read-only store), `entrypoints/popup/App.tsx` (start/stop the tick emitter with the popup's lifetime), `store/index.ts` (the `ui.liveRemainingSeconds` field, if the popup-side countdown is implemented here).
+* **Dependencies**: M2.T1, M2.T2, M2.T3, M1.T10, M2.T15
 * **Acceptance criteria**:
-  - All sections are reachable and functional from a single entry point.
+  - `TIMER_STARTED`/`TIMER_PAUSED` (and the reset transition, if it needs a variant) are part of `MutationMessage` and handled by the background's mutation path, so `startTimer()`/`pauseTimer()`/`resetTimer()` invoked from the popup change the **background's** timer state and schedule/clear the alarm on the background's provider — not on the popup's own in-memory copy (closes changelog issue #6).
+  - The popup emits `TIMER_TICK` on the 2s cadence while a session is `running`, and the background's existing growth/malus wiring consumes it unchanged (closes changelog issue #9).
+  - The emitter is tied to the popup's lifetime and stops on unmount; a tick arriving while `status !== 'running'` neither grows the city nor accrues malus (M2.T15 behaviour preserved).
+  - The popup-side estimated countdown (the §1 "two distinct clocks" note) is either implemented here through `ui.liveRemainingSeconds` or explicitly deferred, with the decision recorded in the changelog.
+  - Integration test (`fakeBrowser`): a command sent from the popup updates the background store exactly once; a sequence of simulated ticks produces the expected city growth.
+* **Notes/decisions**: the popup closes when the user clicks away, so a popup-owned emitter means the city only grows while the popup is open. The §1 technical note ("lives on the popup/background side only while the context is active") is ambiguous about which side owns the tick; the chosen side must be documented with a "why" comment (§1.4) and reported in the changelog.
+
+#### M3.T3c — Session completion (`SESSION_ENDED` → history + population)
+* **Objective**: implement the end-of-session path so the timer actually reaches zero and the session's outcome is recorded: emit `SESSION_ENDED` and populate the session history (M2.T19) and the population counter (M2.T18).
+* **Files**: `entrypoints/background.ts` (replace the empty `handlePlaceholder` on alarm fire with the real completion handler), `store/session-history.slice.ts` (consumption via `recordSession`), `store/score.slice.ts` (consumption via `setPopulation`), `lib/score/calculate-population.ts` (consumption).
+* **Dependencies**: M2.T2, M2.T18, M2.T19
+* **Acceptance criteria**:
+  - The alarm firing at the end of a session transitions the timer out of `running` and emits `SESSION_ENDED` with a `SessionSummary` (`sessionId`, `score`, `population`, `endedAt`) — the M1.T1 variant that is currently declared but never emitted (closes changelog issue #13).
+  - The background records the summary through `recordSession` (newest first, dedup by `sessionId`, capped at 5 — the M2.T19 contract) and computes the session population from the elapsed focus time through `calculatePopulation`, writing it with `setPopulation` (closes changelog issue #12).
+  - A re-emitted `SESSION_ENDED` for the same `sessionId` replaces the existing entry instead of growing the history.
+  - Integration test (`fakeBrowser` + fake alarms): a session that runs to completion records exactly one history entry with the expected score/population; a session that is paused/reset before completion records none.
+* **Notes/decisions**: the exact `distractionRatio` formula remains the roadmap §4 open point; this task consumes whatever ratio the existing score slice holds rather than defining the formula.
+
+#### M3.T4 — Popup `App.tsx` — full UI composition
+* **Objective**: compose all components (timer, city, score, blocklist) in the main popup behind a **tab bar** (one section visible at a time), replacing the WXT starter UI.
+* **Files**: `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css` + `entrypoints/popup/style.css` (replace the WXT starter styles), `locales/en.yml` + `locales/it.yml` (new composition strings), `store/index.ts` (a `setActiveTab` action for the existing `ui.activeTab` field)
+* **Dependencies**: M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1, M3.T2, M3.T3, M3.T3b, M3.T3c, M3.T7, M3.T8
+* **Acceptance criteria**:
+  - All sections are reachable and functional from a single entry point: `TimerDisplay` + `TimerControls` (M2.T3), `CityCanvas` (M2.T14), `ScoreBadge` (M2.T17) + `PopulationCounter` (M2.T18) + `SessionHistory` (M3.T7), `PresetPicker` (M3.T1) + `TagEditor` (M3.T2) + `SiteList` (M3.T3), and `ExportCityButton` (M3.T8).
+  - **Layout decision (tabs)**: the popup shows one section at a time behind a tab bar driven by the existing `ui.activeTab` field (`PopupTab`, M1.T4) through a new `setActiveTab` action; the field is volatile, so the popup always opens on the default tab. The tab bar is keyboard-navigable with the correct ARIA roles (`tablist`/`tab`/`tabpanel`), which M4.T4 then polishes.
+  - **Sizing decision (content-sized)**: the popup is sized by its content and must not scroll; the city canvas and the blocklist sections are laid out to fit the popup's natural width rather than forcing a fixed viewport.
+  - **Visual decision (CRT)**: the black-and-green CRT look is kept, consistent with the components' own inline styles (M2.T14/M2.T17/M2.T18); `App.css`/`style.css` provide the reset, the dark background and the tab-bar/section layout, and drop the starter's `#root { max-width: 1280px }` and `body { min-height: 100vh }`.
+  - `ExportCityButton` is visible at session end, not during the session.
+  - Every string in `App.tsx` goes through `i18n.t(...)` (M3.T9), with the new keys added to **both** `locales/en.yml` and `locales/it.yml` so the M3.T10 drift test stays green (closes changelog issue #17).
   - End-to-end integration test at the component level (not a real browser): starting a timer from the UI updates both `TimerDisplay` and (indirectly) the city state after a simulated tick.
+* **Notes/decisions**: the composition is deliberately split from the timer path (M3.T3b) and session completion (M3.T3c) so this card stays a pure composition task; its acceptance criteria depend on those two landing first. **Test seam (decision: option A)**: the integration test starts the real background in-process with `fakeBrowser` (the pattern of `tests/integration/messaging/mutation-bus.test.ts`) and renders `<App />` against the module-level `useAppStore` singleton, letting the background's writes reach the popup through `attachStoreSync` (M1.T8) — no injectable-store refactor of the components. The dead `ui.malusAlertVisible` field is dropped here: the malus alert is the content-script overlay (M2.T8), not a popup element, so the flag has no consumer.
 
 #### M3.T5 — `framer-motion` animations on building growth/destruction
 * **Objective**: animated transitions when a cell moves from `growing→building` or is destroyed.
@@ -478,6 +542,28 @@ Each task is a standalone card, with this fixed format:
 * **Dependencies**: M3.T4
 * **Acceptance criteria**:
   - `wxt build -b chrome` and `wxt build -b firefox` produce working extensions (verified at least manually for the first pass, then covered by M4.T5).
+
+#### M3.T7 — `SessionHistory` (5-session history UI)
+* **Objective**: show the last 5 completed sessions (score and population) in the popup, reading them from the persisted `sessionHistory` slice (M2.T19).
+* **Files**: `components/score/SessionHistory.tsx`, `store/session-history.slice.ts` (consumption via `selectSessionHistory` only), `entrypoints/popup/App.tsx` (composition, M3.T4).
+* **Dependencies**: M2.T19
+* **Acceptance criteria**:
+  - The component is presentational: it reads the history through the M2.T19 selector and computes nothing (Separation of Concerns principle); the score level is rendered from the stored value, never recalculated.
+  - Renders correctly with an **empty history** (no crash, explicit empty state) and with a full 5-entry history, showing the sessions newest first (the slice's order is preserved, not re-sorted).
+  - The displayed order and cap match the slice's contract (max 5, newest first) rather than being re-implemented in the component.
+  - Strings are hardcoded in EN here and moved to `i18n.t(...)` in M3.T9, like the other components.
+  - Test: rendering with an empty history and with 5 entries, and the transition when a new session is recorded.
+
+#### M3.T8 — `ExportCityButton` — export city as JPEG/PNG at end of focus
+* **Objective**: let the user export the city of a finished session as an image, so the "one city per session" result can be kept outside the extension.
+* **Files**: `lib/city/export-image.ts` (DOM/canvas serialization → JPEG/PNG), `components/city/ExportCityButton.tsx`, `entrypoints/popup/App.tsx` (composition, M3.T4).
+* **Dependencies**: M2.T14
+* **Acceptance criteria**:
+  - The export renders the current three layers exactly as `CityCanvas` (M2.T14) displays them, including the active theme's palette and `backgroundColor` (M2.T13/M2.T13b), so the image matches what the user sees.
+  - The serialization logic lives in `lib/city/export-image.ts` and is kept separate from the component, which only triggers the export and handles the download (Separation of Concerns principle).
+  - Both JPEG and PNG outputs are available.
+  - A failure during export is handled at a known boundary and does not break the popup (Section 1.4).
+  - Test: the serialization function is unit-tested against a known grid (deterministic output dimensions/content); the component test asserts that triggering the export calls it with the current grid and theme.
 
 #### M3.T9 — Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default)
 * **Objective**: configure the official WXT `@wxt-dev/i18n` module (a type-safe, synchronous wrapper around `browser.i18n`) for all visible popup strings and content script messages, with **English as the default language** (and as the fallback for missing keys). The actual language is determined **automatically from the browser's language**: if the browser is set to Italian, the extension shows Italian; in every other case it shows English. **There is no manual language selector** nor any persisted user preference: changing language requires changing the browser's language (an intrinsic limitation of the `browser.i18n` API, accepted at design time in exchange for lightness, synchronous loading, and native caching). Translations live in `locales/<lang>.yml` files with nested keys, compiled at build time into the `_locales/<lang>/messages.json` files expected by the browser: no async fetch, no duplicated translation bundle per entrypoint.
@@ -530,7 +616,7 @@ Each task is a standalone card, with this fixed format:
 #### M4.T4 — Popup accessibility polish
 * **Objective**: a pass on color contrast (particularly the CRT glow effect), keyboard focus, and ARIA labels on timer/blocklist controls.
 * **Files**: components in `components/` involved.
-* **Dependencies**: M3.T7
+* **Dependencies**: M3.T4
 * **Acceptance criteria**:
   - All interactive controls reachable via keyboard (sensible tab order).
   - No interactive element without an accessible label.

@@ -1,0 +1,77 @@
+# Default locale (M3.T9). English is both the default language and the fallback
+# for any key missing in another locale (`manifest.default_locale: 'en'`).
+# Keys are grouped by area (timer/city/score/blocklist/overlay/common); the
+# nested `a.b` form is compiled to the `a_b` key `browser.i18n` expects.
+#
+# `$1`..`$9` are positional substitutions (`i18n.t(key, [value])`), the same
+# syntax `browser.i18n` uses.
+
+timer:
+  timeRemaining: Time remaining
+  start: Start
+  pause: Pause
+  reset: Reset
+
+tabs:
+  ariaLabel: Popup sections
+  timer: Timer
+  city: City
+  blocklist: Blocklist
+  score: Score
+
+city:
+  canvasAriaLabel: Focus city under construction
+  exportAriaLabel: Export city
+  exportPng: Export PNG
+  exportJpeg: Export JPEG
+  exportError: Could not export the city image.
+
+score:
+  excellent: Excellent
+  good: Good
+  bad: Bad
+  badgeAriaLabel: 'Focus score: $1'
+  population: population
+  populationAriaLabel: 'Population: $1'
+  historyAriaLabel: Session history
+  lastSessions: Last sessions
+  noSessions: No completed sessions yet.
+  populationShort: pop.
+
+blocklist:
+  presets: Presets
+  applyPreset: 'Apply $1 preset'
+  tags: Tags
+  newTagName: New tag name
+  newTag: New tag
+  createTag: Create tag
+  customTags: Custom tags
+  assignTag: 'Assign $1 to $2'
+  filterByTag: 'Filter by $1'
+  deleteTag: 'Delete $1'
+  sites: Sites
+  blockedSites: Blocked sites
+  allowedSites: Allowed sites
+  blocklistName: blocklist
+  allowlistName: allowlist
+  addTo: 'Add to $1'
+  entriesAriaLabel: '$1 entries'
+  exampleDomain: example.com
+  invalidUrl: Enter a valid URL
+  alreadyInList: '$1 is already in the $2.'
+  movedFromList: 'Moved $1 from the $2.'
+  added: 'Added $1.'
+
+overlay:
+  title: Stay focused
+  keepFocusing: 'Great! Keep focusing!'
+  # Split around the highlighted domain so the component can keep the colored
+  # `<span>` while the sentence stays translatable as a whole.
+  questionPrefix: 'You put '
+  questionSuffix: ' on your blocklist. Are you sure you want to access it?'
+  yes: Yes
+  no: No
+
+common:
+  add: Add
+  remove: 'Remove $1'

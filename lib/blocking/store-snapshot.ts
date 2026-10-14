@@ -25,7 +25,12 @@ function isBlocklistEntryList(value: unknown): value is ReadonlyArray<BlocklistE
 }
 
 function isTimerStatus(value: unknown): value is TimerStatus {
-  return value === 'idle' || value === 'running' || value === 'paused';
+  return (
+    value === 'idle' ||
+    value === 'running' ||
+    value === 'paused' ||
+    value === 'completed'
+  );
 }
 
 /**

@@ -1,13 +1,7 @@
 import {
   createAppStore,
   attachStoreSync,
-  addSiteToList,
-  removeSiteFromList,
-  upsertTag,
-  removeTag,
   type AppStore,
-  type BlocklistListName,
-  type BlocklistState,
 } from '@/store';
 import {
   createBrowserAlarmProvider,
@@ -22,11 +16,14 @@ import {
 import { onMessage, sendMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
-  type MutationMessage,
   type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
+import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
+import { calculatePopulation } from '@/lib/score/calculate-population';
+import { timerAlarmName } from '@/lib/timer/session';
+import type { SessionSummary } from '@/store/store.types';
 import {
   createBrowserTabEventSource,
   createTabDistractionTracker,
@@ -34,18 +31,20 @@ import {
   type TabEventSource,
 } from '@/lib/timer/tab-distraction-tracker';
 import type { CityLayers } from '@/components/city/city.types';
-import type { Tag } from '@/store/store.types';
+import { malusForDistractionTicks } from '@/lib/score/apply-malus';
 
 /**
  * The passive `RuntimeMessage` variants defined in M1.T1. The background
  * registers one listener per type, so the wiring is complete before the
  * business logic lands in M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth,
  * M2.T16 malus).
+ *
+ * The timer *commands* (`TIMER_STARTED`/`TIMER_PAUSED`/`TIMER_RESET`) are not
+ * here: they are mutations (M3.T3b) and are registered through `MUTATION_TYPES`,
+ * so each type still has exactly one listener.
  */
 export const MESSAGE_TYPES = [
   'TIMER_TICK',
-  'TIMER_STARTED',
-  'TIMER_PAUSED',
   'SITE_BLOCKED_ATTEMPT',
   'MALUS_APPLIED',
   'SESSION_ENDED',
@@ -76,78 +75,6 @@ export interface BackgroundHandle {
   dispose(): void;
 }
 
-// Wiring only (M1.T7): the concrete behavior of each listener is owned by the
-// M2 tasks. Keeping a single placeholder avoids six near-identical no-ops while
-// still registering a distinct listener per message type.
-function handlePlaceholder(): void {
-  // Intentionally empty: the background skeleton only wires the listeners.
-}
-
-function isListName(value: unknown): value is BlocklistListName {
-  return value === 'allowlist' || value === 'blocklist';
-}
-
-function isTag(value: unknown): value is Tag {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as { id?: unknown; label?: unknown };
-  return typeof candidate.id === 'string' && typeof candidate.label === 'string';
-}
-
-/**
- * Apply one mutation to the blocklist state. Returns the *same* reference when
- * the payload is malformed or unknown, so an invalid message neither mutates the
- * store nor triggers a persist (forward-compatible with M5.T1 hardening).
- *
- * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
- * dedup and allowlist precedence (M2.T20), preset expansion (M2.T5) and the DNR
- * side-effect (M2.T7) are owned by those tasks.
- */
-function applyMutation(state: BlocklistState, message: MutationMessage): BlocklistState {
-  switch (message.type) {
-    case 'BLOCKLIST_ADD_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return addSiteToList(state, list, site);
-    }
-    case 'BLOCKLIST_REMOVE_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return removeSiteFromList(state, list, site);
-    }
-    case 'BLOCKLIST_APPLY_PRESET':
-      // Preset expansion needs the preset dataset (M2.T5); until then the
-      // message is accepted but has no effect on the state.
-      return state;
-    case 'TAG_UPSERT': {
-      if (!isTag(message.payload)) return state;
-      return upsertTag(state, message.payload);
-    }
-    case 'TAG_REMOVE': {
-      const { tagId } = message.payload;
-      if (typeof tagId !== 'string' || tagId.length === 0) return state;
-      return removeTag(state, tagId);
-    }
-    default:
-      return state;
-  }
-}
-
-/**
- * Mutation handler for the cross-context path (M1.T10): the popup sends a typed
- * mutation, the background applies it to its single writable store (M1.T9) and
- * the change propagates back to the popup through the M1.T8 sync bridge.
- */
-function handleMutation(store: AppStore) {
-  return (message: MutationMessage): void => {
-    const current = store.getState().blocklist;
-    const next = applyMutation(current, message);
-    // Identity check: an invalid or no-op payload must not persist (one write
-    // per accepted mutation, none for a rejected one).
-    if (next === current) return;
-    store.setState({ blocklist: next });
-  };
-}
-
 /**
  * Growth wiring (M2.T15): the fine-grained character-insertion tick arrives as
  * the typed `TIMER_TICK` message from the active context (popup) — the 2s tick
@@ -162,16 +89,24 @@ function handleMutation(store: AppStore) {
  * set to "now" on the first tick of a running stretch (never to
  * `sessionStartedAt`), so a service-worker restart cannot replay the whole
  * session into the city a second time.
+ *
+ * The tracker also accumulates the same running-only elapsed time as
+ * `focusedMs`, which is what session completion (M3.T3c) feeds to
+ * `calculatePopulation` (M2.T18). Sharing the measure is deliberate: the
+ * population then always agrees with the city that was actually built, instead
+ * of being derived from a second, differently-clocked quantity.
  */
 export interface GrowthTickHandle {
   /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
-  handleTick(): void;
+  readonly handleTick: () => void;
+  /** Running-only focus time accumulated so far, in ms (M3.T3c). */
+  readonly getFocusedMs: () => number;
   /** Detach the status subscription owned by the tracker. */
-  dispose(): void;
+  readonly dispose: () => void;
 }
-
 function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
   let lastGrowthAt: number | null = null;
+  let focusedMs = 0;
   let status = store.getState().timer.status;
 
   // Detect the transitions into/out of `running` even when no tick arrives:
@@ -195,12 +130,12 @@ function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle 
     lastGrowthAt = current;
     const elapsed = current - baseline;
     if (elapsed <= 0) return;
+    focusedMs += elapsed;
     store.getState().growCity(elapsed);
   };
 
-  return { handleTick, dispose: unsubscribe };
+  return { handleTick, getFocusedMs: () => focusedMs, dispose: unsubscribe };
 }
-
 /**
  * How many characters the three layers currently hold. Used only to report how
  * many characters a malus application actually removed (a pending tick against
@@ -212,6 +147,64 @@ function countOccupied(layers: CityLayers): number {
       total + grid.cells.flat().filter((cell) => cell.char !== null).length,
     0,
   );
+}
+
+export interface SessionCompletionDependencies {
+  readonly store: AppStore;
+  /** Running-only focus time accumulated by the growth tracker (M2.T15). */
+  readonly getFocusedMs: () => number;
+  /** Clock used to stamp `endedAt`; injectable for determinism. */
+  readonly now: () => number;
+  /** Message sink, injectable so the handler is testable without the bus. */
+  readonly send?: (message: RuntimeMessage) => void;
+}
+
+export interface SessionCompletion {
+  /** Handle one alarm firing; a non-session or stale alarm is ignored. */
+  readonly handleAlarm: (name: string) => void;
+}
+/**
+ * Session completion (M3.T3c): the alarm scheduled at the end of the countdown
+ * fires, the timer leaves `running` and the session's outcome is recorded.
+ *
+ * The alarm name is the only thing the firing carries, so it is matched against
+ * the *current* session's alarm name: a stale alarm left over from a previous
+ * session (or a firing that arrives after a pause/reset) must not complete the
+ * session that is running now.
+ *
+ * The population is derived from the focus time the growth tracker accumulated
+ * (M2.T15) rather than from the wall clock, so it agrees with the city that was
+ * actually built and excludes paused gaps. The score is whatever the score
+ * slice holds: the `distractionRatio` formula is still the roadmap §4 open
+ * point, and this task deliberately consumes the value instead of defining it.
+ */
+export function createSessionCompletion({
+  store,
+  getFocusedMs,
+  now,
+  send = defaultSend,
+}: SessionCompletionDependencies): SessionCompletion {
+  return {
+    handleAlarm: (name: string): void => {
+      const { timer } = store.getState();
+      if (timer.status !== 'running') return;
+      if (timer.sessionId === null) return;
+      if (name !== timerAlarmName(timer.sessionId)) return;
+
+      const population = calculatePopulation(getFocusedMs() / 60_000);
+      store.getState().setPopulation(population);
+      void store.getState().completeTimer();
+
+      const summary: SessionSummary = {
+        sessionId: timer.sessionId,
+        score: store.getState().score.level,
+        population,
+        endedAt: now(),
+      };
+      store.getState().recordSession(summary);
+      send({ type: 'SESSION_ENDED', payload: summary });
+    },
+  };
 }
 
 /**
@@ -294,10 +287,14 @@ export function createMalusWiring({
   });
 
   // The remove rule lives in `applyMalus` (M2.T10): this only decides how many
-  // ticks are due and hands them to the slice, which never computes.
+  // ticks are due and hands them to the slice, which never computes. The number
+  // of characters owed grows with the time spent (M4.T1): `malusForDistractionTicks`
+  // escalates the cost per tick, while the first character is still removed at
+  // the "proceed" instant itself.
   const pump = (): void => {
     if (!active) return;
-    const expected = 1 + (tracker.getTicks() - baselineTicks);
+    const elapsedTicks = tracker.getTicks() - baselineTicks;
+    const expected = 1 + malusForDistractionTicks(elapsedTicks);
     const pending = expected - applied;
     if (pending <= 0) return;
 
@@ -417,8 +414,12 @@ export function startBackground(
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
+  // The timer commands (M3.T3b) travel the same path and are applied to the
+  // background's own timer slice, so the alarm lives on the background's
+  // provider.
+  const handleMutation = createMutationHandler(store);
   for (const type of MUTATION_TYPES) {
-    disposers.push(onMessage(type, handleMutation(store)));
+    disposers.push(onMessage(type, handleMutation));
   }
 
   // Any change to the blocklist/allowlist or to the timer status re-evaluates
@@ -427,9 +428,14 @@ export function startBackground(
 
   // The alarm provider is wired now so the background owns a single instance for
   // the whole session: the timer slice (M2.T1) schedules the session alarm on it
-  // and this subscription receives the firing. Rebuilding the countdown from the
-  // persisted state when that happens is M2.T2.
-  disposers.push(alarmProvider.onFire(handlePlaceholder));
+  // and this subscription receives the firing. The firing is the end of the
+  // countdown, so it drives session completion (M3.T3c).
+  const completion = createSessionCompletion({
+    store,
+    getFocusedMs: growthTick.getFocusedMs,
+    now,
+  });
+  disposers.push(alarmProvider.onFire(completion.handleAlarm));
 
   // Startup reconciliation (M2.T2): the persisted store may say `running` while
   // the worker was asleep, so the countdown is rebuilt from the still-pending

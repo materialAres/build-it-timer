@@ -56,6 +56,9 @@ describe('timerSlice (M2.T1)', () => {
     const sessionId = requireSessionId(timer.sessionId);
     expect(timer.status).toBe('running');
     expect(timer.sessionStartedAt).toBe(START_MS);
+    // The projected end time matches the alarm's due time (I001), so the popup
+    // can estimate the countdown from it.
+    expect(timer.endsAt).toBe(START_MS + DEFAULT_FOCUS_SECONDS * 1000);
     // One alarm, named after the session, due when the countdown reaches zero.
     expect(alarmProvider.scheduledAlarms).toEqual([
       { name: timerAlarmName(sessionId), whenMs: START_MS + DEFAULT_FOCUS_SECONDS * 1000 },
@@ -87,7 +90,9 @@ describe('timerSlice (M2.T1)', () => {
     expect(timer.sessionId).toBe(sessionId);
     expect(timer.sessionStartedAt).toBe(START_MS);
     expect(timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS);
-    // Resuming re-arms the alarm from *now*, not from the original start time.
+    // Resuming re-arms the alarm from *now*, not from the original start time,
+    // and the projected end time moves with it (I001).
+    expect(timer.endsAt).toBe(nowMs + DEFAULT_FOCUS_SECONDS * 1000);
     expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBe(
       nowMs + DEFAULT_FOCUS_SECONDS * 1000,
     );
@@ -115,7 +120,39 @@ describe('timerSlice (M2.T1)', () => {
     const { timer } = store.getState();
     expect(timer.status).toBe('paused');
     expect(timer.sessionId).toBe(sessionId);
+    // Pausing clears the projected end time: there is no deadline to estimate
+    // from while the countdown is frozen (I001).
+    expect(timer.endsAt).toBeNull();
     expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+  });
+
+  it('pauseTimer persists the elapsed countdown instead of the full duration (I001)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+
+    // Five minutes of the session elapse before the pause.
+    nowMs = START_MS + 5 * 60_000;
+    await store.getState().pauseTimer();
+
+    // The frozen value is the *actual* remaining time, so the display does not
+    // jump back to 25:00 when the session is paused.
+    expect(store.getState().timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS - 300);
+  });
+
+  it('resuming after a pause continues from the frozen countdown (I001)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+
+    nowMs = START_MS + 5 * 60_000;
+    await store.getState().pauseTimer();
+    const frozen = store.getState().timer.remainingSeconds;
+
+    nowMs += 60_000; // a minute passes while paused: it must not count
+    await store.getState().startTimer();
+
+    const { timer } = store.getState();
+    expect(timer.remainingSeconds).toBe(frozen);
+    expect(timer.endsAt).toBe(nowMs + frozen * 1000);
   });
 
   it('pauseTimer while idle is a safe no-op', async () => {
@@ -167,6 +204,52 @@ describe('timerSlice (M2.T1)', () => {
 
     expect(create).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('completeTimer moves running to completed, zeroes the countdown and clears the alarm (M3.T3c)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    const sessionId = requireSessionId(store.getState().timer.sessionId);
+
+    await store.getState().completeTimer();
+
+    const { timer } = store.getState();
+    expect(timer.status).toBe('completed');
+    expect(timer.remainingSeconds).toBe(0);
+    // The session id is kept: the completion handler needs it for the summary.
+    expect(timer.sessionId).toBe(sessionId);
+    // No deadline remains, so the popup stops estimating (I001).
+    expect(timer.endsAt).toBeNull();
+    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+  });
+
+  it('completeTimer while idle is a safe no-op', async () => {
+    const store = createStore();
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer.status).toBe('idle');
+  });
+
+  it('completeTimer while paused is a no-op (a stale alarm cannot complete it)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    await store.getState().pauseTimer();
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer.status).toBe('paused');
+  });
+
+  it('completeTimer while already completed is a no-op', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    await store.getState().completeTimer();
+    const completed = store.getState().timer;
+
+    await store.getState().completeTimer();
+
+    expect(store.getState().timer).toBe(completed);
   });
 });
 

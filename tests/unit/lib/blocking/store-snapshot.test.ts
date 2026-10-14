@@ -29,8 +29,20 @@ describe('parseStoreSnapshot (M2.T8)', () => {
     expect(result.value.allowlist).toEqual([]);
   });
 
-  it('ignores the slices it does not need', () => {
+  it('accepts the completed timer status (M3.T3c)', () => {
     const result = parseStoreSnapshot(
+      envelope({
+        timer: { status: 'completed', remainingSeconds: 0, sessionStartedAt: 0, sessionId: 's1' },
+        blocklist: blocklistState,
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.timerStatus).toBe('completed');
+  });
+
+  it('ignores the slices it does not need', () => {    const result = parseStoreSnapshot(
       envelope({
         timer: { status: 'idle', remainingSeconds: 1, sessionStartedAt: null, sessionId: null },
         blocklist: blocklistState,

@@ -13,7 +13,13 @@ import {
   type CityDependencies,
   type CitySlice,
 } from './city.slice';
-import { createBlocklistSlice, type BlocklistSlice } from './blocklist.slice';
+import { sendMessage } from '@/lib/messaging/bus';
+import type { MutationMessage } from '@/lib/messaging/messages.types';
+import {
+  createBlocklistSlice,
+  type BlocklistDependencies,
+  type BlocklistSlice,
+} from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
@@ -24,8 +30,21 @@ export interface UiSlice {
   readonly ui: {
     readonly activeTab: PopupTab;
     readonly liveRemainingSeconds: number;
-    readonly malusAlertVisible: boolean;
   };
+  /**
+   * Switch the visible popup section (M3.T4). The field is volatile, so the
+   * popup always opens on the default tab; the action writes only the in-memory
+   * state, which is why a read-only context (the popup, M1.T9) may call it —
+   * `ui` is never persisted, so the single-writer rule is not involved.
+   */
+  setActiveTab(tab: PopupTab): void;
+  /**
+   * Publish the popup-side countdown estimate (I001). The value is derived from
+   * the session's end time by the pure `estimateRemainingSeconds` and written
+   * here so `TimerDisplay` can read it through a granular selector; the field is
+   * volatile, so this is a local write even in a read-only context.
+   */
+  setLiveRemainingSeconds(seconds: number): void;
 }
 
 export type AppState = 
@@ -53,7 +72,6 @@ export const STORE_NAME = 'timer-focus-store';
 const initialUiState: UiSlice['ui'] = {
   activeTab: 'timer',
   liveRemainingSeconds: 0,
-  malusAlertVisible: false,
 };
 
 // Collaborators the slices need to act (principle D). Injected through
@@ -61,8 +79,7 @@ const initialUiState: UiSlice['ui'] = {
 // engine, theme picker and a deterministic clock/entropy source without
 // touching the browser APIs. The timer slice (M2.T1) and the city slice
 // (M2.T11) share this object; later slices extend it.
-export type StoreDependencies = TimerDependencies & CityDependencies;
-
+export type StoreDependencies = TimerDependencies & CityDependencies & BlocklistDependencies;
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
@@ -76,17 +93,34 @@ const defaultDependencies = (): StoreDependencies => ({
   selectThemeId,
   width: DEFAULT_CITY_WIDTH,
   height: DEFAULT_CITY_HEIGHT,
+  // A read-only context changes configuration only by asking the background
+  // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) and the timer
+  // commands (M3.T3b) both use this sender.
+  sendMutation: (message: MutationMessage): void => {
+    void sendMessage(message);
+  },
 });
 
 const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
-  (...args) => ({
-    ...createTimerSlice(dependencies)(...args),
-    ...createCitySlice(dependencies)(...args),
-    ...createBlocklistSlice(...args),
-    ...createScoreSlice(...args),
-    ...createSessionHistorySlice(...args),
+  (set, get, ...rest) => ({
+    ...createTimerSlice(dependencies)(set, get, ...rest),
+    ...createCitySlice(dependencies)(set, get, ...rest),
+    ...createBlocklistSlice(dependencies)(set, get, ...rest),
+    ...createScoreSlice(set, get, ...rest),
+    ...createSessionHistorySlice(set, get, ...rest),
     ui: initialUiState,
+    setActiveTab(tab: PopupTab): void {
+      set({ ui: { ...get().ui, activeTab: tab } });
+    },
+    setLiveRemainingSeconds(seconds: number): void {
+      // Guard the untrusted boundary (§1.4): a non-finite estimate would leak
+      // `NaN` into the rendered countdown.
+      const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+      const { ui } = get();
+      if (ui.liveRemainingSeconds === safe) return;
+      set({ ui: { ...ui, liveRemainingSeconds: safe } });
+    },
   });
 
 export const partialize = (state: AppState): PersistedState => ({
@@ -192,6 +226,12 @@ export type {
 export {
   createBlocklistSlice,
   addSiteToList,
+  addPresetToList,
+  assignTagToSite,
+  unassignTagFromSite,
+  filterEntriesByTag,
+  generateTagId,
+  hasTagLabel,
   removeSiteFromList,
   resolveListConflicts,
   upsertTag,
@@ -200,7 +240,11 @@ export {
   selectBlocklist,
   selectCustomTags,
 } from './blocklist.slice';
-export type { BlocklistListName, BlocklistState } from './blocklist.slice';
+export type {
+  BlocklistDependencies,
+  BlocklistListName,
+  BlocklistState,
+} from './blocklist.slice';
 export {
   createSessionHistorySlice,
   appendSessionSummary,

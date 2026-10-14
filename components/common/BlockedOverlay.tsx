@@ -1,3 +1,5 @@
+import { i18n } from '#i18n';
+
 /**
  * The overlay's own stylesheet, rendered *inside* the shadow root (M2.T8).
  *
@@ -122,17 +124,21 @@ export function BlockedOverlay({
       <style>{OVERLAY_STYLES}</style>
       <div className="blocked-overlay__panel">
         <h1 className="blocked-overlay__title" id="blocked-overlay-title">
-          Stay focused
+          {i18n.t('overlay.title')}
         </h1>
         {dismissed ? (
           <p className="blocked-overlay__feedback" id="blocked-overlay-message">
-            Great! Keep focusing!
+            {i18n.t('overlay.keepFocusing')}
           </p>
         ) : (
           <>
-            <p className="blocked-overlay__message" id="blocked-overlay-message">
-              You put <span className="blocked-overlay__domain">{domain}</span> on your blocklist.
-              Are you sure you want to access it?
+            <p
+              className="blocked-overlay__message"
+              id="blocked-overlay-message"
+            >
+              {i18n.t('overlay.questionPrefix')}
+              <span className="blocked-overlay__domain">{domain}</span>
+              {i18n.t('overlay.questionSuffix')}
             </p>
             <div className="blocked-overlay__actions">
               <button
@@ -140,10 +146,14 @@ export function BlockedOverlay({
                 className="blocked-overlay__button blocked-overlay__button--danger"
                 onClick={onProceed}
               >
-                Yes
+                {i18n.t('overlay.yes')}
               </button>
-              <button type="button" className="blocked-overlay__button" onClick={onGoBack}>
-                No
+              <button
+                type="button"
+                className="blocked-overlay__button"
+                onClick={onGoBack}
+              >
+                {i18n.t('overlay.no')}
               </button>
             </div>
           </>

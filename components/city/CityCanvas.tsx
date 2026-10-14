@@ -1,6 +1,8 @@
+import { i18n } from '#i18n';
 import { selectCityLayers, selectCityThemeId, useAppStore } from '@/store';
 import { getBuildingColor } from '@/lib/city/palette';
 import { DEFAULT_THEME_ID, getThemeById } from '@/lib/city/theme-registry';
+import { CITY_FONT_SIZE_REM } from '@/lib/city/city-size';
 import type { CityLayerName, Theme } from './city.types';
 import { CityLayer } from './CityLayer';
 
@@ -11,7 +13,7 @@ const CRT_GREEN = '#7dfba0';
  * Renderable fallback for a theme id that is not in the registry. It is kept as
  * a module constant (not built per render) so the palette reference is stable.
  */
-const FALLBACK_THEME: Theme = {
+export const FALLBACK_THEME: Theme = {
   id: DEFAULT_THEME_ID,
   name: 'Neon Metropolis',
   palette: [CRT_GREEN],
@@ -36,11 +38,18 @@ const CITY_STYLES = `
   .city-canvas {
     position: relative;
     overflow: hidden;
-    box-sizing: border-box;
+    /*
+     * content-box, overriding the global border-box reset: the inline width is
+     * "one \`ch\` per grid column", so it must size the *content*, not the content
+     * plus the 1px border. Under border-box the border eats 2px and the layers
+     * (absolute, inset: 0, white-space: pre) overflow by that much, clipping the
+     * rightmost column and the bottom row.
+     */
+    box-sizing: content-box;
     border: 1px solid #1f3d2b;
     border-radius: 0.25rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.75rem;
+    font-size: ${String(CITY_FONT_SIZE_REM)}rem;
     line-height: 1;
   }
   .city-layer {
@@ -93,7 +102,7 @@ export function CityCanvas() {
     <div
       className="city-canvas"
       role="img"
-      aria-label="Focus city under construction"
+      aria-label={i18n.t('city.canvasAriaLabel')}
       data-theme={theme.id}
       style={{
         width: `${layers.background.width.toString()}ch`,
