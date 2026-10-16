@@ -1,77 +1,65 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculatePopulation,
-  POPULATION_PER_HOUSE,
-  POPULATION_PER_FLOOR,
+  POPULATION_PER_TICK,
 } from '@/lib/score/calculate-population';
-import { composeBuilding } from '@/lib/city/building-composer';
-import { getModuleById } from '@/lib/city/tile-library';
-import type { SeededRandom } from '@/components/city/city.types';
-
-const rng = (value: number): SeededRandom => ({ next: () => value });
-
-/** Count the composed building's bases/floors exactly as population defines them. */
-function countFromBuilding(minutes: number, value: number): number {
-  const building = composeBuilding(minutes, rng(value));
-  return building.moduleIds.reduce((total, id) => {
-    const module = getModuleById(id);
-    if (module?.category === 'base') return total + POPULATION_PER_HOUSE;
-    if (module?.category === 'floor') return total + POPULATION_PER_FLOOR;
-    return total;
-  }, 0);
-}
+import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
 
 describe('calculatePopulation (M2.T18)', () => {
-  it('is zero while the first house is not unlocked (before 5 minutes)', () => {
+  it('uses the same cadence as the city growth tick', () => {
+    // The population advances on the city's fine-grained clock (M2.T12); the
+    // two constants must not drift apart.
+    expect(GROWTH_TICK_MS).toBe(2000);
+    expect(POPULATION_PER_TICK).toBe(5);
+  });
+
+  it('is zero before a whole tick has elapsed', () => {
     expect(calculatePopulation(0)).toBe(0);
-    expect(calculatePopulation(4.9)).toBe(0);
+    expect(calculatePopulation(GROWTH_TICK_MS - 1)).toBe(0);
   });
 
-  it('adds one house (+5) at the base threshold', () => {
-    expect(POPULATION_PER_HOUSE).toBe(5);
-    expect(calculatePopulation(5)).toBe(5);
-    expect(calculatePopulation(9)).toBe(5);
+  it('adds 5 inhabitants per completed 2-second tick', () => {
+    expect(calculatePopulation(GROWTH_TICK_MS)).toBe(5);
+    expect(calculatePopulation(GROWTH_TICK_MS * 2)).toBe(10);
+    expect(calculatePopulation(GROWTH_TICK_MS * 3)).toBe(15);
   });
 
-  it('adds one building floor (+15) at each floor threshold', () => {
-    expect(POPULATION_PER_FLOOR).toBe(15);
-    expect(calculatePopulation(10)).toBe(20);
-    expect(calculatePopulation(19)).toBe(20);
-    expect(calculatePopulation(20)).toBe(35);
+  it('counts only whole ticks (a partial tick contributes nothing)', () => {
+    expect(calculatePopulation(GROWTH_TICK_MS * 3 + 1_999)).toBe(15);
+    expect(calculatePopulation(GROWTH_TICK_MS * 4 - 1)).toBe(15);
   });
 
-  it('does not add inhabitants for the decorative top element (25 minutes)', () => {
-    expect(calculatePopulation(24)).toBe(35);
-    expect(calculatePopulation(25)).toBe(35);
-    expect(calculatePopulation(10_000)).toBe(35);
+  it('reaches 3750 over a 25-minute session', () => {
+    // 750 ticks × 5 inhabitants.
+    expect(calculatePopulation(25 * 60_000)).toBe(3_750);
   });
 
-  it('matches the composition schedule: the same focused time always yields the same value', () => {
-    for (const minutes of [5, 6, 10, 15, 20, 25, 30, 60]) {
-      expect(calculatePopulation(minutes)).toBe(countFromBuilding(minutes, 0.1));
-      expect(calculatePopulation(minutes)).toBe(countFromBuilding(minutes, 0.9));
-    }
+  it('keeps growing linearly with focused time', () => {
+    expect(calculatePopulation(60_000)).toBe(150);
+    expect(calculatePopulation(120_000)).toBe(300);
+    expect(calculatePopulation(600_000)).toBe(1_500);
   });
 
   it('is monotonic non-decreasing over focused time', () => {
     let previous = 0;
-    for (let minutes = 0; minutes <= 30; minutes += 0.5) {
-      const population = calculatePopulation(minutes);
+    for (let ms = 0; ms <= 60_000; ms += 500) {
+      const population = calculatePopulation(ms);
       expect(population).toBeGreaterThanOrEqual(previous);
       previous = population;
     }
   });
 
-  it('is independent of the module variant (seed does not matter)', () => {
-    // Population counts unlocked categories, not the randomly chosen variant.
-    expect(calculatePopulation(25)).toBe(countFromBuilding(25, 0));
-    expect(calculatePopulation(25)).toBe(countFromBuilding(25, 0.999));
+  it('is pure: the same input always yields the same value', () => {
+    expect(calculatePopulation(90_000)).toBe(calculatePopulation(90_000));
+    expect(calculatePopulation(90_000)).toBe(225);
   });
 
   it('defensively normalizes non-finite and negative input without throwing', () => {
     expect(calculatePopulation(Number.NaN)).toBe(0);
     expect(calculatePopulation(-5)).toBe(0);
     expect(calculatePopulation(Number.NEGATIVE_INFINITY)).toBe(0);
-    expect(calculatePopulation(Number.POSITIVE_INFINITY)).toBe(35);
+    expect(calculatePopulation(Number.POSITIVE_INFINITY)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
   });
 });

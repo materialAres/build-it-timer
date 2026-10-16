@@ -106,12 +106,13 @@ export interface GrowthTickHandle {
 }
 function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
   let lastGrowthAt: number | null = null;
-  let focusedMs = 0;
   let status = store.getState().timer.status;
 
   // Detect the transitions into/out of `running` even when no tick arrives:
   // resuming must start measuring from the resume moment, not from the last
   // running tick before the pause (otherwise the paused gap would count as focus).
+  // Rehydration flips the status the same way, so the baseline after a service
+  // worker restart is the wake-up instant — the sleep gap is never replayed.
   const unsubscribe = store.subscribe(() => {
     const next = store.getState().timer.status;
     if (next === status) return;
@@ -130,11 +131,29 @@ function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle 
     lastGrowthAt = current;
     const elapsed = current - baseline;
     if (elapsed <= 0) return;
-    focusedMs += elapsed;
     store.getState().growCity(elapsed);
+
+    // The focus accumulator lives in the persisted `timer.focusedMs` (not a
+    // closure variable): it then survives a service worker restart for free —
+    // the store rehydrates — and `startTimer` resetting it on a new session
+    // needs no extra wiring here. Writing it on the same tick as `growCity`
+    // adds no persist churn: the city write already flushes the store.
+    const focusedMs = timer.focusedMs + elapsed;
+    store.getState().recordFocusedMs(focusedMs);
+
+    // Live population (M2.T18): the counter advances with every completed
+    // 2-second focus tick. Same measure as the city, so the two always agree.
+    const population = calculatePopulation(focusedMs);
+    if (population !== store.getState().score.population) {
+      store.getState().setPopulation(population);
+    }
   };
 
-  return { handleTick, getFocusedMs: () => focusedMs, dispose: unsubscribe };
+  return {
+    handleTick,
+    getFocusedMs: () => store.getState().timer.focusedMs,
+    dispose: unsubscribe,
+  };
 }
 /**
  * How many characters the three layers currently hold. Used only to report how
@@ -191,7 +210,7 @@ export function createSessionCompletion({
       if (timer.sessionId === null) return;
       if (name !== timerAlarmName(timer.sessionId)) return;
 
-      const population = calculatePopulation(getFocusedMs() / 60_000);
+      const population = calculatePopulation(getFocusedMs());
       store.getState().setPopulation(population);
       void store.getState().completeTimer();
 

@@ -13,6 +13,7 @@ const runningTimer: TimerState = {
   sessionStartedAt: T0,
   sessionId: SESSION_ID,
   endsAt: T0 + 1_500_000,
+  focusedMs: 0,
 };
 
 describe('restoreTimer (M2.T2)', () => {
@@ -24,6 +25,7 @@ describe('restoreTimer (M2.T2)', () => {
       sessionStartedAt: null,
       sessionId: null,
       endsAt: null,
+      focusedMs: 0,
     };
 
     const result = await restoreTimer(idle, { alarmProvider, now: () => T0 });

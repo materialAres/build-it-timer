@@ -53,7 +53,7 @@ describe('session completion (M3.T3c)', () => {
 
     // 10 minutes of focus: the 5' base and the 10' floor are unlocked.
     const ticks = await runSession(10 * 60_000);
-    const expectedPopulation = calculatePopulation((ticks * GROWTH_TICK_MS) / 60_000);
+    const expectedPopulation = calculatePopulation(ticks * GROWTH_TICK_MS);
 
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);

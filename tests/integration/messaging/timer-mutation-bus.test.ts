@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
-import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
+import { createAppStore, attachStoreSync, STORE_NAME, selectPopulation } from '@/store';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { timerAlarmName } from '@/lib/timer/session';
 import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
@@ -151,6 +151,35 @@ describe('popup → background timer path (M3.T3b)', () => {
     expect(popupStore.getState().timer.sessionId).toBe(
       backgroundStore.getState().timer.sessionId,
     );
+
+    handle.dispose();
+  });
+
+  it('propagates the live population to a read-only popup store (M2.T18)', async () => {
+    const backgroundStore = createAppStore({
+      dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+    });
+    await backgroundStore.persist.rehydrate();
+    const handle = startBackground({ store: backgroundStore, alarmProvider, now: () => now });
+
+    const popupStore = createAppStore({ readOnly: true });
+    await popupStore.persist.rehydrate();
+    attachStoreSync(popupStore);
+
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+    await flushAsync();
+
+    // Two ticks of focus: the popup must see +5 each time through the sync
+    // bridge, not only at session completion.
+    now = T0 + GROWTH_TICK_MS;
+    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
+    await flushAsync();
+    expect(selectPopulation(popupStore.getState())).toBe(5);
+
+    now = T0 + GROWTH_TICK_MS * 2;
+    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_498 } });
+    await flushAsync();
+    expect(selectPopulation(popupStore.getState())).toBe(10);
 
     handle.dispose();
   });

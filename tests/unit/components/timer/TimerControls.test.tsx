@@ -12,6 +12,7 @@ const idleTimer: TimerState = {
   sessionStartedAt: null,
   sessionId: null,
   endsAt: null,
+  focusedMs: 0,
 };
 
 function setTimer(partial: Partial<TimerState>): void {

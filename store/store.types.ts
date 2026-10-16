@@ -18,6 +18,15 @@ export interface TimerState {
    * field is a projection of it, recomputed on every start/resume.
    */
   readonly endsAt: number | null;
+  /**
+   * Undistracted focus time accumulated by the growth tracker (M2.T15),
+   * in ms. Persisted so the accumulator survives a service worker restart
+   * mid-session: without it, the restarted tracker would restart from zero
+   * and both the live population (M2.T18) and the completion summary
+   * (M3.T3c) would undercount the session's real focus time. Reset to 0 on
+   * every new session, kept across pause/resume.
+   */
+  readonly focusedMs: number;
 }
 
 // derived from remainingSeconds from a formatting function

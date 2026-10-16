@@ -45,6 +45,14 @@ export interface TimerSlice {
    */
   completeTimer(): Promise<void>;
   /**
+   * Record undistracted focus time accumulated by the growth tracker
+   * (M2.T15/M2.T18). The tracker measures the running-only elapsed time on
+   * each 2s tick and hands the running total here; the field is persisted so
+   * the accumulator survives a service worker restart mid-session. A
+   * non-finite or negative value degrades to 0 (§1.4).
+   */
+  recordFocusedMs(focusedMs: number): void;
+  /**
    * Ask the background to start/resume the session (M3.T3b). A read-only
    * context (the popup, M1.T9) must not run `startTimer` locally: that would
    * mutate only its own in-memory copy and schedule the alarm on its own
@@ -64,6 +72,7 @@ const initialTimerState: TimerState = {
   sessionStartedAt: null,
   sessionId: null,
   endsAt: null,
+  focusedMs: 0,
 };
 
 /**
@@ -96,6 +105,8 @@ export function createTimerSlice(
         // Resuming re-arms the countdown from *now*, so the projected end time
         // moves with it (I001): the popup estimates from this value.
         const endsAt = now() + timer.remainingSeconds * 1000;
+        // The accumulated focus time is kept: a resume continues the same
+        // session's city and population, it does not restart them.
         set({ timer: { ...timer, status: 'running', endsAt } });
         if (sessionId !== null) {
           await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
@@ -119,6 +130,9 @@ export function createTimerSlice(
           sessionStartedAt: startedAt,
           sessionId,
           endsAt,
+          // A brand-new session starts with an empty focus accumulator; the
+          // previous session's total must not bleed into the new city.
+          focusedMs: 0,
         },
       });
       await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
@@ -172,6 +186,9 @@ export function createTimerSlice(
           sessionStartedAt: timer.sessionStartedAt,
           sessionId,
           endsAt: null,
+          // The session's focus total stays readable after completion (the
+          // summary and the population are derived from it, M3.T3c).
+          focusedMs: timer.focusedMs,
         },
       });
       // The alarm has already fired, but clearing is idempotent and keeps the
@@ -179,6 +196,16 @@ export function createTimerSlice(
       if (sessionId !== null) {
         await alarmProvider.clear(timerAlarmName(sessionId));
       }
+    },
+
+    recordFocusedMs(focusedMs: number): void {
+      const { timer } = get();
+      // Guard the untrusted boundary (§1.4): the tracker is an injected
+      // collaborator, so a non-finite or negative total degrades to 0 instead
+      // of leaking into the persisted state.
+      const safe = Number.isFinite(focusedMs) ? Math.max(0, focusedMs) : 0;
+      if (safe === timer.focusedMs) return;
+      set({ timer: { ...timer, focusedMs: safe } });
     },
 
     // The request actions never touch the local state: the popup's copy is

@@ -10,6 +10,7 @@ const running: TimerState = {
   sessionStartedAt: T0,
   sessionId: 'session-1',
   endsAt: T0 + 1500 * 1000,
+  focusedMs: 0,
 };
 
 describe('estimateRemainingSeconds (I001)', () => {
