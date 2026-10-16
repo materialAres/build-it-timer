@@ -4,7 +4,7 @@ import { startBackground } from '@/entrypoints/background';
 import { sendMessage, onMessage } from '@/lib/messaging/bus';
 import { createAppStore } from '@/store';
 import { applyMalus } from '@/lib/score/apply-malus';
-import { growCity, seedFromSession, GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { FakeTabEventSource } from '@/tests/helpers/fake-tab-event-source';
 import type { CityLayers } from '@/components/city/city.types';
@@ -121,15 +121,14 @@ describe('malus linked to building destruction (M2.T16)', () => {
 
     await store.getState().startTimer();
     store.getState().growCity(GROWTH_TICK_MS * 4);
-    const seed = seedFromSession(store.getState().city.sessionId);
 
     await proceed();
     const afterProceed = store.getState().city.layers;
     expect(countOccupied(afterProceed)).toBe(3);
 
     // The blocked tab is open (facebook.com is on the blocklist); 2s later a
-    // timer tick grows the city by one character and the malus removes one, one
-    // after the other.
+    // timer tick no longer grows the city — the elapsed stretch counts as
+    // distraction (M2.T18) — so the malus removes one character net.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { list: 'blocklist', site: 'facebook.com' },
@@ -138,8 +137,9 @@ describe('malus linked to building destruction (M2.T16)', () => {
     now = T0 + GROWTH_TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_400 } });
 
-    const expected = applyMalus(growCity(afterProceed, GROWTH_TICK_MS, seed), 1);
+    const expected = applyMalus(afterProceed, 1);
     expect(store.getState().city.layers).toEqual(expected);
+    expect(countOccupied(store.getState().city.layers)).toBe(2);
     handle.dispose();
   });
 });

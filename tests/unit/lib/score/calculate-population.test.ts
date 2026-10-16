@@ -54,6 +54,28 @@ describe('calculatePopulation (M2.T18)', () => {
     expect(calculatePopulation(90_000)).toBe(225);
   });
 
+  it('subtracts 5 inhabitants per completed distraction tick', () => {
+    // 6 focus ticks (+30) minus 2 distraction ticks (-10).
+    expect(calculatePopulation(GROWTH_TICK_MS * 6, GROWTH_TICK_MS * 2)).toBe(20);
+    // 10 focus ticks (+50) minus 10 distraction ticks (-50).
+    expect(calculatePopulation(GROWTH_TICK_MS * 10, GROWTH_TICK_MS * 10)).toBe(0);
+  });
+
+  it('never goes below zero however long the distraction lasts', () => {
+    expect(calculatePopulation(0, GROWTH_TICK_MS * 5)).toBe(0);
+    expect(calculatePopulation(GROWTH_TICK_MS, GROWTH_TICK_MS * 100)).toBe(0);
+  });
+
+  it('counts only whole distraction ticks', () => {
+    expect(calculatePopulation(GROWTH_TICK_MS * 4, GROWTH_TICK_MS - 1)).toBe(20);
+    expect(calculatePopulation(GROWTH_TICK_MS * 4, GROWTH_TICK_MS)).toBe(15);
+  });
+
+  it('normalizes non-finite distraction input without throwing', () => {
+    expect(calculatePopulation(GROWTH_TICK_MS * 2, Number.NaN)).toBe(10);
+    expect(calculatePopulation(GROWTH_TICK_MS * 2, -1_000)).toBe(10);
+  });
+
   it('defensively normalizes non-finite and negative input without throwing', () => {
     expect(calculatePopulation(Number.NaN)).toBe(0);
     expect(calculatePopulation(-5)).toBe(0);

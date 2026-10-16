@@ -101,10 +101,29 @@ export interface GrowthTickHandle {
   readonly handleTick: () => void;
   /** Running-only focus time accumulated so far, in ms (M3.T3c). */
   readonly getFocusedMs: () => number;
+  /** Running-only distraction time accumulated so far, in ms (M2.T18). */
+  readonly getDistractedMs: () => number;
   /** Detach the status subscription owned by the tracker. */
   readonly dispose: () => void;
 }
-function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle {
+
+export interface GrowthTickDependencies {
+  readonly store: AppStore;
+  readonly now: () => number;
+  /**
+   * Whether a blocked site is currently open. Time elapsed while this is true is
+   * counted as distraction instead of focus: the city stops growing and the
+   * population takes its penalty (M2.T18), so a distracted stretch yields a net
+   * decrease rather than a wash.
+   */
+  readonly isDistracted?: () => boolean;
+}
+
+function createGrowthTick({
+  store,
+  now,
+  isDistracted = () => false,
+}: GrowthTickDependencies): GrowthTickHandle {
   let lastGrowthAt: number | null = null;
   let status = store.getState().timer.status;
 
@@ -131,19 +150,29 @@ function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle 
     lastGrowthAt = current;
     const elapsed = current - baseline;
     if (elapsed <= 0) return;
-    store.getState().growCity(elapsed);
 
-    // The focus accumulator lives in the persisted `timer.focusedMs` (not a
-    // closure variable): it then survives a service worker restart for free —
-    // the store rehydrates — and `startTimer` resetting it on a new session
-    // needs no extra wiring here. Writing it on the same tick as `growCity`
-    // adds no persist churn: the city write already flushes the store.
-    const focusedMs = timer.focusedMs + elapsed;
-    store.getState().recordFocusedMs(focusedMs);
+    // The elapsed stretch is either focus or distraction, never both: while a
+    // blocked site is open the city does not grow and the time is booked against
+    // the population instead. The two accumulators live in the persisted timer
+    // (not in closures), so they survive a service worker restart for free and
+    // `startTimer` resetting them on a new session needs no extra wiring here.
+    const distracted = isDistracted();
+    const focusedMs = distracted ? timer.focusedMs : timer.focusedMs + elapsed;
+    const distractedMs = distracted ? timer.distractedMs + elapsed : timer.distractedMs;
 
-    // Live population (M2.T18): the counter advances with every completed
-    // 2-second focus tick. Same measure as the city, so the two always agree.
-    const population = calculatePopulation(focusedMs);
+    if (distracted) store.getState().recordDistractedMs(distractedMs);
+    else {
+      store.getState().growCity(elapsed);
+      store.getState().recordFocusedMs(focusedMs);
+    }
+
+    // Live population (M2.T18): +5 per completed focus tick, -5 per completed
+    // distraction tick, clamped at zero. Same measures as the city and the
+    // malus, so the counter always agrees with what actually happened. The write
+    // is skipped while the value is unchanged — `score` is persisted, and a
+    // needless 2s-cadence write would churn `storage.local` and re-broadcast
+    // sync messages for nothing.
+    const population = calculatePopulation(focusedMs, distractedMs);
     if (population !== store.getState().score.population) {
       store.getState().setPopulation(population);
     }
@@ -152,6 +181,7 @@ function createGrowthTick(store: AppStore, now: () => number): GrowthTickHandle 
   return {
     handleTick,
     getFocusedMs: () => store.getState().timer.focusedMs,
+    getDistractedMs: () => store.getState().timer.distractedMs,
     dispose: unsubscribe,
   };
 }
@@ -172,6 +202,8 @@ export interface SessionCompletionDependencies {
   readonly store: AppStore;
   /** Running-only focus time accumulated by the growth tracker (M2.T15). */
   readonly getFocusedMs: () => number;
+  /** Running-only distraction time accumulated by the tab tracker (M2.T16). */
+  readonly getDistractedMs: () => number;
   /** Clock used to stamp `endedAt`; injectable for determinism. */
   readonly now: () => number;
   /** Message sink, injectable so the handler is testable without the bus. */
@@ -200,6 +232,7 @@ export interface SessionCompletion {
 export function createSessionCompletion({
   store,
   getFocusedMs,
+  getDistractedMs,
   now,
   send = defaultSend,
 }: SessionCompletionDependencies): SessionCompletion {
@@ -210,7 +243,7 @@ export function createSessionCompletion({
       if (timer.sessionId === null) return;
       if (name !== timerAlarmName(timer.sessionId)) return;
 
-      const population = calculatePopulation(getFocusedMs());
+      const population = calculatePopulation(getFocusedMs(), getDistractedMs());
       store.getState().setPopulation(population);
       void store.getState().completeTimer();
 
@@ -389,13 +422,6 @@ export function startBackground(
   // background's store rehydrates whenever the persisted key changes (M1.T8).
   disposers.push(attachStoreSync(store));
 
-  // Growth across the timer ticks (M2.T15): the tracker owns the running/idle
-  // baseline used to size each `growCity` delta.
-  const growthTick = createGrowthTick(store, now);
-  disposers.push(() => {
-    growthTick.dispose();
-  });
-
   // Malus across the distraction ticks (M2.T16): the tab tracker (M2.T10)
   // accumulates how long blocked tabs stay open while a session is running, and
   // the wiring routes the overlay's "proceed" choice plus those ticks to the
@@ -414,6 +440,20 @@ export function startBackground(
   disposers.push(() => {
     malus.dispose();
     distractionTracker.dispose();
+  });
+
+  // Growth across the timer ticks (M2.T15): the tracker owns the running/idle
+  // baseline used to size each `growCity` delta. It is created after the
+  // distraction tracker (M2.T16) so it can consult it: while a blocked site is
+  // open the elapsed time is booked as distraction, which pauses the city and
+  // applies the population penalty (M2.T18) instead of counting as focus.
+  const growthTick = createGrowthTick({
+    store,
+    now,
+    isDistracted: () => distractionTracker.isDistracted(),
+  });
+  disposers.push(() => {
+    growthTick.dispose();
   });
 
   // Passive variants: the malus consumes `SITE_BLOCKED_ATTEMPT` and the same
@@ -452,6 +492,7 @@ export function startBackground(
   const completion = createSessionCompletion({
     store,
     getFocusedMs: growthTick.getFocusedMs,
+    getDistractedMs: growthTick.getDistractedMs,
     now,
   });
   disposers.push(alarmProvider.onFire(completion.handleAlarm));

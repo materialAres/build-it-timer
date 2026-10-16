@@ -19,22 +19,33 @@ function normalizeFocusedMs(focusedMs: number): number {
 }
 
 /**
- * Population of the city built for `focusedMs` of undistracted focus (roadmap
- * M2.T18): every completed 2-second focus tick adds {@link POPULATION_PER_TICK}
- * inhabitants, so the counter evolves continuously with the elapsed focus time.
+ * Population of the city built for `focusedMs` of undistracted focus and
+ * `distractedMs` spent on blocked sites (roadmap M2.T18, extended): every
+ * completed 2-second focus tick adds {@link POPULATION_PER_TICK} inhabitants and
+ * every completed 2-second distraction tick removes the same amount, so the
+ * counter both grows with progress and shrinks with distraction on the very same
+ * cadence.
  *
- * The time is the *same* running-only quantity that grows the city (the
- * background's growth tracker, M2.T15), so the population always agrees with
- * the city that was actually built and excludes paused gaps. It is a function
- * of elapsed focus time, not of the rendered grid: it keeps growing even after
- * the grid is visually full (roadmap M2.T12), because the cap is on rendering,
- * never on session progress.
+ * The two times are the *same* running-only quantities the background measures
+ * (M2.T15/M2.T16), so the population always agrees with the city that was
+ * actually built and excludes paused gaps. Distracted time is deliberately not
+ * also counted as focus time by the caller, so a tick on a blocked site yields a
+ * net {@link POPULATION_PER_TICK} decrease.
+ *
+ * The result is clamped at zero: population is a count of inhabitants and can
+ * never be negative, however long the distraction lasts.
  *
  * Pure and total: same input → same output, no internal
  * `Date.now()`/`Math.random()` (principles D, §1.4). A partial tick contributes
  * nothing — only whole 2-second ticks count.
  */
-export function calculatePopulation(focusedMs: number): number {
-  const elapsed = normalizeFocusedMs(focusedMs);
-  return Math.floor(elapsed / GROWTH_TICK_MS) * POPULATION_PER_TICK;
+export function calculatePopulation(
+  focusedMs: number,
+  distractedMs = 0,
+): number {
+  const focusTicks = Math.floor(normalizeFocusedMs(focusedMs) / GROWTH_TICK_MS);
+  const distractionTicks = Math.floor(
+    normalizeFocusedMs(distractedMs) / GROWTH_TICK_MS,
+  );
+  return Math.max(0, focusTicks - distractionTicks) * POPULATION_PER_TICK;
 }

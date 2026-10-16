@@ -144,6 +144,8 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
 
   let now: number;
   let alarmProvider: FakeAlarmProvider;
+  /** Drives the fake tab source's `onUpdated` listener from a test. */
+  let reflectTabUpdate: (url: string | undefined) => void;
 
   beforeEach(() => {
     fakeBrowser.reset();
@@ -275,5 +277,116 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     expect(selectPopulation(restartedStore.getState())).toBe(before + 5);
 
     restarted.dispose();
+  });
+
+  it('decreases the population while a blocked site is open and pauses the city', async () => {
+    const store = createAppStore({
+      dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+    });
+    // A fake tab source we can drive: opening a blocked tab marks the user as
+    // distracted (M2.T16), which the growth tick must treat as non-focus time.
+    let blockedUrl: string | undefined;
+    const handle = startBackground({
+      store,
+      alarmProvider,
+      now: () => now,
+      tabEventSource: {
+        queryTabs: () => Promise.resolve([{ id: 1, url: blockedUrl }]),
+        onUpdated: (listener) => {
+          reflectTabUpdate = (url) => {
+            blockedUrl = url;
+            listener({ id: 1, url });
+          };
+          return () => {};
+        },
+        onRemoved: () => () => {},
+      },
+    });
+    await handle.ready;
+
+    // Block a site and apply it, then start the session.
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { list: 'blocklist', site: 'x.com' } });
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+
+    // Two clean focus ticks: +5 each.
+    now = T0 + GROWTH_TICK_MS;
+    await tick();
+    now = T0 + GROWTH_TICK_MS * 2;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(10);
+    const cityBefore = store.getState().city.layers;
+
+    // Navigate to the blocked site: the elapsed stretch is now distraction.
+    reflectTabUpdate('https://x.com/feed');
+    now = T0 + GROWTH_TICK_MS * 3;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(5);
+
+    now = T0 + GROWTH_TICK_MS * 4;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(0);
+
+    // The city did not grow during the distracted stretch.
+    expect(store.getState().city.layers).toBe(cityBefore);
+
+    handle.dispose();
+  });
+
+  it('pays back the accumulated distraction before growing again', async () => {
+    const store = createAppStore({
+      dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+    });
+    let blockedUrl: string | undefined;
+    const handle = startBackground({
+      store,
+      alarmProvider,
+      now: () => now,
+      tabEventSource: {
+        queryTabs: () => Promise.resolve([{ id: 1, url: blockedUrl }]),
+        onUpdated: (listener) => {
+          reflectTabUpdate = (url) => {
+            blockedUrl = url;
+            listener({ id: 1, url });
+          };
+          return () => {};
+        },
+        onRemoved: () => () => {},
+      },
+    });
+    await handle.ready;
+
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { list: 'blocklist', site: 'x.com' } });
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+
+    // Distracted from the start: two ticks of penalty, clamped at zero.
+    reflectTabUpdate('https://x.com/feed');
+    now = T0 + GROWTH_TICK_MS;
+    await tick();
+    now = T0 + GROWTH_TICK_MS * 2;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(0);
+
+    // Back to a safe page. The counter is focus ticks minus distraction ticks,
+    // so the two ticks of distraction debt are paid back first: still 0 after
+    // one and two focus ticks...
+    reflectTabUpdate('https://example.com/');
+    now = T0 + GROWTH_TICK_MS * 3;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(0);
+
+    now = T0 + GROWTH_TICK_MS * 4;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(0);
+
+    // ...and the population grows again from the third focus tick onward.
+    now = T0 + GROWTH_TICK_MS * 5;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(5);
+
+    now = T0 + GROWTH_TICK_MS * 6;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(10);
+
+    handle.dispose();
   });
 });

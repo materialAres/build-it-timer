@@ -16,6 +16,7 @@ const idleTimer: TimerState = {
   sessionId: null,
   endsAt: null,
   focusedMs: 0,
+  distractedMs: 0,
 };
 
 function Probe() {

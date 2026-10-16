@@ -53,6 +53,14 @@ export interface TimerSlice {
    */
   recordFocusedMs(focusedMs: number): void;
   /**
+   * Record distraction time accumulated on blocked sites by the tab tracker
+   * (M2.T16/M2.T18). Same contract as {@link recordFocusedMs}: the tracker
+   * measures it, the slice only stores it, and the field is persisted so the
+   * population penalty survives a restart. A non-finite or negative value
+   * degrades to 0 (§1.4).
+   */
+  recordDistractedMs(distractedMs: number): void;
+  /**
    * Ask the background to start/resume the session (M3.T3b). A read-only
    * context (the popup, M1.T9) must not run `startTimer` locally: that would
    * mutate only its own in-memory copy and schedule the alarm on its own
@@ -73,6 +81,7 @@ const initialTimerState: TimerState = {
   sessionId: null,
   endsAt: null,
   focusedMs: 0,
+  distractedMs: 0,
 };
 
 /**
@@ -133,6 +142,7 @@ export function createTimerSlice(
           // A brand-new session starts with an empty focus accumulator; the
           // previous session's total must not bleed into the new city.
           focusedMs: 0,
+          distractedMs: 0,
         },
       });
       await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
@@ -189,6 +199,7 @@ export function createTimerSlice(
           // The session's focus total stays readable after completion (the
           // summary and the population are derived from it, M3.T3c).
           focusedMs: timer.focusedMs,
+          distractedMs: timer.distractedMs,
         },
       });
       // The alarm has already fired, but clearing is idempotent and keeps the
@@ -206,6 +217,13 @@ export function createTimerSlice(
       const safe = Number.isFinite(focusedMs) ? Math.max(0, focusedMs) : 0;
       if (safe === timer.focusedMs) return;
       set({ timer: { ...timer, focusedMs: safe } });
+    },
+
+    recordDistractedMs(distractedMs: number): void {
+      const { timer } = get();
+      const safe = Number.isFinite(distractedMs) ? Math.max(0, distractedMs) : 0;
+      if (safe === timer.distractedMs) return;
+      set({ timer: { ...timer, distractedMs: safe } });
     },
 
     // The request actions never touch the local state: the popup's copy is

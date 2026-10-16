@@ -27,6 +27,14 @@ export interface TimerState {
    * every new session, kept across pause/resume.
    */
   readonly focusedMs: number;
+  /**
+   * Distraction time accumulated on blocked sites during the session, in ms.
+   * Measured by the tab tracker (M2.T16) with the same 2s cadence and the same
+   * running-only baseline as `focusedMs`. Persisted for the same reason: the
+   * population penalty (M2.T18) must survive a service-worker restart mid
+   * session. Reset to 0 on every new session.
+   */
+  readonly distractedMs: number;
 }
 
 // derived from remainingSeconds from a formatting function

@@ -35,6 +35,12 @@ export interface TabDistractionTracker {
   readonly ready: Promise<void>;
   /** Whole 2s ticks accumulated so far, sampled at `now()`. */
   getTicks(): number;
+  /**
+   * Whether at least one blocked tab is currently open. The growth tracker
+   * consults it (M2.T18) so time spent on a blocked site is counted as
+   * distraction instead of focus.
+   */
+  isDistracted(): boolean;
   /** Stop observing tab events. */
   dispose(): void;
 }
@@ -98,6 +104,9 @@ export function createTabDistractionTracker(
     getTicks(): number {
       sample();
       return Math.floor(accumulatedMs / tickMs);
+    },
+    isDistracted(): boolean {
+      return openBlockedTabs.size > 0;
     },
     dispose(): void {
       for (const dispose of disposers) dispose();
