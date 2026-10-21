@@ -34,54 +34,55 @@ description: Rules for updating the changelog
 | M1.T1 | Shared domain type definitions | completed | `c1fa995` |
 | M1.T2 | `lib/url/domain.ts` module (`tldts` wrapper) | completed | `c1fa995` |
 | M1.T3 | Storage adapter for `persist` on `browser.storage.local` | completed | `5793128` |
-| M1.T4 | Zustand store — skeleton + slice combination | completed | — (to be committed) |
-| M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | — (to be committed) |
-| M1.T6 | Typed message bus background↔content↔popup | completed | — (to be committed) |
-| M1.T7 | Background entrypoint — orchestrator skeleton | completed | — (to be committed) |
-| M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | completed | — (to be committed) |
-| M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | completed | — (to be committed) |
-| M1.T10 | Cross-context mutation path (popup → background) | completed | — (to be committed) |
-| M2.T1 | `timerSlice` — timer state and actions | completed | — (to be committed) |
-| M2.T2 | Timer persistence/restore logic via alarms | completed | — (to be committed) |
-| M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | — (to be committed) |
-| M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | — (to be committed) |
-| M2.T5 | Predefined presets (data) | completed | — (to be committed) |
-| M2.T6 | `declarativeNetRequest` rule generator | completed | — (to be committed) |
-| M2.T7 | Applying DNR rules from the background, active only in-session | completed | — (to be committed) |
-| M2.T8 | Overlay alert content script (Shadow DOM) | completed | — (to be committed) |
-| M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | — (to be committed) |
-| M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | — (to be committed) |
-| M2.T11 | `citySlice` — city grid/layer state, new every session | completed | — (to be committed) |
-| M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | — (to be committed) |
-| M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | — (to be committed) |
-| M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | — (to be committed) |
-| M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | — (to be committed) |
-| M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | — (to be committed) |
-| M2.T13b | `lib/city/theme-registry.ts` — color themes/biomes per session | completed | — (to be committed) |
-| M2.T14 | `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow) | completed | — (to be committed) |
-| M2.T15 | Linking growth-engine ↔ character-insertion tick (2s) | completed | — (to be committed) |
-| M2.T16 | Linking malus ↔ building destruction | completed | — (to be committed) |
-| M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | — (to be committed) |
-| M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | — (to be committed) |
-| M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | — (to be committed) |
-| M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | — (to be committed) |
-| M2.T21 | Defensive blocklist input normalization (entry + navigation check) | completed | — (to be committed) |
-| M3.T1 | `PresetPicker` (preset selection UI) | completed | — (to be committed) |
-| M3.T2 | `TagEditor` — custom categories via tags | completed | — (to be committed) |
-| M3.T3 | `SiteList` — site CRUD in allow/blocklist | completed | — (to be committed) |
-| M3.T3b | Popup → background timer path (commands + 2s tick emitter) | completed | — (to be committed) |
-| M3.T3c | Session completion (`SESSION_ENDED` → history + population) | completed | — (to be committed) |
-| M3.T4 | Popup `App.tsx` — full UI composition | completed | — (to be committed) |
-| M3.T5 | `framer-motion` animations on building growth/deletion | completed | — (to be committed) |
-| M3.T6 | Multi-browser persistence: Firefox/Chrome build verification | completed | — (to be committed) |
-| M3.T7 | `SessionHistory` (5-session history UI) | completed | — (to be committed) |
-| M3.T8 | `ExportCityButton` — export city as JPEG/PNG at end of focus | completed | — (to be committed) |
-| M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | — (to be committed) |
-| M3.T10 | IT translation (language auto-detected from browser) | completed | — (to be committed) |
+| M1.T4 | Zustand store — skeleton + slice combination | completed | `25dca41` |
+| M1.T5 | `browser.alarms` adapter (`AlarmProvider`) | completed | `bd024a9` |
+| M1.T6 | Typed message bus background↔content↔popup | completed | `24b04ec` |
+| M1.T7 | Background entrypoint — orchestrator skeleton | completed | `28934c2` |
+| M1.T8 | Cross-context store synchronization (`browser.storage.onChanged`) | completed | `178ad74` |
+| M1.T9 | Single-writer ownership: read-only stores for non-writer contexts | completed | `1d53fb8` (landed with M1.T10) |
+| M1.T10 | Cross-context mutation path (popup → background) | completed | `1d53fb8` |
+| M2.T1 | `timerSlice` — timer state and actions | completed | `d8c473d` |
+| M2.T2 | Timer persistence/restore logic via alarms | completed | `e935d35` |
+| M2.T3 | `TimerDisplay` + `TimerControls` (UI) | completed | `d2f47b1` |
+| M2.T4 | `blocklistSlice` — allowlist/blocklist state | completed | `d9b9cfc` |
+| M2.T5 | Predefined presets (data) | completed | `0faad2c` |
+| M2.T6 | `declarativeNetRequest` rule generator | completed | `e43d249` |
+| M2.T7 | Applying DNR rules from the background, active only in-session | completed | `eff4312` |
+| M2.T8 | Overlay alert content script (Shadow DOM) | completed | `9a0aacf` |
+| M2.T9 | `scoreSlice` + `lib/score/calculate-score.ts` (Excellent/Good/Bad thresholds) | completed | `1e65e42` |
+| M2.T10 | `lib/score/apply-malus.ts` — progressive character-by-character deletion | completed | `f33a100` |
+| M2.T11 | `citySlice` — city grid/layer state, new every session | completed | `da1259a` |
+| M2.T11b | `lib/city/tile-library.ts` — library of composable ASCII modules | completed | `45926a6` |
+| M2.T11c | `lib/city/building-composer.ts` — building composition from modules based on minutes | completed | `6bcda09` |
+| M2.T12 | `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid | completed | `1db3913` |
+| M2.T12b | `lib/city/decoration-engine.ts` — procedural details (windows, trees, cars, clouds) | completed | `df6ee5f` |
+| M2.T13 | `lib/city/palette.ts` — deterministic domain hash → color | completed | `9f62b22` |
+| M2.T13b | `lib/city/theme-registry.ts` — color themes/biomes per session | completed | `d3dbc44` |
+| M2.T14 | `CityCanvas` + `CityLayer` + `CityCell` (multi-layer ASCII render + CRT glow) | completed | `8ce39c8` |
+| M2.T15 | Linking growth-engine ↔ character-insertion tick (2s) | completed | `af808d4` |
+| M2.T16 | Linking malus ↔ building destruction | completed | `6aea971` |
+| M2.T17 | `ScoreBadge` (Excellent/Good/Bad UI) | completed | `34f6890` |
+| M2.T18 | `PopulationCounter` + `lib/score/calculate-population.ts` | completed | `a0e0fa7` |
+| M2.T19 | `session-history.slice.ts` — history of the last 5 sessions | completed | `540e97d` |
+| M2.T20 | Allowlist/blocklist mutual-exclusion validation (allowlist wins) | completed | `8e064d6` |
+| M2.T21 | Defensive blocklist input normalization (entry + navigation check) | completed | `c9c4ab5` |
+| M3.T1 | `PresetPicker` (preset selection UI) | completed | `95f1fde` |
+| M3.T2 | `TagEditor` — custom categories via tags | completed | `74f610c` |
+| M3.T3 | `SiteList` — site CRUD in allow/blocklist | completed | `180d025` |
+| M3.T3b | Popup → background timer path (commands + 2s tick emitter) | completed | `4796b68` |
+| M3.T3c | Session completion (`SESSION_ENDED` → history + population) | completed | `11861bd` |
+| M3.T4 | Popup `App.tsx` — full UI composition | completed | `d10bafb` |
+| M3.T5 | `framer-motion` animations on building growth/deletion | completed | `e7a5a60` |
+| M3.T6 | Multi-browser persistence: Firefox/Chrome build verification | completed | `532670b` |
+| M3.T7 | `SessionHistory` (5-session history UI) | completed | `7c891e7` |
+| M3.T8 | `ExportCityButton` — export city as JPEG/PNG at end of focus | completed | `e9e0950` |
+| M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | `46b9678` |
+| M3.T10 | IT translation (language auto-detected from browser) | completed | `51f3b19` |
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | `5d665bb` (adapted to the session cadence by `de0ffe8`, I005) |
-| I001 | Countdown never decremented (timer display frozen) | fixed | — (to be committed) |
-| I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | — (to be committed) |
-| I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | — (to be committed) |
+| I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
+| I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
+| I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
+| I005 | User-selectable focus duration (duration-neutral growth, malus and population) | implemented | `de0ffe8` |
 
 ---
 
