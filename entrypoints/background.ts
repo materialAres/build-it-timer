@@ -33,6 +33,7 @@ import {
 } from '@/lib/timer/tab-distraction-tracker';
 import type { CityLayers } from '@/components/city/city.types';
 import { malusForDistractionTicks } from '@/lib/score/apply-malus';
+import { createLogger, type Logger } from '@/utils/logger';
 
 /**
  * The passive `RuntimeMessage` variants defined in M1.T1. The background
@@ -62,6 +63,8 @@ export interface BackgroundDependencies {
   readonly ruleApplier?: RuleApplier;
   /** Tab event source for distraction tracking (M2.T10/M2.T16). */
   readonly tabEventSource?: TabEventSource;
+  /** Centralized logger (M4.T3b). Injectable so tests assert records, not console text. */
+  readonly logger?: Logger;
 }
 
 export interface BackgroundHandle {
@@ -428,6 +431,8 @@ export function createMalusWiring({
 export function startBackground(
   dependencies: BackgroundDependencies = {},
 ): BackgroundHandle {
+  const log = dependencies.logger ?? createLogger('background');
+
   // The background is the single writer of the persisted store (M1.T9): it owns
   // the writable instance, while every other context gets a read-only one.
   //
@@ -452,7 +457,7 @@ export function startBackground(
   const syncRules = (): void => {
     void rulesSync.sync(store.getState()).catch((error: unknown) => {
       // Known boundary (§1.4): a failed rule update must not crash the worker.
-      console.error('[background] DNR rule sync failed', error);
+      log.error('DNR rule sync failed', error, { boundary: 'dnr' });
     });
   };
 
@@ -474,7 +479,9 @@ export function startBackground(
   // The tracker's initial tab read is best-effort: a failure must not become an
   // unhandled rejection that kills the service worker (§1.4).
   void distractionTracker.ready.catch((error: unknown) => {
-    console.error('[background] tab distraction tracker failed to start', error);
+    log.error('tab distraction tracker failed to start', error, {
+      boundary: 'tab-tracker',
+    });
   });
   const malus = createMalusWiring({ store, tracker: distractionTracker });
   disposers.push(() => {
@@ -508,8 +515,9 @@ export function startBackground(
     }
   };
 
+  const busLog = log.child('bus');
   for (const type of MESSAGE_TYPES) {
-    disposers.push(onMessage(type, handlePassiveMessage));
+    disposers.push(onMessage(type, handlePassiveMessage, busLog));
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
@@ -518,7 +526,7 @@ export function startBackground(
   // provider.
   const handleMutation = createMutationHandler(store);
   for (const type of MUTATION_TYPES) {
-    disposers.push(onMessage(type, handleMutation));
+    disposers.push(onMessage(type, handleMutation, busLog));
   }
 
   // Any change to the blocklist/allowlist or to the timer status re-evaluates
@@ -556,9 +564,8 @@ export function startBackground(
     await rulesSync.sync(store.getState());
   })().catch((error: unknown) => {
     // The startup path is a known boundary (§1.4): a failure here must not
-    // become an unhandled rejection that kills the service worker. Logged with
-    // context; centralized logging replaces this in M4.T3.
-    console.error('[background] startup reconciliation failed', error);
+    // become an unhandled rejection that kills the service worker.
+    log.error('startup reconciliation failed', error, { boundary: 'startup' });
   });
 
   return {
@@ -572,6 +579,26 @@ export function startBackground(
   };
 }
 
+/**
+ * Production bootstrap (M4.T3b): `startBackground` is synchronous, so a failure
+ * while wiring the worker (a malformed dependency, an unavailable browser API)
+ * would otherwise escape the WXT callback. Catch it, log it with context and
+ * return `null`: the worker stays alive and the failure is diagnosable instead
+ * of silent. Asynchronous startup failures are already contained by `ready`.
+ */
+export function bootstrapBackground(
+  dependencies: BackgroundDependencies = {},
+): BackgroundHandle | null {
+  const log = dependencies.logger ?? createLogger('background');
+
+  try {
+    return startBackground({ ...dependencies, logger: log });
+  } catch (error: unknown) {
+    log.error('background failed to start', error, { boundary: 'bootstrap' });
+    return null;
+  }
+}
+
 export default defineBackground(() => {
-  startBackground();
+  bootstrapBackground();
 });

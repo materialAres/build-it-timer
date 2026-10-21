@@ -1,17 +1,28 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { browser } from 'wxt/browser';
-import { startBackground, MESSAGE_TYPES } from '@/entrypoints/background';
+import {
+  bootstrapBackground,
+  startBackground,
+  MESSAGE_TYPES,
+} from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 import { MUTATION_TYPES } from '@/lib/messaging/messages.types';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, DEFAULT_FOCUS_SECONDS, STORE_NAME } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
+import { createLogger, type LogRecord } from '@/utils/logger';
 import type { Tag } from '@/store/store.types';
+import type { TabEventSource } from '@/lib/timer/tab-distraction-tracker';
 
 describe('background orchestrator skeleton (M1.T7)', () => {
   beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
     fakeBrowser.reset();
   });
 
@@ -22,6 +33,91 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     expect(typeof handle.alarmProvider.schedule).toBe('function');
     expect(typeof handle.alarmProvider.clear).toBe('function');
     expect(typeof handle.alarmProvider.onFire).toBe('function');
+
+    handle.dispose();
+  });
+
+  it('logs a synchronous startup failure and returns null instead of throwing (M4.T3b)', () => {
+    const store = createAppStore();
+    vi.spyOn(store, 'getState').mockImplementation(() => {
+      throw new Error('store unavailable');
+    });
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+
+    const handle = bootstrapBackground({ store, logger });
+
+    expect(handle).toBeNull();
+    const failure = records.find(
+      (record) => record.message === 'background failed to start',
+    );
+    expect(failure).toBeDefined();
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('background-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ boundary: 'bootstrap' });
+  });
+
+  it('logs a failed tab-tracker startup without crashing the worker (M4.T3b)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    const tabEventSource: TabEventSource = {
+      queryTabs: () => Promise.reject(new Error('tabs unavailable')),
+      onUpdated: () => () => undefined,
+      onRemoved: () => () => undefined,
+    };
+
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(0),
+      tabEventSource,
+      logger,
+    });
+    await handle.ready;
+
+    await vi.waitFor(() => {
+      expect(
+        records.some(
+          (record) => record.message === 'tab distraction tracker failed to start',
+        ),
+      ).toBe(true);
+    });
+    expect(handle.store.getState().timer.status).toBe('idle');
+
+    handle.dispose();
+  });
+
+  it('logs a failed startup reconciliation and keeps ready resolved (M4.T3b)', async () => {
+    const store = createAppStore();
+    vi.spyOn(store.persist, 'rehydrate').mockRejectedValue(
+      new Error('hydration failed'),
+    );
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+
+    const handle = startBackground({ store, logger });
+    await expect(handle.ready).resolves.toBeUndefined();
+
+    const failure = records.find(
+      (record) => record.message === 'startup reconciliation failed',
+    );
+    expect(failure).toBeDefined();
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ boundary: 'startup' });
 
     handle.dispose();
   });

@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3a** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
+> Updated to: **M4.T3b** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -15,9 +15,9 @@ description: Rules for updating the changelog
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
-- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a done; M4.T3b … M4.T3e, M4.T4 … M4.T5 remaining.
+- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a–b done; M4.T3c … M4.T3e, M4.T4 … M4.T5 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus).
-- Tests: `bun run test` → **652 passing tests** across 71 files (unit + integration + component).
+- Tests: `bun run test` → **657 passing tests** across 71 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -80,6 +80,7 @@ description: Rules for updating the changelog
 | M3.T10 | IT translation (language auto-detected from browser) | completed | `51f3b19` |
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | `5d665bb` (adapted to the session cadence by `de0ffe8`, I005) |
 | M4.T3a | Error hardening — centralized logger foundation | completed | working tree (commit pending) |
+| M4.T3b | Error hardening — background and message-bus boundaries | completed | working tree (commit pending) |
 | I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
@@ -755,6 +756,21 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: no call site was changed in this subtask, so the existing three `console.error` calls in `entrypoints/background.ts` remain until M4.T3b. For the same reason `no-console` is deferred to M4.T3e; enabling it now would fail immediately.
 - Commit: working tree (commit pending).
 - Acceptance criteria: verified — the logger has levels, scope/child context and an injectable sink; the threshold is configurable; the error cause is preserved/normalized; context carries no user data; logging cannot break the caller.
+
+### M4.T3b — Background and message-bus error boundaries
+- `entrypoints/background.ts` — the three scattered `console.error` boundaries now use the centralized logger, and the worker has a synchronous bootstrap guard:
+  - `BackgroundDependencies` gains an optional `logger` (default `createLogger('background')`), so tests assert records/sinks instead of exact console text. The DNR sync, tab-distraction-tracker startup and startup reconciliation boundaries keep their original messages and causes and add technical context: `{ boundary: 'dnr' }`, `{ boundary: 'tab-tracker' }` and `{ boundary: 'startup' }`.
+  - `bootstrapBackground()` wraps the synchronous `startBackground()` wiring: a failure is logged as `background failed to start` with `{ boundary: 'bootstrap' }` and returns `null`, so the WXT callback cannot throw and the service worker stays alive. The default entrypoint now calls the wrapper; asynchronous startup failures remain contained by `BackgroundHandle.ready`.
+  - Message handlers are registered with `log.child('bus')`, so a handler failure in the background is scoped `background:bus` rather than losing its origin.
+- `lib/messaging/bus.ts` — `onMessage` accepts an optional logger (default scope `messaging`) and contains handler failures at the boundary:
+  - A synchronous throw is caught around handler invocation; an async handler's rejection is consumed with `.catch`. Both log `message handler failed` with `{ type }` and the original cause.
+  - The listener still returns `void`, so the browser's `sendMessage` contract is unchanged; a rejecting handler can no longer become an unhandled rejection that takes down the context. Full payload validation/provenance remains M5.T1.
+- Files created/modified: `entrypoints/background.ts`, `lib/messaging/bus.ts`, `tests/integration/background/background.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/messaging/bus.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/background/background.test.ts` (+3 tests) — synchronous bootstrap failure → log + `null`; failed tab-tracker startup → log + worker still idle; failed rehydration/startup reconciliation → log + `ready` resolves. `tests/integration/messaging/bus.test.ts` (+2 tests) — synchronous handler throw and async handler rejection are logged with `{ type }` while `sendMessage` still resolves. `tests/integration/background/dnr-rules.test.ts` — the failing-DNR test now injects a logger/sink and asserts scope, message, cause and `{ boundary: 'dnr' }` instead of spying on console text. Full suite: **657 passing tests** across 71 files (baseline 652/71; +5 tests). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
+- Relevant notes/decisions: the logger is injected at the two public seams (`startBackground`/`bootstrapBackground` and `onMessage`) rather than mocked globally, which keeps the tests independent of console formatting. The existing `session-completion.test.ts` guard still asserts that a normal completion logs nothing. `no-console` remains deferred to M4.T3e; the only remaining `console.*` calls are inside `utils/logger.ts` itself.
+- Commit: working tree (commit pending).
+- Acceptance criteria: verified — a simulated DNR failure is logged with context while the store remains usable; synchronous start failures and async handler rejections are contained; all three previous `console.error` boundaries now go through the centralized logger.
 
 ---
 

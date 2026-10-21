@@ -2,6 +2,7 @@ import { describe, it, expect, expectTypeOf, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { sendMessage, onMessage, type MessageOf } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
+import { createLogger, type LogRecord } from '@/utils/logger';
 import type { Result } from '@/utils/result';
 
 describe('typed message bus', () => {
@@ -125,5 +126,61 @@ describe('typed message bus', () => {
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 7 } });
 
     expect(seen).toEqual([7]);
+  });
+
+  it('logs a synchronous handler failure without propagating it (M4.T3b)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('test-bus', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    onMessage(
+      'TIMER_TICK',
+      () => {
+        throw new Error('sync handler failed');
+      },
+      logger,
+    );
+
+    await expect(
+      sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 7 } }),
+    ).resolves.toEqual({ ok: true, value: undefined });
+
+    await vi.waitFor(() => {
+      expect(records).toHaveLength(1);
+    });
+    expect(records[0]?.level).toBe('error');
+    expect(records[0]?.scope).toBe('test-bus');
+    expect(records[0]?.message).toBe('message handler failed');
+    expect(records[0]?.details[0]).toBeInstanceOf(Error);
+    expect(records[0]?.details[1]).toEqual({ type: 'TIMER_TICK' });
+  });
+
+  it('logs an async handler rejection without becoming an unhandled rejection (M4.T3b)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('test-bus', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    onMessage(
+      'TIMER_TICK',
+      () => Promise.reject(new Error('async handler failed')),
+      logger,
+    );
+
+    await expect(
+      sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 7 } }),
+    ).resolves.toEqual({ ok: true, value: undefined });
+
+    await vi.waitFor(() => {
+      expect(records).toHaveLength(1);
+    });
+    expect(records[0]?.level).toBe('error');
+    expect(records[0]?.details[0]).toBeInstanceOf(Error);
+    expect(records[0]?.details[1]).toEqual({ type: 'TIMER_TICK' });
   });
 });

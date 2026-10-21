@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { createLogger, type Logger } from '@/utils/logger';
 import type { Result } from '@/utils/result';
 import { ok, err } from '@/utils/result';
 import type { RuntimeMessage } from './messages.types';
@@ -24,6 +25,8 @@ export type MessageHandler<T extends MessageType> = (
   message: MessageOf<T>,
 ) => void | Promise<void>;
 
+const messagingLogger = createLogger('messaging');
+
 /**
  * Send a typed message to the extension's listeners. Accepts only valid
  * `RuntimeMessage` variants at the type level (no `any`/free-form object).
@@ -47,10 +50,16 @@ export async function sendMessage(message: RuntimeMessage): Promise<Result<undef
  *
  * Returns an unsubscribe function. Registering twice for the same `type` simply
  * adds a second listener; both are invoked (roadmap §3.3, M1.T6).
+ *
+ * Handler failures are a known boundary (§1.4): a synchronous throw or a
+ * rejected async handler is logged with the message type and contained, so it
+ * cannot become an unhandled rejection that takes down the context. The browser
+ * still receives `void`, exactly as before (M4.T3b).
  */
 export function onMessage<T extends MessageType>(
   type: T,
   handler: MessageHandler<T>,
+  logger: Logger = messagingLogger,
 ): () => void {
   const listener = (rawMessage: unknown): void => {
     // Minimal structural guard so a foreign/unknown message can never reach a
@@ -59,7 +68,16 @@ export function onMessage<T extends MessageType>(
     const received = (rawMessage as { type?: unknown }).type;
     if (typeof received !== 'string' || received !== type) return;
 
-    void handler(rawMessage as MessageOf<T>);
+    try {
+      const result = handler(rawMessage as MessageOf<T>);
+      if (result !== undefined) {
+        void result.catch((error: unknown) => {
+          logger.error('message handler failed', error, { type });
+        });
+      }
+    } catch (error: unknown) {
+      logger.error('message handler failed', error, { type });
+    }
   };
 
   browser.runtime.onMessage.addListener(listener);
