@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3b** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
+> Updated to: **M4.T3d** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -15,9 +15,9 @@ description: Rules for updating the changelog
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
-- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a–b done; M4.T3c … M4.T3e, M4.T4 … M4.T5 remaining.
+- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a–d done; M4.T3e, M4.T4 … M4.T5 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus).
-- Tests: `bun run test` → **657 passing tests** across 71 files (unit + integration + component).
+- Tests: `bun run test` → **663 passing tests** across 72 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -79,8 +79,10 @@ description: Rules for updating the changelog
 | M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | `46b9678` |
 | M3.T10 | IT translation (language auto-detected from browser) | completed | `51f3b19` |
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | `5d665bb` (adapted to the session cadence by `de0ffe8`, I005) |
-| M4.T3a | Error hardening — centralized logger foundation | completed | working tree (commit pending) |
-| M4.T3b | Error hardening — background and message-bus boundaries | completed | working tree (commit pending) |
+| M4.T3a | Error hardening — centralized logger foundation | completed | `c95f193` |
+| M4.T3b | Error hardening — background and message-bus boundaries | completed | `bbe209b` |
+| M4.T3c | Error hardening — persistence read/rehydration (CI-3) | completed | working tree (commit pending) |
+| M4.T3d | Error hardening — popup React error boundary | completed | working tree (commit pending) |
 | I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
@@ -754,7 +756,7 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `bun run test` → **652 passing tests** across 71 files (baseline 642/70; +10 tests/+1 file). `bun run compile` and `bun run lint` are clean; `bun run build` (Chrome) and `bun run build:firefox` (Firefox) both succeed.
 - Relevant notes/decisions: no call site was changed in this subtask, so the existing three `console.error` calls in `entrypoints/background.ts` remain until M4.T3b. For the same reason `no-console` is deferred to M4.T3e; enabling it now would fail immediately.
-- Commit: working tree (commit pending).
+- Commit: `c95f193 feat(logger): implement centralized logging with scoped context and configurable levels`.
 - Acceptance criteria: verified — the logger has levels, scope/child context and an injectable sink; the threshold is configurable; the error cause is preserved/normalized; context carries no user data; logging cannot break the caller.
 
 ### M4.T3b — Background and message-bus error boundaries
@@ -769,8 +771,38 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `tests/integration/background/background.test.ts` (+3 tests) — synchronous bootstrap failure → log + `null`; failed tab-tracker startup → log + worker still idle; failed rehydration/startup reconciliation → log + `ready` resolves. `tests/integration/messaging/bus.test.ts` (+2 tests) — synchronous handler throw and async handler rejection are logged with `{ type }` while `sendMessage` still resolves. `tests/integration/background/dnr-rules.test.ts` — the failing-DNR test now injects a logger/sink and asserts scope, message, cause and `{ boundary: 'dnr' }` instead of spying on console text. Full suite: **657 passing tests** across 71 files (baseline 652/71; +5 tests). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
 - Relevant notes/decisions: the logger is injected at the two public seams (`startBackground`/`bootstrapBackground` and `onMessage`) rather than mocked globally, which keeps the tests independent of console formatting. The existing `session-completion.test.ts` guard still asserts that a normal completion logs nothing. `no-console` remains deferred to M4.T3e; the only remaining `console.*` calls are inside `utils/logger.ts` itself.
-- Commit: working tree (commit pending).
+- Commit: `bbe209b feat(logging): implement centralized logging in background and messaging components`.
 - Acceptance criteria: verified — a simulated DNR failure is logged with context while the store remains usable; synchronous start failures and async handler rejections are contained; all three previous `console.error` boundaries now go through the centralized logger.
+
+### M4.T3c — Persistence read/rehydration diagnostics (CI-3)
+- `store/storage-adapter.ts` — `createBrowserStorage(logger?)` now accepts an optional logger (default scope `storage`) and makes the CI-3 fallback observable without changing it:
+  - A missing/`undefined` key still returns `null` silently: first hydration is normal and `fakeBrowser` returns the requested key with an `undefined` value rather than an empty object.
+  - A *present* value that is not a string logs `warn` as `ignoring non-string persisted value` with `{ key }` and still returns `null`. The rejected value is never passed to the logger, so it cannot leak a domain or other user data.
+  - `browserStorage` keeps using the default logger; tests inject a sink through the new parameter.
+- `store/index.ts` — rehydration failures are no longer silent:
+  - `CreateAppStoreOptions` gains an optional `logger` (default scope `store`), threaded into `buildStore`.
+  - `onRehydrateStorage` logs `error` as `store rehydration failed` with `{ key: STORE_NAME }` when zustand reports a parse/migration/hydration failure. Zustand still keeps the store defaults and resolves `rehydrate()`; only the diagnostic is new. A `SyntaxError` from `JSON.parse` is replaced with a generic `persisted store JSON is malformed` error because V8 may quote a prefix of the persisted string in its message; non-parse errors keep their original cause/stack. The raw persisted string and parsed state are never logged.
+- Files created/modified: `store/storage-adapter.ts`, `store/index.ts`, `tests/integration/store/storage-adapter.test.ts`, `tests/integration/store/store.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/store/storage-adapter.test.ts` — the absent-key case now injects a logger and asserts no records, and the non-string case asserts one `warn` with the key and no leaked value/domain. `tests/integration/store/store.test.ts` (+2 tests) — corrupt JSON → `error` with `{ key }` + default state; a valid persisted payload restores its data and logs nothing. Full suite: **659 passing tests** across 71 files (baseline 657/71; +2 tests). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
+- Relevant notes/decisions: CI-3 is closed by keeping the defensive fallback exactly as it was and adding diagnostics at the two read layers (adapter shape check, persist rehydration callback). `undefined` is deliberately treated as "absent" rather than "non-string" because that is what both Chrome's `storage.local.get` and WXT's fake return for a missing key. Parse errors are sanitized as described above; non-parse errors retain their stack, and no raw payload/state/domain is attached as context.
+- Commit: working tree (commit pending).
+- Acceptance criteria: verified — a present non-string value warns with the key and returns `null`; an absent key logs nothing; corrupt JSON logs `error` and leaves the defaults; a valid payload logs nothing.
+
+### M4.T3d — Popup React error boundary
+- `components/common/ErrorBoundary.tsx` (new) — a class-based boundary around the popup, because React only catches render/lifecycle failures with `getDerivedStateFromError`/`componentDidCatch`:
+  - `getDerivedStateFromError` sets `hasError`; `componentDidCatch` logs `popup component failed` through an injectable logger (default scope `popup:error-boundary`) with the original error and `{ componentStack }`. The optional `onError(error, info)` hook receives the same pair for tests/integration.
+  - The fallback is a self-contained CRT-styled `role="alert"` panel with `aria-labelledby`/`aria-describedby`; its title, body and button resolve from `common.errorTitle`, `common.errorBody` and `common.reload`. No store or other popup module is imported, so the boundary can render even when a component failed.
+  - The recovery button calls `onReset()` and clears the error state when the hook is provided (the test/future reset strategy); otherwise it calls `window.location.reload()`. Calling `onReset` first lets a child that stops throwing render on the same update.
+  - Scope limit documented in the component: event-handler and async/promise errors are not caught here; they belong to the message bus (M4.T3b), store (M4.T3c) and content/export paths (M4.T3e).
+- `entrypoints/popup/main.tsx` — `<App />` is wrapped in `<ErrorBoundary>` inside `React.StrictMode`; the normal popup composition is unchanged.
+- `locales/en.yml` / `locales/it.yml` — added `common.errorTitle`, `common.errorBody`, `common.reload` in both locales. The existing EN/IT drift test remains green.
+- Files created/modified: `components/common/ErrorBoundary.tsx` (new), `entrypoints/popup/main.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/unit/components/common/ErrorBoundary.test.tsx` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/components/common/ErrorBoundary.test.tsx` (4 tests) — a throwing child is contained, the fallback shows the EN text, `onError` receives the original error/component stack and the logger records scope/cause/context; the fallback renders in IT through the shared i18n instance; `onReset` recovers when the child stops throwing; without `onReset`, the button calls `window.location.reload()`. Full suite: **663 passing tests** across 72 files (baseline 659/71; +4 tests/+1 file). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
+- Relevant notes/decisions: the logger/error/reset hooks follow the M4.T3b injection pattern and keep the test independent of console formatting. React's own development `console.error` for caught render errors is silenced only inside the test. The fallback styles travel with the component (no new CSS file), matching the existing self-contained common components. No user data is logged: the context is limited to the component stack.
+- Commit: working tree (commit pending).
+- Acceptance criteria: verified — the boundary logs the error/component stack with a scoped logger and shows a localized, accessible recovery screen; the reload button reloads by default and the reset hook recovers deterministically; `<App />` is wrapped in the real entrypoint; the normal popup composition and all existing tests are unchanged.
 
 ---
 

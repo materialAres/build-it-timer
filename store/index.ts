@@ -15,6 +15,7 @@ import {
 } from './city.slice';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
+import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
   type BlocklistDependencies,
@@ -158,6 +159,8 @@ export interface CreateAppStoreOptions {
   readonly storage?: BrowserStateStorage;
   /** When true, `setState` is never persisted (non-owner context). */
   readonly readOnly?: boolean;
+  /** Logger for rehydration diagnostics (M4.T3c); defaults to scope `store`. */
+  readonly logger?: Logger;
   /**
    * Slice collaborators (M2.T1). Defaults to the real `browser.alarms` provider
    * with the system clock and `Math.random`; tests inject fakes instead.
@@ -170,10 +173,32 @@ export function createAppStore(
 ): AppStore {
   const { storage = browserStorage, readOnly = false, dependencies } = options;
   const resolved = { ...defaultDependencies(), ...dependencies };
-  return buildStore(readOnly ? createReadOnlyStorage(storage) : storage, resolved);
+  const logger = options.logger ?? createLogger('store');
+  return buildStore(
+    readOnly ? createReadOnlyStorage(storage) : storage,
+    resolved,
+    logger,
+  );
 }
 
-function buildStore(storage: BrowserStateStorage, dependencies: StoreDependencies) {
+/**
+ * Keep rehydration diagnostics useful without echoing user data. V8's
+ * `JSON.parse` error can quote a prefix of the malformed input, and the
+ * persisted store contains the blocklist (user domains), so a bare
+ * `SyntaxError` must not reach the log verbatim.
+ */
+function sanitizeRehydrationError(error: unknown): unknown {
+  if (error instanceof SyntaxError) {
+    return new Error('persisted store JSON is malformed');
+  }
+  return error;
+}
+
+function buildStore(
+  storage: BrowserStateStorage,
+  dependencies: StoreDependencies,
+  logger: Logger,
+) {
   const store = create<AppState>()(
     persist(createAppState(dependencies), {
       name: STORE_NAME,
@@ -189,6 +214,16 @@ function buildStore(storage: BrowserStateStorage, dependencies: StoreDependencie
       // (breaking `selectCity`-style identity checks) and could clobber state
       // written between store creation and the async hydration completing.
       version: 1,
+      // CI-3 (M4.T3c): zustand consumes rehydration failures and keeps the
+      // defaults, which is the right behaviour but used to leave no trace. Log
+      // the key and the error; never the raw persisted string or the parsed
+      // state (it can contain user domains).
+      onRehydrateStorage: () => (_state, error) => {
+        if (error === undefined) return;
+        logger.error('store rehydration failed', sanitizeRehydrationError(error), {
+          key: STORE_NAME,
+        });
+      },
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<PersistedState>;
         return {

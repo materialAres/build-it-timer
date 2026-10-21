@@ -77,3 +77,6 @@ overlay:
 common:
   add: Add
   remove: 'Remove $1'
+  errorTitle: Something went wrong
+  errorBody: The popup hit an unexpected error. Reload to try again.
+  reload: Reload
