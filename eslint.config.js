@@ -27,11 +27,21 @@ export default tseslint.config(
       'react/prop-types': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      'no-empty': ['error', { allowEmptyCatch: false }],
+      'no-console': 'error',
     },
     settings: {
       react: {
         version: 'detect',
       },
+    },
+  },
+  {
+    // The logger is the one module that owns the console sink; tests may spy
+    // on or silence console output while asserting the injected sink instead.
+    files: ['utils/logger.ts', 'tests/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'off',
     },
   },
 );

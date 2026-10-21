@@ -2,13 +2,35 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { browser } from 'wxt/browser';
 import { ContentScriptContext } from 'wxt/utils/content-script-context';
-import { startBlockedOverlay, createStoreReader } from '@/entrypoints/blocked-overlay.content.tsx';
+import {
+  startBlockedOverlay,
+  createStoreReader,
+  type StoreReader,
+} from '@/entrypoints/blocked-overlay.content.tsx';
 import { onMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
-import type { StoreSnapshot } from '@/lib/blocking/store-snapshot';
+import {
+  STORE_STORAGE_KEY,
+  type StoreSnapshot,
+} from '@/lib/blocking/store-snapshot';
 import type { BlocklistEntry } from '@/store/store.types';
+import { createLogger, type LogRecord } from '@/utils/logger';
 
 const HOST_ID = 'buildit-blocked-overlay';
+
+function captureLogger(): {
+  records: LogRecord[];
+  logger: ReturnType<typeof createLogger>;
+} {
+  const records: LogRecord[] = [];
+  const logger = createLogger('content-test', {
+    sink: (record) => {
+      records.push(record);
+    },
+    minLevel: 'debug',
+  });
+  return { records, logger };
+}
 
 const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
 
@@ -275,13 +297,15 @@ describe('blocked overlay content script (M2.T8)', () => {
     expect(overlayText()).not.toContain('Are you sure');
   });
 
-  it('survives a background that does not respond', async () => {
-    // No listener registered on the bus: `sendMessage` resolves with `{ ok: false }`.
+  it('logs a failed background send and leaves the page alive', async () => {
+    // No listener registered on the bus: `sendMessage` returns `{ ok: false }`.
+    const { records, logger } = captureLogger();
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
     teardown = startBlockedOverlay(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
+      logger,
     });
     await vi.waitFor(() => {
       expect(host()).not.toBeNull();
@@ -291,9 +315,126 @@ describe('blocked overlay content script (M2.T8)', () => {
 
     await vi.waitFor(() => {
       expect(host()).toBeNull();
+      expect(
+        records.some(
+          (record) => record.message === 'blocked attempt could not be sent',
+        ),
+      ).toBe(true);
     });
     // The page is untouched and the script is still alive.
     expect(ctx.isValid).toBe(true);
+  });
+
+  it('logs a rejected store refresh and leaves the page alive', async () => {
+    const { records, logger } = captureLogger();
+    const reader: StoreReader = {
+      current: () => undefined,
+      refresh: () => Promise.reject(new Error('storage unavailable')),
+      subscribe: () => () => undefined,
+    };
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: reader,
+      url: 'https://facebook.com/',
+      logger,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        records.some((record) => record.message === 'store refresh failed'),
+      ).toBe(true);
+    });
+
+    const failure = records.find(
+      (record) => record.message === 'store refresh failed',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('content-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect((failure?.details[0] as Error).message).toBe('storage unavailable');
+    expect(failure?.details[1]).toEqual({ key: STORE_STORAGE_KEY });
+    expect(host()).toBeNull();
+    expect(ctx.isValid).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('facebook.com');
+  });
+
+  it('logs an unreadable persisted snapshot without leaking its contents', async () => {
+    const { records, logger } = captureLogger();
+    await fakeBrowser.storage.local.set({
+      [STORE_STORAGE_KEY]:
+        '{"state":{"blocklist":{"blocklist":[{"domain":{"value":"facebook.com"',
+    });
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: createStoreReader(logger),
+      url: 'https://facebook.com/',
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        records.some(
+          (record) => record.message === 'unreadable persisted snapshot',
+        ),
+      ).toBe(true);
+    });
+
+    const failure = records.find(
+      (record) => record.message === 'unreadable persisted snapshot',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('content-test');
+    // No cause: V8 can quote the malformed JSON in a SyntaxError message.
+    expect(failure?.details).toEqual([{ key: STORE_STORAGE_KEY }]);
+    expect(host()).toBeNull();
+    expect(JSON.stringify(records)).not.toContain('facebook.com');
+  });
+
+  it('does not log when the persisted store is absent', async () => {
+    const { records, logger } = captureLogger();
+    const reader = createStoreReader(logger);
+
+    await expect(reader.refresh()).resolves.toBeUndefined();
+
+    expect(records).toEqual([]);
+  });
+
+  it('logs a rejected attempt and leaves the page alive after the overlay closes', async () => {
+    const { records, logger } = captureLogger();
+    const sendAttempt = vi.fn(() =>
+      Promise.reject(new Error('background unavailable')),
+    );
+    const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: reader,
+      url: 'https://facebook.com/',
+      sendAttempt,
+      logger,
+    });
+    await vi.waitFor(() => {
+      expect(host()).not.toBeNull();
+    });
+
+    clickShadowButton('Yes');
+
+    await vi.waitFor(() => {
+      expect(
+        records.some(
+          (record) => record.message === 'blocked attempt could not be sent',
+        ),
+      ).toBe(true);
+    });
+
+    const failure = records.find(
+      (record) => record.message === 'blocked attempt could not be sent',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('content-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ choice: 'proceed' });
+    expect(host()).toBeNull();
+    expect(ctx.isValid).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('facebook.com');
   });
 
   it('uses the real storage reader against the persisted key', async () => {

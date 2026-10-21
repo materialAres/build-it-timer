@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3d** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
+> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -15,9 +15,9 @@ description: Rules for updating the changelog
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
-- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a–d done; M4.T3e, M4.T4 … M4.T5 remaining.
+- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus).
-- Tests: `bun run test` → **663 passing tests** across 72 files (unit + integration + component).
+- Tests: `bun run test` → **668 passing tests** across 72 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -83,6 +83,7 @@ description: Rules for updating the changelog
 | M4.T3b | Error hardening — background and message-bus boundaries | completed | `bbe209b` |
 | M4.T3c | Error hardening — persistence read/rehydration (CI-3) | completed | working tree (commit pending) |
 | M4.T3d | Error hardening — popup React error boundary | completed | working tree (commit pending) |
+| M4.T3e | Error hardening — content/export boundaries + logging guardrails | completed | working tree (commit pending) |
 | I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
@@ -803,6 +804,25 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the logger/error/reset hooks follow the M4.T3b injection pattern and keep the test independent of console formatting. React's own development `console.error` for caught render errors is silenced only inside the test. The fallback styles travel with the component (no new CSS file), matching the existing self-contained common components. No user data is logged: the context is limited to the component stack.
 - Commit: working tree (commit pending).
 - Acceptance criteria: verified — the boundary logs the error/component stack with a scoped logger and shows a localized, accessible recovery screen; the reload button reloads by default and the reset hook recovers deterministically; `<App />` is wrapped in the real entrypoint; the normal popup composition and all existing tests are unchanged.
+
+### M4.T3e — Content/export boundaries + logging guardrails
+- `entrypoints/blocked-overlay.content.tsx` — the last silent content-script boundaries now report through the scoped logger:
+  - `createStoreReader(logger?)` accepts an optional logger (default scope `content:store-reader`). A missing key remains silent (normal first run); a *present* value that `parseStoreSnapshot` rejects logs `error` as `unreadable persisted snapshot` with `{ key: STORE_STORAGE_KEY }` and falls back to `undefined`. The parse cause is deliberately not attached: V8's `SyntaxError` message can quote the persisted JSON, which contains the user's domains.
+  - `startBlockedOverlay` accepts an optional `logger` (default scope `content:blocked-overlay`) and gives the default reader a `store-reader` child scope. The initial refresh and every subscription refresh go through one helper that contains both a rejected promise and a synchronously throwing reader; a failure logs `store refresh failed` with `{ key }` and leaves the page and overlay lifecycle alive.
+  - `sendAttempt` no longer produces an unhandled rejection: a shared `reportAttempt` helper contains both rejection and synchronous throw, logging `blocked attempt could not be sent` with `{ choice }` only. The default sender now turns a failed `sendMessage` `Result` into a rejection, so a missing/restarted background is logged through the same boundary instead of staying silent. The domain is never attached, so the diagnostic cannot leak the visited site. The overlay still unmounts on Yes and shows the encouragement on No; the page remains usable when the background is absent.
+- `components/city/ExportCityButton.tsx` — accepts an optional `logger` (default scope `popup:export-city`):
+  - A failed `Result` logs `city export failed` with the original error and `{ format }`.
+  - A rejected exporter promise, or a synchronous throw before the promise is returned, logs `city export rejected` with the original cause and `{ format }`.
+  - The localized `city.exportError` message and the download path are unchanged, and the boundary never rethrows into the popup. No layers, theme or user data are logged.
+- `eslint.config.js` — the guardrails are now explicit: `no-empty` is an error with `allowEmptyCatch: false`, and `no-console` is an error with only two exceptions: `utils/logger.ts` (the console sink) and `tests/**/*.{ts,tsx}` (spies/silencing). The effective config was inspected with `eslint --print-config` for a source file, the logger and a test file.
+  - The intentional `lib/blocking/apply-rules.ts` guard `queue = run.catch(() => undefined)` is untouched, together with its comment: the internal queue survives a rejection while the promise returned to the caller still rejects.
+- Files created/modified: `entrypoints/blocked-overlay.content.tsx`, `components/city/ExportCityButton.tsx`, `eslint.config.js`, `tests/integration/content/blocked-overlay.test.ts`, `tests/unit/components/city/ExportCityButton.test.tsx`.
+- Dependencies added: none.
+- Tests: `tests/integration/content/blocked-overlay.test.ts` (+4 tests, 1 extended) — a rejected `refresh()` logs scope/cause/key and leaves the page valid with no overlay; a corrupt persisted snapshot logs `unreadable persisted snapshot` with only the key and does not leak the domain embedded in the malformed JSON; an absent store logs nothing; a rejected `sendAttempt` logs `{ choice }`, still closes the overlay on Yes and leaves the content context valid; the existing no-listener scenario now asserts that the default `sendMessage` failure is also logged while the page stays alive. `tests/unit/components/city/ExportCityButton.test.tsx` (2 tests extended, +1) — a failed `Result` logs the cause and `{ format: 'png' }` while keeping the localized error; a rejected exporter logs `{ format: 'jpeg' }`; a synchronously throwing exporter is contained and logged. Full suite: **668 passing tests** across 72 files (baseline 663/72; +5 tests). `bun run compile` and `bun run lint` are clean; `bun run build` (Chrome) and `bun run build:firefox` (Firefox) both succeed.
+- Relevant notes/decisions: logging stays local and technical — no persistence, no remote transport, no URL/domain/layer/theme payload. The manual empty-catch search over `entrypoints components lib store utils` returned **0 matches** (executed with the equivalent `grep -RInE` because `rg` is not installed in this environment). `no-empty` accepts the logger's commented best-effort catch and still rejects a genuinely empty catch. The `apply-rules.ts` queue guard is intentionally not caught as empty because it is an arrow-function rejection handler with a return value, not an empty block.
+- Commit: working tree (commit pending).
+- Acceptance criteria: verified — rejected refreshes, unreadable persisted snapshots and rejected attempts are logged with scope and no user data; the overlay and page survive background failures; failed/failed-promise exports log the cause and format while keeping the localized message; ESLint enforces both rules with only the documented exceptions; compile/lint/tests/both builds are green.
+- **Umbrella closure**: M4.T3a–e are complete. Every known boundary now logs with technical context and containment, the simulated background failures no longer crash a worker/page/popup, and the empty-catch/no-console rules prevent the next feature from regressing the hardening.
 
 ---
 

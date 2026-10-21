@@ -11,8 +11,11 @@ import {
 } from '@/lib/city/export-image';
 import type { RasterizedCityImage } from '@/lib/city/rasterize-image';
 import type { Result } from '@/utils/result';
+import { createLogger, type Logger } from '@/utils/logger';
 import type { CityLayers, Theme } from './city.types';
 import { FALLBACK_THEME } from './CityCanvas';
+
+const defaultLogger = createLogger('popup:export-city');
 
 /**
  * Injected boundary (principle D/L): the production default serializes and
@@ -27,6 +30,8 @@ export type CityImageExporter = (
 
 export interface ExportCityButtonProps {
   readonly exporter?: CityImageExporter;
+  /** Diagnostics sink (M4.T3e); defaults to scope `popup:export-city`. */
+  readonly logger?: Logger;
 }
 
 const EXPORT_CITY_STYLES = `
@@ -76,6 +81,7 @@ function triggerDownload(dataUrl: string, filename: string): void {
  */
 export function ExportCityButton({
   exporter = exportCityImage,
+  logger = defaultLogger,
 }: ExportCityButtonProps) {
   const layers = useAppStore(selectCityLayers);
   const themeId = useAppStore(selectCityThemeId);
@@ -84,17 +90,29 @@ export function ExportCityButton({
 
   const handleExport = (format: ImageFormat): void => {
     setError(null);
-    void exporter(layers, theme, format)
-      .then((result) => {
-        if (!result.ok) {
-          setError(i18n.t('city.exportError'));
-          return;
-        }
-        triggerDownload(result.value.dataUrl, `focus-city.${format}`);
-      })
-      .catch(() => {
-        setError(i18n.t('city.exportError'));
-      });
+
+    const fail = (cause: unknown, message: string): void => {
+      logger.error(message, cause, { format });
+      setError(i18n.t('city.exportError'));
+    };
+
+    try {
+      void exporter(layers, theme, format)
+        .then((result) => {
+          if (!result.ok) {
+            fail(result.error, 'city export failed');
+            return;
+          }
+          triggerDownload(result.value.dataUrl, `focus-city.${format}`);
+        })
+        .catch((error: unknown) => {
+          fail(error, 'city export rejected');
+        });
+    } catch (error: unknown) {
+      // A custom exporter can throw before returning a promise. Contain it at
+      // the same boundary so a failed export never escapes the popup.
+      fail(error, 'city export rejected');
+    }
   };
 
   return (

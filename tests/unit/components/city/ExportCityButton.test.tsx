@@ -8,6 +8,7 @@ import {
 } from '@/components/city/ExportCityButton';
 import { getThemeById } from '@/lib/city/theme-registry';
 import { ok, err } from '@/utils/result';
+import { createLogger, type LogRecord } from '@/utils/logger';
 import { useAppStore, DEFAULT_CITY_HEIGHT, DEFAULT_CITY_WIDTH } from '@/store';
 import type {
   CityCell,
@@ -55,6 +56,20 @@ function setCity(layers: CityLayers, themeId: string | null = null): void {
 
 function makeExporter() {
   return vi.fn<CityImageExporter>();
+}
+
+function captureLogger(): {
+  records: LogRecord[];
+  logger: ReturnType<typeof createLogger>;
+} {
+  const records: LogRecord[] = [];
+  const logger = createLogger('export-test', {
+    sink: (record) => {
+      records.push(record);
+    },
+    minLevel: 'debug',
+  });
+  return { records, logger };
 }
 
 describe('ExportCityButton (M3.T8)', () => {
@@ -105,26 +120,67 @@ describe('ExportCityButton (M3.T8)', () => {
     expect(exporter.mock.calls[0]?.[2]).toBe('jpeg');
   });
 
-  it('shows an error message when the export fails, without throwing', async () => {
+  it('logs a failed result and keeps the localized error, without throwing', async () => {
     const exporter = makeExporter();
-    exporter.mockResolvedValue(err(new Error('canvas exploded')));
+    const cause = new Error('canvas exploded');
+    exporter.mockResolvedValue(err(cause));
+    const { records, logger } = captureLogger();
 
-    render(<ExportCityButton exporter={exporter} />);
+    render(<ExportCityButton exporter={exporter} logger={logger} />);
     await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not export the city image.',
     );
+
+    const failure = records.find(
+      (record) => record.message === 'city export failed',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('export-test');
+    expect(failure?.details[0]).toBe(cause);
+    expect(failure?.details[1]).toEqual({ format: 'png' });
   });
 
-  it('handles a rejected export at the boundary without breaking the popup', async () => {
+  it('logs a rejected export and keeps the localized error, without breaking the popup', async () => {
     const exporter = makeExporter();
-    exporter.mockRejectedValue(new Error('unexpected'));
+    const cause = new Error('unexpected');
+    exporter.mockRejectedValue(cause);
+    const { records, logger } = captureLogger();
 
-    render(<ExportCityButton exporter={exporter} />);
+    render(<ExportCityButton exporter={exporter} logger={logger} />);
     await userEvent.click(screen.getByRole('button', { name: 'Export JPEG' }));
 
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not export the city image.',
+    );
+
+    const failure = records.find(
+      (record) => record.message === 'city export rejected',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('export-test');
+    expect(failure?.details[0]).toBe(cause);
+    expect(failure?.details[1]).toEqual({ format: 'jpeg' });
+  });
+
+  it('contains a synchronously throwing exporter', async () => {
+    const exporter = makeExporter();
+    exporter.mockImplementation(() => {
+      throw new Error('sync failure');
+    });
+    const { records, logger } = captureLogger();
+
+    render(<ExportCityButton exporter={exporter} logger={logger} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not export the city image.',
+    );
+    expect(
+      records.find((record) => record.message === 'city export rejected')
+        ?.details[1],
+    ).toEqual({ format: 'png' });
   });
 
   it('carries its own CRT stylesheet', () => {
