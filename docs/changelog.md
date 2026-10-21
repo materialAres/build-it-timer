@@ -81,9 +81,9 @@ description: Rules for updating the changelog
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | `5d665bb` (adapted to the session cadence by `de0ffe8`, I005) |
 | M4.T3a | Error hardening — centralized logger foundation | completed | `c95f193` |
 | M4.T3b | Error hardening — background and message-bus boundaries | completed | `bbe209b` |
-| M4.T3c | Error hardening — persistence read/rehydration (CI-3) | completed | working tree (commit pending) |
-| M4.T3d | Error hardening — popup React error boundary | completed | working tree (commit pending) |
-| M4.T3e | Error hardening — content/export boundaries + logging guardrails | completed | working tree (commit pending) |
+| M4.T3c | Error hardening — persistence read/rehydration (CI-3) | completed | `d45b6db` (with M4.T3d) |
+| M4.T3d | Error hardening — popup React error boundary | completed | `d45b6db` |
+| M4.T3e | Error hardening — content/export boundaries + logging guardrails | completed | `2a74b6b` |
 | I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
@@ -787,7 +787,7 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `tests/integration/store/storage-adapter.test.ts` — the absent-key case now injects a logger and asserts no records, and the non-string case asserts one `warn` with the key and no leaked value/domain. `tests/integration/store/store.test.ts` (+2 tests) — corrupt JSON → `error` with `{ key }` + default state; a valid persisted payload restores its data and logs nothing. Full suite: **659 passing tests** across 71 files (baseline 657/71; +2 tests). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
 - Relevant notes/decisions: CI-3 is closed by keeping the defensive fallback exactly as it was and adding diagnostics at the two read layers (adapter shape check, persist rehydration callback). `undefined` is deliberately treated as "absent" rather than "non-string" because that is what both Chrome's `storage.local.get` and WXT's fake return for a missing key. Parse errors are sanitized as described above; non-parse errors retain their stack, and no raw payload/state/domain is attached as context.
-- Commit: working tree (commit pending).
+- Commit: `d45b6db` — committed together with M4.T3d.
 - Acceptance criteria: verified — a present non-string value warns with the key and returns `null`; an absent key logs nothing; corrupt JSON logs `error` and leaves the defaults; a valid payload logs nothing.
 
 ### M4.T3d — Popup React error boundary
@@ -802,7 +802,7 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `tests/unit/components/common/ErrorBoundary.test.tsx` (4 tests) — a throwing child is contained, the fallback shows the EN text, `onError` receives the original error/component stack and the logger records scope/cause/context; the fallback renders in IT through the shared i18n instance; `onReset` recovers when the child stops throwing; without `onReset`, the button calls `window.location.reload()`. Full suite: **663 passing tests** across 72 files (baseline 659/71; +4 tests/+1 file). `bun run compile` and `bun run lint` are clean; both Chrome and Firefox builds succeed.
 - Relevant notes/decisions: the logger/error/reset hooks follow the M4.T3b injection pattern and keep the test independent of console formatting. React's own development `console.error` for caught render errors is silenced only inside the test. The fallback styles travel with the component (no new CSS file), matching the existing self-contained common components. No user data is logged: the context is limited to the component stack.
-- Commit: working tree (commit pending).
+- Commit: `d45b6db feat(ErrorBoundary): implement error boundary for popup with logging and recovery options`.
 - Acceptance criteria: verified — the boundary logs the error/component stack with a scoped logger and shows a localized, accessible recovery screen; the reload button reloads by default and the reset hook recovers deterministically; `<App />` is wrapped in the real entrypoint; the normal popup composition and all existing tests are unchanged.
 
 ### M4.T3e — Content/export boundaries + logging guardrails
@@ -820,7 +820,7 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `tests/integration/content/blocked-overlay.test.ts` (+4 tests, 1 extended) — a rejected `refresh()` logs scope/cause/key and leaves the page valid with no overlay; a corrupt persisted snapshot logs `unreadable persisted snapshot` with only the key and does not leak the domain embedded in the malformed JSON; an absent store logs nothing; a rejected `sendAttempt` logs `{ choice }`, still closes the overlay on Yes and leaves the content context valid; the existing no-listener scenario now asserts that the default `sendMessage` failure is also logged while the page stays alive. `tests/unit/components/city/ExportCityButton.test.tsx` (2 tests extended, +1) — a failed `Result` logs the cause and `{ format: 'png' }` while keeping the localized error; a rejected exporter logs `{ format: 'jpeg' }`; a synchronously throwing exporter is contained and logged. Full suite: **668 passing tests** across 72 files (baseline 663/72; +5 tests). `bun run compile` and `bun run lint` are clean; `bun run build` (Chrome) and `bun run build:firefox` (Firefox) both succeed.
 - Relevant notes/decisions: logging stays local and technical — no persistence, no remote transport, no URL/domain/layer/theme payload. The manual empty-catch search over `entrypoints components lib store utils` returned **0 matches** (executed with the equivalent `grep -RInE` because `rg` is not installed in this environment). `no-empty` accepts the logger's commented best-effort catch and still rejects a genuinely empty catch. The `apply-rules.ts` queue guard is intentionally not caught as empty because it is an arrow-function rejection handler with a return value, not an empty block.
-- Commit: working tree (commit pending).
+- Commit: `2a74b6b feat(logging): enhance logging in content and export boundaries with detailed error handling`.
 - Acceptance criteria: verified — rejected refreshes, unreadable persisted snapshots and rejected attempts are logged with scope and no user data; the overlay and page survive background failures; failed/failed-promise exports log the cause and format while keeping the localized message; ESLint enforces both rules with only the documented exceptions; compile/lint/tests/both builds are green.
 - **Umbrella closure**: M4.T3a–e are complete. Every known boundary now logs with technical context and containment, the simulated background failures no longer crash a worker/page/popup, and the empty-catch/no-console rules prevent the next feature from regressing the hardening.
 
