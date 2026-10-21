@@ -7,6 +7,7 @@ import {
 import { PopupTabs, tabButtonId, tabPanelId } from '@/components/common/PopupTabs';
 import { TimerDisplay } from '@/components/timer/TimerDisplay';
 import { TimerControls } from '@/components/timer/TimerControls';
+import { DurationPicker } from '@/components/timer/DurationPicker';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
 import { CityCanvas } from '@/components/city/CityCanvas';
@@ -29,6 +30,7 @@ function TimerSection() {
     <div className="popup-section popup-section--timer">
       <TimerDisplay />
       <TimerControls />
+      <DurationPicker />
     </div>
   );
 }

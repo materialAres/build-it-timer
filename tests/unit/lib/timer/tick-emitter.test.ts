@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createTickEmitter, TICK_INTERVAL_MS } from '@/lib/timer/tick-emitter';
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import {
+  createTickEmitter,
+  TICK_INTERVAL_MS,
+  SAMPLE_INTERVAL_MS,
+} from '@/lib/timer/tick-emitter';
 
 /** Minimal manual scheduler so the cadence is driven without fake timers. */
 function createManualScheduler() {
@@ -30,7 +33,7 @@ function createManualScheduler() {
 }
 
 describe('tick emitter (M3.T3b)', () => {
-  it('uses the 2s growth cadence by default', () => {
+  it('samples on a fixed interval, decoupled from the session cadence', () => {
     const scheduler = createManualScheduler();
     const emitter = createTickEmitter({
       send: vi.fn(),
@@ -40,8 +43,11 @@ describe('tick emitter (M3.T3b)', () => {
 
     emitter.start();
 
-    expect(TICK_INTERVAL_MS).toBe(GROWTH_TICK_MS);
-    expect(scheduler.intervalMs).toBe(GROWTH_TICK_MS);
+    // The sampling interval is a fixed 1s, NOT the (now per-session) growth
+    // cadence: the background converts elapsed focus time to session ticks.
+    expect(SAMPLE_INTERVAL_MS).toBe(1_000);
+    expect(TICK_INTERVAL_MS).toBe(SAMPLE_INTERVAL_MS);
+    expect(scheduler.intervalMs).toBe(SAMPLE_INTERVAL_MS);
   });
 
   it('emits one tick per interval firing', () => {

@@ -7,6 +7,7 @@ import {
   selectCustomTags,
   selectActiveTab,
   selectSessionHistory,
+  DEFAULT_FOCUS_SECONDS,
   STORE_NAME,
 } from '@/store';
 import type { SessionSummary, Tag } from '@/store/store.types';
@@ -112,8 +113,42 @@ describe('useAppStore', () => {
     const store = createAppStore();
     const state = store.getState();
 
-    expect(selectRemainingSeconds(state)).toBe(25 * 60);
+    expect(selectRemainingSeconds(state)).toBe(DEFAULT_FOCUS_SECONDS);
     expect(selectCustomTags(state)).toEqual([]);
     expect(selectActiveTab(state)).toBe('timer');
+  });
+
+  it('fills fields a persisted snapshot predates (slice-aware merge, CI-2)', async () => {
+    // A snapshot written before `timer.durationSeconds` existed at all.
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          timer: {
+            status: 'idle',
+            remainingSeconds: 420,
+            sessionStartedAt: null,
+            sessionId: null,
+            endsAt: null,
+            focusedMs: 0,
+            distractedMs: 0,
+          },
+          blocklist: {
+            allowlist: [],
+            blocklist: [],
+            customTags: [testTag],
+          },
+        },
+        version: 1,
+      }),
+    });
+
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    // The added field falls back to the fresh default instead of `undefined`…
+    expect(store.getState().timer.durationSeconds).toBe(DEFAULT_FOCUS_SECONDS);
+    // …while every persisted value is still restored.
+    expect(store.getState().timer.remainingSeconds).toBe(420);
+    expect(store.getState().blocklist.customTags).toEqual([testTag]);
   });
 });

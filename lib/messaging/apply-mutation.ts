@@ -1,5 +1,6 @@
 import type { AppStore } from '@/store';
 import { getPresetById } from '@/lib/blocking/presets';
+import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
 import {
   addSiteToList,
   addPresetToList,
@@ -126,6 +127,19 @@ export function createMutationHandler(store: AppStore) {
         if (!hasEmptyPayload(message.payload)) return;
         void store.getState().resetTimer();
         return;
+      case 'TIMER_SET_DURATION': {
+        const { durationSeconds } = message.payload;
+        // Untrusted payload (M5.T1): a whole number that is one of the offered
+        // presets. `setFocusDuration` also no-ops outside idle/completed.
+        if (
+          !Number.isInteger(durationSeconds) ||
+          !isPresetDurationSeconds(durationSeconds)
+        ) {
+          return;
+        }
+        store.getState().setFocusDuration(durationSeconds);
+        return;
+      }
       default: {
         const current = store.getState().blocklist;
         const next = applyBlocklistMutation(current, message);

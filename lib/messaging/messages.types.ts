@@ -28,6 +28,15 @@ interface TimerResetMessage {
   readonly payload: Record<string, never>;
 }
 
+// Session length (user-selectable focus duration). The popup is read-only
+// (M1.T9), so it requests the change and the background — the timer's owner —
+// validates it against the preset table and applies it. A caller-supplied value
+// is untrusted (M5.T1).
+interface TimerSetDurationMessage {
+  readonly type: 'TIMER_SET_DURATION';
+  readonly payload: { readonly durationSeconds: number };
+}
+
 // The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
 // design: the content script cannot know its own tab id without the `tabs`
 // permission, and a caller-supplied id is untrusted anyway — the background
@@ -110,6 +119,7 @@ export type RuntimeMessage =
   | TimerStartedMessage
   | TimerPausedMessage
   | TimerResetMessage
+  | TimerSetDurationMessage
   | SiteBlockedAttemptMessage
   | MalusAppliedMessage
   | SessionEndedMessage
@@ -128,7 +138,8 @@ export type RuntimeMessage =
  * handled by the background's mutation path.
  *
  * `TIMER_TICK` is intentionally absent: it is a passive notification the popup
- * emits on the 2s cadence (M2.T15), not a request to change persisted state.
+ * emits on a fixed sampling cadence (M2.T15), not a request to change persisted
+ * state.
  */
 export const MUTATION_TYPES = [
   'BLOCKLIST_ADD_SITE',
@@ -141,6 +152,7 @@ export const MUTATION_TYPES = [
   'TIMER_STARTED',
   'TIMER_PAUSED',
   'TIMER_RESET',
+  'TIMER_SET_DURATION',
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
 /** The mutation variants a read-only context may send to the background. */

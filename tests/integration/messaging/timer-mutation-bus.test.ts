@@ -5,10 +5,16 @@ import { sendMessage } from '@/lib/messaging/bus';
 import { createAppStore, attachStoreSync, STORE_NAME, selectPopulation } from '@/store';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { timerAlarmName } from '@/lib/timer/session';
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import {
+  DEFAULT_FOCUS_PRESET,
+  FOCUS_PRESETS,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
+/** Cadence of the default preset used by the sessions here. */
+const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
 const flushAsync = (): Promise<void> =>
@@ -93,6 +99,100 @@ describe('popup → background timer path (M3.T3b)', () => {
     handle.dispose();
   });
 
+  it('applies TIMER_SET_DURATION to the background timer and persists it', async () => {
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+
+    const chosen = FOCUS_PRESETS.find(
+      (preset) => preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
+    );
+    if (chosen === undefined) throw new Error('expected more than one preset');
+
+    await sendMessage({
+      type: 'TIMER_SET_DURATION',
+      payload: { durationSeconds: chosen.durationSeconds },
+    });
+
+    const { timer } = store.getState();
+    expect(timer.durationSeconds).toBe(chosen.durationSeconds);
+    // The idle countdown shows the chosen length immediately.
+    expect(timer.remainingSeconds).toBe(chosen.durationSeconds);
+
+    const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+    const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+      state: { timer: { durationSeconds: number } };
+    };
+    expect(parsed.state.timer.durationSeconds).toBe(chosen.durationSeconds);
+
+    handle.dispose();
+  });
+
+  it('ignores a duration that is not one of the presets (untrusted input)', async () => {
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+
+    const before = store.getState().timer.durationSeconds;
+    await sendMessage({
+      type: 'TIMER_SET_DURATION',
+      payload: { durationSeconds: before + 7 },
+    });
+
+    expect(store.getState().timer.durationSeconds).toBe(before);
+
+    handle.dispose();
+  });
+
+  it('ignores a duration change while a session is running', async () => {
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+    const { durationSeconds } = store.getState().timer;
+
+    const other = FOCUS_PRESETS.find(
+      (preset) => preset.durationSeconds !== durationSeconds,
+    );
+    if (other === undefined) throw new Error('expected more than one preset');
+
+    await sendMessage({
+      type: 'TIMER_SET_DURATION',
+      payload: { durationSeconds: other.durationSeconds },
+    });
+
+    expect(store.getState().timer.durationSeconds).toBe(durationSeconds);
+
+    handle.dispose();
+  });
+
+  it('propagates a duration change to a read-only popup store (M1.T8)', async () => {
+    const backgroundStore = createAppStore({
+      dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+    });
+    await backgroundStore.persist.rehydrate();
+    const handle = startBackground({ store: backgroundStore, alarmProvider, now: () => now });
+
+    const popupStore = createAppStore({ readOnly: true });
+    await popupStore.persist.rehydrate();
+    attachStoreSync(popupStore);
+
+    const chosen = FOCUS_PRESETS.find(
+      (preset) => preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
+    );
+    if (chosen === undefined) throw new Error('expected more than one preset');
+
+    await sendMessage({
+      type: 'TIMER_SET_DURATION',
+      payload: { durationSeconds: chosen.durationSeconds },
+    });
+    await flushAsync();
+
+    expect(popupStore.getState().timer.durationSeconds).toBe(
+      chosen.durationSeconds,
+    );
+
+    handle.dispose();
+  });
+
   it('applies a timer command exactly once and persists the result', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
@@ -171,12 +271,12 @@ describe('popup → background timer path (M3.T3b)', () => {
 
     // Two ticks of focus: the popup must see +5 each time through the sync
     // bridge, not only at session completion.
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
     await flushAsync();
     expect(selectPopulation(popupStore.getState())).toBe(5);
 
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_498 } });
     await flushAsync();
     expect(selectPopulation(popupStore.getState())).toBe(10);
@@ -191,11 +291,11 @@ describe('popup → background timer path (M3.T3b)', () => {
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
     const empty = store.getState().city.layers;
 
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
     expect(countOccupied(store.getState().city.layers)).toBe(1);
 
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_498 } });
     expect(countOccupied(store.getState().city.layers)).toBe(2);
     expect(store.getState().city.layers).not.toBe(empty);
@@ -208,12 +308,12 @@ describe('popup → background timer path (M3.T3b)', () => {
     await handle.ready;
 
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
     await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
     const frozen = store.getState().city.layers;
 
-    now = T0 + GROWTH_TICK_MS * 10;
+    now = T0 + TICK_MS * 10;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_480 } });
 
     expect(store.getState().city.layers).toBe(frozen);

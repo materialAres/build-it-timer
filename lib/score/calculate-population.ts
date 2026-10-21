@@ -1,10 +1,8 @@
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
-
 /**
- * Inhabitants added by each completed 2-second focus tick. The cadence is the
- * same fine-grained clock that grows the city (M2.T12), so the population
- * advances visibly while the session runs instead of jumping at a few minute
- * thresholds.
+ * Inhabitants added by each completed focus tick. The cadence is the same
+ * per-session clock that grows the city (see `lib/timer/focus-presets.ts`), so
+ * the population advances visibly while the session runs instead of jumping at a
+ * few minute thresholds.
  */
 export const POPULATION_PER_TICK = 5;
 
@@ -21,10 +19,14 @@ function normalizeFocusedMs(focusedMs: number): number {
 /**
  * Population of the city built for `focusedMs` of undistracted focus and
  * `distractedMs` spent on blocked sites (roadmap M2.T18, extended): every
- * completed 2-second focus tick adds {@link POPULATION_PER_TICK} inhabitants and
- * every completed 2-second distraction tick removes the same amount, so the
- * counter both grows with progress and shrinks with distraction on the very same
- * cadence.
+ * completed focus tick adds {@link POPULATION_PER_TICK} inhabitants and every
+ * completed distraction tick removes the same amount, so the counter both grows
+ * with progress and shrinks with distraction on the very same cadence.
+ *
+ * `tickMs` is the session cadence, derived from the chosen duration by the
+ * timer's preset table. Because every preset is worth the same number of ticks
+ * over a full session, the total population is duration-neutral: a 5-minute and
+ * a 120-minute session both end on the same count.
  *
  * The two times are the *same* running-only quantities the background measures
  * (M2.T15/M2.T16), so the population always agrees with the city that was
@@ -35,17 +37,20 @@ function normalizeFocusedMs(focusedMs: number): number {
  * The result is clamped at zero: population is a count of inhabitants and can
  * never be negative, however long the distraction lasts.
  *
- * Pure and total: same input → same output, no internal
- * `Date.now()`/`Math.random()` (principles D, §1.4). A partial tick contributes
- * nothing — only whole 2-second ticks count.
+ * Pure, total and defensive: same input → same output, no internal
+ * `Date.now()`/`Math.random()` (principles D, §1.4), and a non-finite or
+ * non-positive `tickMs` degrades to a population of 0 rather than `NaN`. A
+ * partial tick contributes nothing — only whole ticks count.
  */
 export function calculatePopulation(
   focusedMs: number,
   distractedMs = 0,
+  tickMs: number,
 ): number {
-  const focusTicks = Math.floor(normalizeFocusedMs(focusedMs) / GROWTH_TICK_MS);
+  if (!Number.isFinite(tickMs) || tickMs <= 0) return 0;
+  const focusTicks = Math.floor(normalizeFocusedMs(focusedMs) / tickMs);
   const distractionTicks = Math.floor(
-    normalizeFocusedMs(distractedMs) / GROWTH_TICK_MS,
+    normalizeFocusedMs(distractedMs) / tickMs,
   );
   return Math.max(0, focusTicks - distractionTicks) * POPULATION_PER_TICK;
 }

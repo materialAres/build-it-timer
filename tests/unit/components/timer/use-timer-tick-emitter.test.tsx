@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useAppStore, DEFAULT_FOCUS_SECONDS } from '@/store';
+import { SAMPLE_INTERVAL_MS } from '@/lib/timer/tick-emitter';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { TimerState } from '@/store/store.types';
 
@@ -11,6 +12,7 @@ vi.mock('@/lib/messaging/bus', () => ({
 
 const idleTimer: TimerState = {
   status: 'idle',
+  durationSeconds: DEFAULT_FOCUS_SECONDS,
   remainingSeconds: DEFAULT_FOCUS_SECONDS,
   sessionStartedAt: null,
   sessionId: null,
@@ -50,15 +52,15 @@ describe('useTimerTickEmitter (M3.T3b)', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it('emits TIMER_TICK on the 2s cadence while running', () => {
+  it('emits TIMER_TICK on the fixed sampling cadence while running', () => {
     setTimer({ status: 'running', sessionId: 'session-1' });
     render(<Probe />);
 
     act(() => {
-      vi.advanceTimersByTime(6_000);
+      vi.advanceTimersByTime(SAMPLE_INTERVAL_MS * 6);
     });
 
-    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(sendMessage).toHaveBeenCalledTimes(6);
     expect(sendMessage).toHaveBeenCalledWith({
       type: 'TIMER_TICK',
       payload: { remainingSeconds: DEFAULT_FOCUS_SECONDS },
@@ -70,7 +72,7 @@ describe('useTimerTickEmitter (M3.T3b)', () => {
     render(<Probe />);
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(SAMPLE_INTERVAL_MS);
     });
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
@@ -89,7 +91,7 @@ describe('useTimerTickEmitter (M3.T3b)', () => {
     const { unmount } = render(<Probe />);
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(SAMPLE_INTERVAL_MS);
     });
     expect(sendMessage).toHaveBeenCalledTimes(1);
 

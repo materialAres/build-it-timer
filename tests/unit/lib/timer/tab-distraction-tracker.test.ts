@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { createTabDistractionTracker } from '@/lib/timer/tab-distraction-tracker';
 import { FakeTabEventSource } from '@/tests/helpers/fake-tab-event-source';
 
+/**
+ * The tracker owns no cadence: it reports raw (weighted) blocked-tab time, and
+ * the malus wiring converts it to ticks with the *session* cadence. These tests
+ * therefore assert milliseconds.
+ */
 describe('tab distraction tracker (M2.T10)', () => {
   const createHarness = (
     blocked: ReadonlyArray<string>,
@@ -24,28 +29,28 @@ describe('tab distraction tracker (M2.T10)', () => {
     };
   };
 
-  it('accumulates no ticks while no blocked tab is open', async () => {
+  it('accumulates no time while no blocked tab is open', async () => {
     const { tracker, advanceBy } = createHarness(['facebook.com']);
     await tracker.ready;
 
     advanceBy(10_000);
 
-    expect(tracker.getTicks()).toBe(0);
+    expect(tracker.getAccumulatedMs()).toBe(0);
   });
 
-  it('accrues one tick per 2s while a blocked tab stays open', async () => {
+  it('accrues the elapsed time while a blocked tab stays open', async () => {
     const { eventSource, tracker, advanceBy } = createHarness(['facebook.com']);
     await tracker.ready;
 
     eventSource.emitUpdated({ id: 1, url: 'https://facebook.com/feed' });
     advanceBy(2_000);
-    expect(tracker.getTicks()).toBe(1);
+    expect(tracker.getAccumulatedMs()).toBe(2_000);
 
     advanceBy(2_000);
-    expect(tracker.getTicks()).toBe(2);
+    expect(tracker.getAccumulatedMs()).toBe(4_000);
 
     advanceBy(1_000);
-    expect(tracker.getTicks()).toBe(2);
+    expect(tracker.getAccumulatedMs()).toBe(5_000);
   });
 
   it('stops accruing once the blocked tab is closed', async () => {
@@ -57,7 +62,7 @@ describe('tab distraction tracker (M2.T10)', () => {
     eventSource.emitRemoved(1);
     advanceBy(10_000);
 
-    expect(tracker.getTicks()).toBe(2);
+    expect(tracker.getAccumulatedMs()).toBe(4_000);
   });
 
   it('stops accruing when the tab navigates away from the blocked site', async () => {
@@ -69,10 +74,10 @@ describe('tab distraction tracker (M2.T10)', () => {
     eventSource.emitUpdated({ id: 1, url: 'https://example.com/' });
     advanceBy(10_000);
 
-    expect(tracker.getTicks()).toBe(1);
+    expect(tracker.getAccumulatedMs()).toBe(2_000);
   });
 
-  it('accumulates across every simultaneously open blocked tab', async () => {
+  it('weights the elapsed time by every simultaneously open blocked tab', async () => {
     const { eventSource, tracker, advanceBy } = createHarness(['facebook.com']);
     await tracker.ready;
 
@@ -80,7 +85,7 @@ describe('tab distraction tracker (M2.T10)', () => {
     eventSource.emitUpdated({ id: 2, url: 'https://m.facebook.com/' });
     advanceBy(2_000);
 
-    expect(tracker.getTicks()).toBe(2);
+    expect(tracker.getAccumulatedMs()).toBe(4_000);
   });
 
   it('counts blocked tabs already open at startup', async () => {
@@ -92,7 +97,7 @@ describe('tab distraction tracker (M2.T10)', () => {
 
     advanceBy(2_000);
 
-    expect(tracker.getTicks()).toBe(1);
+    expect(tracker.getAccumulatedMs()).toBe(2_000);
   });
 
   it('counts a tab only when the supplied predicate says it is distracted', async () => {
@@ -104,7 +109,7 @@ describe('tab distraction tracker (M2.T10)', () => {
     eventSource.emitUpdated({ id: 1, url: 'https://example.com/' });
     advanceBy(5_000);
 
-    expect(tracker.getTicks()).toBe(0);
+    expect(tracker.getAccumulatedMs()).toBe(0);
   });
 
   it('stops observing tab events after dispose', async () => {
@@ -115,6 +120,6 @@ describe('tab distraction tracker (M2.T10)', () => {
     eventSource.emitUpdated({ id: 1, url: 'https://facebook.com/' });
     advanceBy(4_000);
 
-    expect(tracker.getTicks()).toBe(0);
+    expect(tracker.getAccumulatedMs()).toBe(0);
   });
 });

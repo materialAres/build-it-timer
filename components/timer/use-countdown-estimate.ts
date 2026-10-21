@@ -22,7 +22,7 @@ export const COUNTDOWN_TICK_MS = 1_000;
  */
 export function useCountdownEstimate(): void {
   const timer = useAppStore(selectTimer);
-  const { status, endsAt } = timer;
+  const { status, endsAt, remainingSeconds } = timer;
 
   useEffect(() => {
     const publish = (): void => {
@@ -33,7 +33,7 @@ export function useCountdownEstimate(): void {
     };
 
     // Publish immediately so the display is correct before the first interval
-    // fires (e.g. right after a resume or a popup reopen).
+    // fires (e.g. right after a resume, a popup reopen, or a duration change).
     publish();
     if (status !== 'running' || endsAt === null) return;
 
@@ -41,5 +41,9 @@ export function useCountdownEstimate(): void {
     return () => {
       globalThis.clearInterval(handle);
     };
-  }, [status, endsAt]);
+    // `remainingSeconds` is a dependency so an idle/paused change to the
+    // persisted value — most notably a new duration choice — is reflected at
+    // once. While running it stays constant (the background only rewrites it at
+    // a pause), so the interval is not needlessly recreated each second.
+  }, [status, endsAt, remainingSeconds]);
 }

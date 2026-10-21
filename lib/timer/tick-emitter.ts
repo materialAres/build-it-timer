@@ -1,16 +1,17 @@
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
-
 /**
  * The fine-grained character-insertion tick (M2.T15, §1 "two distinct clocks").
  *
- * The 2s cadence is deliberately *not* a `browser.alarms` alarm: the platform
- * cannot wake an MV3 service worker more often than once per minute (M1.T5), so
- * the countdown's persistence stays on the 60s alarm while the city's growth is
- * driven by this finer tick. The background consumes the tick and measures the
- * elapsed focus time itself, so a missed or late tick only delays growth — it
- * never loses or duplicates characters.
+ * The cadence here is a fixed *sampling* interval, deliberately NOT the growth
+ * cadence: how many ms equal one character is a per-session value derived from
+ * the chosen duration (`lib/timer/focus-presets.ts`). The background measures
+ * the elapsed focus time itself and converts it to whole session ticks, so the
+ * sampling interval only bounds how promptly a due character appears — a missed
+ * or late tick delays growth, it never loses or duplicates characters. Sampling
+ * faster than the platform's 60s alarm minimum is why this is not a
+ * `browser.alarms` alarm (M1.T5).
  */
-export const TICK_INTERVAL_MS = GROWTH_TICK_MS;
+export const SAMPLE_INTERVAL_MS = 1_000;
+export const TICK_INTERVAL_MS = SAMPLE_INTERVAL_MS;
 
 export interface TickEmitterDependencies {
   /** Sink for one tick; the popup wires it to `sendMessage({ type: 'TIMER_TICK' })`. */

@@ -4,13 +4,18 @@ import { startBackground } from '@/entrypoints/background';
 import { sendMessage, onMessage } from '@/lib/messaging/bus';
 import { createAppStore } from '@/store';
 import { applyMalus } from '@/lib/score/apply-malus';
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import {
+  DEFAULT_FOCUS_PRESET,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { FakeTabEventSource } from '@/tests/helpers/fake-tab-event-source';
 import type { CityLayers } from '@/components/city/city.types';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 
 const T0 = 1_700_000_000_000;
+/** Cadence of the default preset used by the sessions here. */
+const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
 function countOccupied(layers: CityLayers): number {
   return [layers.background, layers.middleground, layers.foreground].reduce(
@@ -49,7 +54,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
     await handle.ready;
 
     await store.getState().startTimer();
-    store.getState().growCity(GROWTH_TICK_MS * 3);
+    store.getState().growCityByTicks(3);
     const before = store.getState().city.layers;
     expect(countOccupied(before)).toBe(3);
 
@@ -69,7 +74,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
     });
 
     await store.getState().startTimer();
-    store.getState().growCity(GROWTH_TICK_MS * 2);
+    store.getState().growCityByTicks(2);
     await proceed();
 
     expect(received).toEqual([
@@ -88,7 +93,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
     });
 
     await store.getState().startTimer();
-    store.getState().growCity(GROWTH_TICK_MS * 2);
+    store.getState().growCityByTicks(2);
     const before = store.getState().city.layers;
 
     await sendMessage({
@@ -107,7 +112,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
     await handle.ready;
 
     await store.getState().startTimer();
-    store.getState().growCity(GROWTH_TICK_MS * 3);
+    store.getState().growCityByTicks(3);
     await proceed();
     await proceed();
 
@@ -115,26 +120,26 @@ describe('malus linked to building destruction (M2.T16)', () => {
     handle.dispose();
   });
 
-  it('keeps destroying one character per 2s while a blocked tab stays open', async () => {
+  it('keeps destroying one character per session tick while a blocked tab stays open', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await store.getState().startTimer();
-    store.getState().growCity(GROWTH_TICK_MS * 4);
+    store.getState().growCityByTicks(4);
 
     await proceed();
     const afterProceed = store.getState().city.layers;
     expect(countOccupied(afterProceed)).toBe(3);
 
-    // The blocked tab is open (facebook.com is on the blocklist); 2s later a
-    // timer tick no longer grows the city — the elapsed stretch counts as
-    // distraction (M2.T18) — so the malus removes one character net.
+    // The blocked tab is open (facebook.com is on the blocklist); one session
+    // tick later the elapsed stretch counts as distraction (M2.T18), so the
+    // malus removes one character net.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { list: 'blocklist', site: 'facebook.com' },
     });
     tabEventSource.emitUpdated({ id: 1, url: 'https://facebook.com/' });
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_400 } });
 
     const expected = applyMalus(afterProceed, 1);

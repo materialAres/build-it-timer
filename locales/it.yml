@@ -12,6 +12,8 @@ timer:
   start: Avvia
   pause: Pausa
   reset: Reimposta
+  durationLabel: Durata della sessione
+  durationOption: '$1 min'
 
 tabs:
   ariaLabel: Sezioni del popup

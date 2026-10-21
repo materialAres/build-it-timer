@@ -22,8 +22,9 @@ import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { calculatePopulation } from '@/lib/score/calculate-population';
+import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
 import { timerAlarmName } from '@/lib/timer/session';
-import type { SessionSummary } from '@/store/store.types';
+import type { SessionSummary, TimerState } from '@/store/store.types';
 import {
   createBrowserTabEventSource,
   createTabDistractionTracker,
@@ -76,25 +77,31 @@ export interface BackgroundHandle {
 }
 
 /**
- * Growth wiring (M2.T15): the fine-grained character-insertion tick arrives as
- * the typed `TIMER_TICK` message from the active context (popup) — the 2s tick
- * of the §1 "two distinct clocks" note, deliberately separate from the 60s
- * `browser.alarms` countdown clock (M1.T5).
+ * Growth wiring (M2.T15, extended): the fine-grained character-insertion tick
+ * arrives as the typed `TIMER_TICK` message from the active context (popup) — a
+ * sampling clock deliberately separate from the 60s `browser.alarms` countdown
+ * clock (M1.T5). What one character *costs in time* is not fixed: it is the
+ * chosen session's cadence (`lib/timer/focus-presets.ts`), so a longer focus
+ * builds the same city more slowly (duration-neutral).
  *
  * On each tick the *undistracted* focus time elapsed since the previous tick is
- * measured with the injected clock and handed to `citySlice.growCity` (M2.T11),
- * which delegates to the session-seeded engine (M2.T12). A tick that arrives
- * while the timer is not `running` neither grows the city nor moves the
- * baseline, so paused/idle time is never counted as focus time. The baseline is
- * set to "now" on the first tick of a running stretch (never to
- * `sessionStartedAt`), so a service-worker restart cannot replay the whole
- * session into the city a second time.
+ * measured with the injected clock and accumulated; the whole session ticks it
+ * now covers are handed to `citySlice.growCityByTicks` (M2.T11), which delegates
+ * to the session-seeded engine (M2.T12). Deriving the target from the *total*
+ * focus time (not the per-tick delta) is what lets a cadence longer than the
+ * sampling interval work without stalling: the leftover fraction of a tick is
+ * carried by construction. A tick that arrives while the timer is not `running`
+ * neither grows the city nor moves the baseline, so paused/idle time is never
+ * counted as focus time. The baseline is set to "now" on the first tick of a
+ * running stretch (never to `sessionStartedAt`), so a service-worker restart
+ * cannot replay the whole session into the city a second time.
  *
  * The tracker also accumulates the same running-only elapsed time as
  * `focusedMs`, which is what session completion (M3.T3c) feeds to
- * `calculatePopulation` (M2.T18). Sharing the measure is deliberate: the
- * population then always agrees with the city that was actually built, instead
- * of being derived from a second, differently-clocked quantity.
+ * `calculatePopulation` (M2.T18), on the same session cadence. Sharing the
+ * measure is deliberate: the population then always agrees with the city that
+ * was actually built, instead of being derived from a second, differently-clocked
+ * quantity.
  */
 export interface GrowthTickHandle {
   /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
@@ -119,6 +126,11 @@ export interface GrowthTickDependencies {
   readonly isDistracted?: () => boolean;
 }
 
+/** Whole growth ticks a timer's accumulated focus time is worth, at its cadence. */
+function sessionTicks(timer: TimerState): number {
+  return Math.floor(timer.focusedMs / tickMsForDurationSeconds(timer.durationSeconds));
+}
+
 function createGrowthTick({
   store,
   now,
@@ -126,6 +138,11 @@ function createGrowthTick({
 }: GrowthTickDependencies): GrowthTickHandle {
   let lastGrowthAt: number | null = null;
   let status = store.getState().timer.status;
+  let sessionId = store.getState().timer.sessionId;
+  // Growth ticks already reflected in the persisted city. Initialized from the
+  // persisted focus time so a service-worker restart neither replays the session
+  // into the city nor loses growth (M2.T15).
+  let appliedTicks = sessionTicks(store.getState().timer);
 
   // Detect the transitions into/out of `running` even when no tick arrives:
   // resuming must start measuring from the resume moment, not from the last
@@ -133,10 +150,17 @@ function createGrowthTick({
   // Rehydration flips the status the same way, so the baseline after a service
   // worker restart is the wake-up instant — the sleep gap is never replayed.
   const unsubscribe = store.subscribe(() => {
-    const next = store.getState().timer.status;
-    if (next === status) return;
-    status = next;
-    lastGrowthAt = next === 'running' ? now() : null;
+    const state = store.getState();
+    if (state.timer.status !== status) {
+      status = state.timer.status;
+      lastGrowthAt = status === 'running' ? now() : null;
+    }
+    // A new session (or a reset) zeroes `focusedMs`: restart the applied
+    // baseline so the fresh city is not credited with the previous session.
+    if (state.timer.sessionId !== sessionId) {
+      sessionId = state.timer.sessionId;
+      appliedTicks = sessionTicks(state.timer);
+    }
   });
 
   const handleTick = (): void => {
@@ -161,18 +185,26 @@ function createGrowthTick({
     const distractedMs = distracted ? timer.distractedMs + elapsed : timer.distractedMs;
 
     if (distracted) store.getState().recordDistractedMs(distractedMs);
-    else {
-      store.getState().growCity(elapsed);
-      store.getState().recordFocusedMs(focusedMs);
+    else store.getState().recordFocusedMs(focusedMs);
+
+    // Cumulative-target growth (user-selectable duration): the target is derived
+    // from the *total* focus time and the session cadence, so a cadence longer
+    // than the sampling interval can never stall — the leftover fraction of a
+    // tick is carried for free by the next call.
+    const tickMs = tickMsForDurationSeconds(timer.durationSeconds);
+    const targetTicks = Math.floor(focusedMs / tickMs);
+    if (targetTicks > appliedTicks) {
+      store.getState().growCityByTicks(targetTicks - appliedTicks);
+      appliedTicks = targetTicks;
     }
 
     // Live population (M2.T18): +5 per completed focus tick, -5 per completed
     // distraction tick, clamped at zero. Same measures as the city and the
     // malus, so the counter always agrees with what actually happened. The write
     // is skipped while the value is unchanged — `score` is persisted, and a
-    // needless 2s-cadence write would churn `storage.local` and re-broadcast
-    // sync messages for nothing.
-    const population = calculatePopulation(focusedMs, distractedMs);
+    // needless per-tick write would churn `storage.local` and re-broadcast sync
+    // messages for nothing.
+    const population = calculatePopulation(focusedMs, distractedMs, tickMs);
     if (population !== store.getState().score.population) {
       store.getState().setPopulation(population);
     }
@@ -243,7 +275,11 @@ export function createSessionCompletion({
       if (timer.sessionId === null) return;
       if (name !== timerAlarmName(timer.sessionId)) return;
 
-      const population = calculatePopulation(getFocusedMs(), getDistractedMs());
+      const population = calculatePopulation(
+        getFocusedMs(),
+        getDistractedMs(),
+        tickMsForDurationSeconds(timer.durationSeconds),
+      );
       store.getState().setPopulation(population);
       void store.getState().completeTimer();
 
@@ -291,8 +327,8 @@ export interface MalusWiring {
 
 export interface MalusWiringDependencies {
   readonly store: AppStore;
-  /** Distraction clock source; only the tick count is consumed. */
-  readonly tracker: Pick<TabDistractionTracker, 'getTicks'>;
+  /** Distraction clock source; only the accumulated weighted ms is consumed. */
+  readonly tracker: Pick<TabDistractionTracker, 'getAccumulatedMs'>;
   /** Message sink, injectable so the wiring is testable without the bus. */
   readonly send?: (message: RuntimeMessage) => void;
 }
@@ -324,7 +360,7 @@ export function createMalusWiring({
   send = defaultSend,
 }: MalusWiringDependencies): MalusWiring {
   let active = false;
-  let baselineTicks = 0;
+  let baselineMs = 0;
   let applied = 0;
   let domain = '';
   let sessionId = store.getState().city.sessionId;
@@ -334,18 +370,22 @@ export function createMalusWiring({
     if (next === sessionId) return;
     sessionId = next;
     active = false;
-    baselineTicks = 0;
+    baselineMs = 0;
     applied = 0;
   });
 
   // The remove rule lives in `applyMalus` (M2.T10): this only decides how many
-  // ticks are due and hands them to the slice, which never computes. The number
-  // of characters owed grows with the time spent (M4.T1): `malusForDistractionTicks`
-  // escalates the cost per tick, while the first character is still removed at
-  // the "proceed" instant itself.
+  // ticks are due and hands them to the slice, which never computes. The tick
+  // length is the *session* cadence (user-selectable duration), so destruction
+  // keeps pace with construction at every preset. The number of characters owed
+  // grows with the time spent (M4.T1): `malusForDistractionTicks` escalates the
+  // cost per tick, while the first character is still removed at the "proceed"
+  // instant itself.
   const pump = (): void => {
     if (!active) return;
-    const elapsedTicks = tracker.getTicks() - baselineTicks;
+    const tickMs = tickMsForDurationSeconds(store.getState().timer.durationSeconds);
+    const elapsedMs = tracker.getAccumulatedMs() - baselineMs;
+    const elapsedTicks = elapsedMs > 0 ? Math.floor(elapsedMs / tickMs) : 0;
     const expected = 1 + malusForDistractionTicks(elapsedTicks);
     const pending = expected - applied;
     if (pending <= 0) return;
@@ -366,7 +406,7 @@ export function createMalusWiring({
       if (active) return;
       active = true;
       domain = message.payload.domain;
-      baselineTicks = tracker.getTicks();
+      baselineMs = tracker.getAccumulatedMs();
       applied = 0;
       pump();
     },

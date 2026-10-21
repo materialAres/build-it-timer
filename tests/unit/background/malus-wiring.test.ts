@@ -3,11 +3,17 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createAppStore } from '@/store';
 import { createMalusWiring } from '@/entrypoints/background';
 import { applyMalus, malusForDistractionTicks } from '@/lib/score/apply-malus';
+import {
+  DEFAULT_FOCUS_PRESET,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import type { CityLayers } from '@/components/city/city.types';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 
 const T0 = 1_700_000_000_000;
+/** Cadence of the default preset, which the store starts sessions with. */
+const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
 function countOccupied(layers: CityLayers): number {
   return [layers.background, layers.middleground, layers.foreground].reduce(
@@ -29,19 +35,20 @@ describe('malus wiring (M2.T16)', () => {
     const store = createAppStore({
       dependencies: { alarmProvider, now: () => T0, random: () => 0.5 },
     });
-    let ticks = 0;
+    let accumulatedMs = 0;
     const send = vi.fn<(message: RuntimeMessage) => void>();
     const wiring = createMalusWiring({
       store,
-      tracker: { getTicks: () => ticks },
+      tracker: { getAccumulatedMs: () => accumulatedMs },
       send,
     });
     return {
       store,
       wiring,
       send,
+      /** Make `value` whole session ticks of weighted distraction time accrued. */
       setTicks: (value: number) => {
-        ticks = value;
+        accumulatedMs = value * TICK_MS;
       },
     };
   }
@@ -51,7 +58,7 @@ describe('malus wiring (M2.T16)', () => {
     characterCount: number,
   ): Promise<void> {
     await store.getState().startTimer();
-    store.getState().growCity(2_000 * characterCount);
+    store.getState().growCityByTicks(characterCount);
   }
 
   it('destroys a character in the same update cycle as "proceed"', async () => {
@@ -103,7 +110,7 @@ describe('malus wiring (M2.T16)', () => {
   it('does not start the malus when the timer is not running', () => {
     const { store, wiring, send } = setup();
     // Grow without starting a session so the city has a character to lose.
-    store.getState().growCity(2_000);
+    store.getState().growCityByTicks(1);
     const before = store.getState().city.layers;
 
     wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
@@ -182,7 +189,7 @@ describe('malus wiring (M2.T16)', () => {
     // A new session resets the city and the stretch, so a fresh "proceed"
     // applies to the new city instead of being ignored as a re-mount.
     store.getState().resetCityForNewSession('session-2', 'default');
-    store.getState().growCity(2_000);
+    store.getState().growCityByTicks(1);
     setTicks(0);
     wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'x.com', choice: 'proceed' } });
 

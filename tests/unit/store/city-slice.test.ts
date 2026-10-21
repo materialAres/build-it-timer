@@ -122,24 +122,24 @@ describe('citySlice (M2.T11)', () => {
     expect(store.getState().city.themeId).toBe('theme-from-registry');
   });
 
-  it('growCity delegates to the injected engine without computing internally', () => {
+  it('growCityByTicks delegates whole ticks to the injected engine', () => {
     growthEngine = vi.fn((layers: CityLayers) => withCharacterAt(layers, 0, 0));
     const store = createStore();
     const before = store.getState().city.layers;
 
-    store.getState().growCity(2_000);
+    store.getState().growCityByTicks(2);
 
-    expect(growthEngine).toHaveBeenCalledWith(before, 2_000, seedFromSession(null));
+    expect(growthEngine).toHaveBeenCalledWith(before, 2, seedFromSession(null));
     expect(store.getState().city.layers).not.toBe(before);
     expect(store.getState().city.layers.background.cells[0]?.[0]?.char).toBe('#');
   });
 
-  it('growCity skips the write when the engine returns the same reference', () => {
+  it('growCityByTicks skips the write when the engine returns the same reference', () => {
     const store = createStore();
     const before = store.getState().city;
     const setState = vi.spyOn(store, 'setState');
 
-    store.getState().growCity(0);
+    store.getState().growCityByTicks(0);
 
     expect(growthEngine).toHaveBeenCalledWith(before.layers, 0, seedFromSession(null));
     expect(setState).not.toHaveBeenCalled();

@@ -6,12 +6,17 @@ import { createAppStore, STORE_NAME } from '@/store';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { timerAlarmName } from '@/lib/timer/session';
 import { calculatePopulation } from '@/lib/score/calculate-population';
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import {
+  DEFAULT_FOCUS_PRESET,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 import type { SessionSummary } from '@/store/store.types';
 
 const T0 = 1_700_000_000_000;
-const FOCUS_SECONDS = 25 * 60;
+/** A full session uses the default preset's length and cadence. */
+const FOCUS_SECONDS = DEFAULT_FOCUS_PRESET.durationSeconds;
+const TICK_MS = tickMsForDurationSeconds(FOCUS_SECONDS);
 
 /**
  * M3.T3c — session completion. The alarm scheduled at the end of the countdown
@@ -36,12 +41,12 @@ describe('session completion (M3.T3c)', () => {
     return { store, handle };
   }
 
-  /** Start a session and let `ms` of focus elapse through the 2s tick cadence. */
+  /** Start a session and let `ms` of focus elapse through the session cadence. */
   async function runSession(ms: number) {
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
-    const ticks = Math.floor(ms / GROWTH_TICK_MS);
+    const ticks = Math.floor(ms / TICK_MS);
     for (let tick = 1; tick <= ticks; tick += 1) {
-      now = T0 + tick * GROWTH_TICK_MS;
+      now = T0 + tick * TICK_MS;
       await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: FOCUS_SECONDS } });
     }
     return ticks;
@@ -53,7 +58,7 @@ describe('session completion (M3.T3c)', () => {
 
     // 10 minutes of focus: the 5' base and the 10' floor are unlocked.
     const ticks = await runSession(10 * 60_000);
-    const expectedPopulation = calculatePopulation(ticks * GROWTH_TICK_MS);
+    const expectedPopulation = calculatePopulation(ticks * TICK_MS, 0, TICK_MS);
 
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);

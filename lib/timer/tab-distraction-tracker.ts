@@ -1,5 +1,4 @@
 import { browser, type Browser } from 'wxt/browser';
-import { MALUS_TICK_MS } from '@/lib/score/apply-malus';
 
 /** A tab as the tracker needs to see it (id + last known URL). */
 export interface TrackedTab {
@@ -26,15 +25,20 @@ export interface DistractionTrackerDependencies {
   readonly isDistractedUrl: (url: string | undefined) => boolean;
   /** Clock (injectable for deterministic tests). */
   readonly now: () => number;
-  /** Tick length in ms; defaults to the shared 2s malus cadence (M2.T15). */
-  readonly tickMs?: number;
 }
 
 export interface TabDistractionTracker {
   /** Resolves once the initially open tabs have been read. */
   readonly ready: Promise<void>;
-  /** Whole 2s ticks accumulated so far, sampled at `now()`. */
-  getTicks(): number;
+  /**
+   * Weighted blocked-tab time accumulated so far, in ms, sampled at `now()`.
+   * Each open blocked tab contributes its elapsed time once (N open tabs → N×),
+   * so "accumulating distraction time across all simultaneously open blocked
+   * tabs" (M2.T10) is preserved. The malus wiring converts this to ticks with
+   * the *session* cadence (`lib/timer/focus-presets.ts`), which is why the
+   * tracker itself owns no cadence.
+   */
+  getAccumulatedMs(): number;
   /**
    * Whether at least one blocked tab is currently open. The growth tracker
    * consults it (M2.T18) so time spent on a blocked site is counted as
@@ -55,14 +59,13 @@ export interface TabDistractionTracker {
  * `tabs.onActivated` + `windows.onFocusChanged` and would under-count the
  * simultaneously open blocked tabs the roadmap asks to accumulate.
  *
- * Each open blocked tab contributes one tick per `tickMs`, so N open blocked
- * tabs accrue N ticks per interval ("accumulating distraction time across all
- * simultaneously open blocked tabs").
+ * Each open blocked tab contributes its elapsed time once, so N open blocked
+ * tabs accrue N× the time per interval ("accumulating distraction time across
+ * all simultaneously open blocked tabs").
  */
 export function createTabDistractionTracker(
   dependencies: DistractionTrackerDependencies,
 ): TabDistractionTracker {
-  const tickMs = dependencies.tickMs ?? MALUS_TICK_MS;
   const openBlockedTabs = new Set<number>();
   let accumulatedMs = 0;
   let lastSampleMs = dependencies.now();
@@ -101,9 +104,9 @@ export function createTabDistractionTracker(
 
   return {
     ready,
-    getTicks(): number {
+    getAccumulatedMs(): number {
       sample();
-      return Math.floor(accumulatedMs / tickMs);
+      return accumulatedMs;
     },
     isDistracted(): boolean {
       return openBlockedTabs.size > 0;

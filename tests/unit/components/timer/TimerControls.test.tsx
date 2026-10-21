@@ -8,6 +8,7 @@ import type { TimerState } from '@/store/store.types';
 
 const idleTimer: TimerState = {
   status: 'idle',
+  durationSeconds: DEFAULT_FOCUS_SECONDS,
   remainingSeconds: DEFAULT_FOCUS_SECONDS,
   sessionStartedAt: null,
   sessionId: null,

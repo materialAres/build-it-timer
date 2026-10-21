@@ -4,6 +4,13 @@ export type ScoreLevel = 'excellent' | 'good' | 'bad';
 
 export interface TimerState {
   readonly status: TimerStatus;
+  /**
+   * Currently selected session length in seconds. `remainingSeconds` is the live
+   * countdown; this is the length a fresh start/reset returns to, and the value
+   * that keys the growth/malus cadence (`lib/timer/focus-presets.ts`). Persisted
+   * so the choice survives a popup reopen and a service-worker restart.
+   */
+  readonly durationSeconds: number;
   readonly remainingSeconds: number;
   readonly sessionStartedAt: number | null; // epoch ms, null if idle
   readonly sessionId: string | null;
@@ -29,8 +36,9 @@ export interface TimerState {
   readonly focusedMs: number;
   /**
    * Distraction time accumulated on blocked sites during the session, in ms.
-   * Measured by the tab tracker (M2.T16) with the same 2s cadence and the same
-   * running-only baseline as `focusedMs`. Persisted for the same reason: the
+   * Measured by the tab tracker (M2.T16) with the same running-only baseline as
+   * `focusedMs`; the malus wiring converts it to ticks at the session cadence.
+   * Persisted for the same reason: the
    * population penalty (M2.T18) must survive a service-worker restart mid
    * session. Reset to 0 on every new session.
    */

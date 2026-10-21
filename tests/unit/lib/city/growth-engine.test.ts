@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createGrowthEngine,
   growCity,
+  growCityByTicks,
   GROWTH_TICK_MS,
 } from '@/lib/city/growth-engine';
 import {
@@ -187,6 +188,46 @@ describe('growth engine (M2.T12)', () => {
     const viaFunction = growCity(city, GROWTH_TICK_MS * 4, 123);
 
     expect(viaAdapter).toEqual(viaFunction);
+  });
+});
+
+/**
+ * The session-cadence primitive (user-selectable duration): the background
+ * converts the elapsed focus time to whole ticks with the chosen preset and
+ * calls this with the *delta* of completed ticks.
+ */
+describe('growCityByTicks (whole-tick primitive)', () => {
+  it('places exactly `ticks` characters, one per tick', () => {
+    const city = growCityByTicks(emptyLayers(), 3);
+
+    expect(occupiedTotal(city)).toBe(3);
+  });
+
+  it('is a no-op for zero, negative or non-finite ticks', () => {
+    const city = emptyLayers();
+
+    expect(growCityByTicks(city, 0)).toBe(city);
+    expect(growCityByTicks(city, -1)).toBe(city);
+    expect(growCityByTicks(city, Number.NaN)).toBe(city);
+    expect(growCityByTicks(city, Number.POSITIVE_INFINITY)).toBe(city);
+  });
+
+  it('discards the fractional part of a tick count', () => {
+    expect(occupiedTotal(growCityByTicks(emptyLayers(), 2.9))).toBe(2);
+  });
+
+  it('equals growCity for the equivalent elapsed time', () => {
+    const city = emptyLayers();
+
+    expect(growCityByTicks(city, 3, 7)).toEqual(
+      growCity(city, GROWTH_TICK_MS * 3, 7),
+    );
+  });
+
+  it('accumulates across calls', () => {
+    const once = growCityByTicks(emptyLayers(), 2);
+
+    expect(occupiedTotal(growCityByTicks(once, 1))).toBe(3);
   });
 });
 

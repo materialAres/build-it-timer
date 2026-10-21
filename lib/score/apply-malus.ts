@@ -1,12 +1,6 @@
 import type { CityGrid, CityLayers, CityCell } from '@/components/city/city.types';
 
 /**
- * The malus cadence: the same 2s tick used for construction (M2.T15), applied
- * in reverse. One tick of distraction removes exactly one character.
- */
-export const MALUS_TICK_MS = 2_000;
-
-/**
  * The order in which the malus consumes cells that sit on the same row. The
  * middleground carries the main skyscrapers (M2.T12), so its characters are the
  * most prominent and disappear first; within a layer the scan is left to right.
@@ -17,8 +11,10 @@ const EMPTY_CELL: CityCell = { char: null };
 
 /**
  * How the malus escalates with the time spent on a blocked site (M4.T1). Each
- * rule means: from `fromTicks` whole 2s ticks of distraction onwards, every
- * further tick costs `charactersPerTick` characters instead of one. The schedule
+ * rule means: from `fromTicks` whole distraction ticks onwards, every further
+ * tick costs `charactersPerTick` characters instead of one. The tick length is
+ * the session cadence (user-selectable duration), the same clock the growth
+ * uses, so the two stay in step at every preset. The schedule
  * is data (Open/Closed, §1.1): making the penalty harder or softer is an array
  * edit, never a change to the calculation below. Its first stage weighs the same
  * as the M2.T10 base cadence (one character per tick), so short stays keep the
@@ -50,8 +46,8 @@ function tickCost(tickNumber: number): number {
 
 /**
  * Proportional malus (M4.T1): the *additional* characters owed for
- * `ticksOfDistraction` whole 2s ticks spent on a blocked site, on top of the
- * single character removed the moment the user chooses to proceed ("the malus
+ * `ticksOfDistraction` whole distraction ticks spent on a blocked site, on top
+ * of the single character removed the moment the user chooses to proceed ("the malus
  * grows as a function of time spent", not just the single event). The value is
  * cumulative and **monotonic non-decreasing** — more time can never yield a
  * smaller malus — because every tick contributes a non-negative cost. Pure and
@@ -123,7 +119,8 @@ function removeOneCharacter(layers: CityLayers): CityLayers {
 
 /**
  * Progressive malus (M2.T10): the inverse of the growth engine, removing one
- * character for each 2s tick spent on a blocked site. When there is nothing left
+ * character for each tick spent on a blocked site (the tick length is the
+ * session cadence, matching growth). When there is nothing left
  * to destroy the city simply stops shrinking — the function is total and pure
  * (no browser, no clock, no randomness), so it is unit-testable in isolation.
  *

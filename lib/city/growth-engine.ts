@@ -17,9 +17,13 @@ import {
 import { TILE_BASE_WIDTH, getModulesByCategory } from './tile-library';
 
 /**
- * Growth cadence: one character of city per 2 seconds of undistracted focus
- * (roadmap M2.T12). Distinct from the 60s `browser.alarms` persistence clock
- * (M1.T5): it is recalculated from the elapsed focus time, never alarm-driven.
+ * Legacy growth cadence: one character of city per 2 seconds of undistracted
+ * focus. Kept only for the elapsed-time wrapper `growCity` and the pure engine
+ * tests; the running app derives one character's *time cost* from the chosen
+ * session's preset (`lib/timer/focus-presets.ts`, M2.T12) and calls
+ * `growCityByTicks` with whole ticks. Distinct from the 60s `browser.alarms`
+ * persistence clock (M1.T5): it is recalculated from the elapsed focus time,
+ * never alarm-driven.
  */
 export const GROWTH_TICK_MS = 2000;
 
@@ -513,23 +517,28 @@ function pickLayer(
 }
 
 /**
- * Grow the three city layers by the undistracted focus time elapsed since the
- * last call (roadmap M2.T12). Every 2 seconds inserts exactly **one** character
- * — never a whole module at once.
+ * Grow the three city layers by **whole ticks** (roadmap M2.T12). One tick
+ * inserts exactly **one** character — never a whole module at once.
  *
- * Pure and deterministic: same `(layers, elapsedMs, seed)` → deep-equal result,
- * no `Date.now()`/`Math.random()`. The scene layout is derived from the seed and
+ * This is the primitive: the session cadence (how many ms a tick is) is a
+ * *timer* policy (see `lib/timer/focus-presets.ts`), so the caller converts its
+ * elapsed focus time to ticks. `growCity` remains the elapsed-based convenience
+ * wrapper for the legacy 2s cadence and the pure unit tests.
+ *
+ * Pure and deterministic: same `(layers, ticks, seed)` → deep-equal result, no
+ * `Date.now()`/`Math.random()`. The scene layout is derived from the seed and
  * the grid dimensions only, never from how much is already built, so it cannot
  * stall. When all three layers are full it returns the *same* `CityLayers`
  * reference (visual cap, not an error).
  */
-export function growCity(
+export function growCityByTicks(
   layers: CityLayers,
-  elapsedMs: number,
+  ticks: number,
   seed = 0,
 ): CityLayers {
-  const ticks = ticksFor(elapsedMs);
-  if (ticks === 0) return layers;
+  if (!Number.isFinite(ticks) || ticks <= 0) return layers;
+  const whole = Math.floor(ticks);
+  if (whole === 0) return layers;
 
   const plans: Record<CityLayerName, ReadonlyArray<LotPlan>> = {
     background: planLayer(layers.background, 'background', seed),
@@ -545,7 +554,7 @@ export function growCity(
     countOccupied(layers.middleground) +
     countOccupied(layers.foreground);
 
-  for (let index = 0; index < ticks; index += 1) {
+  for (let index = 0; index < whole; index += 1) {
     const layer = pickLayer(current, placedBefore + index, plans);
     if (layer === null) break; // all layers full: the visual cap
 
@@ -556,6 +565,20 @@ export function growCity(
   }
 
   return current;
+}
+
+/**
+ * Elapsed-time wrapper over {@link growCityByTicks} using the legacy
+ * {@link GROWTH_TICK_MS} cadence. Kept for the pure engine tests and any caller
+ * that still thinks in wall-clock time; production growth goes through
+ * `growCityByTicks` with the session's own cadence.
+ */
+export function growCity(
+  layers: CityLayers,
+  elapsedMs: number,
+  seed = 0,
+): CityLayers {
+  return growCityByTicks(layers, ticksFor(elapsedMs), seed);
 }
 
 /** Collaborators/parameters the growth engine is built with. */

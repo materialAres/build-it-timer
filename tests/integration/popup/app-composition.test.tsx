@@ -6,10 +6,12 @@ import App from '@/entrypoints/popup/App';
 import { startBackground } from '@/entrypoints/background';
 import { useAppStore, attachStoreSync, DEFAULT_FOCUS_SECONDS } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
-import { GROWTH_TICK_MS } from '@/lib/city/growth-engine';
+import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
 import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
+/** Cadence of the default preset the sessions start on. */
+const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_SECONDS);
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
 const flushAsync = (): Promise<void> =>
@@ -49,6 +51,11 @@ describe('popup App composition (M3.T4)', () => {
     await handle.ready;
     attachStoreSync(store);
     store.getState().setActiveTab('timer');
+    // The store is a module-level singleton shared by every test in this file:
+    // a session or a chosen duration left by a previous test would leak into
+    // this one, so start each from a clean idle timer on the default length.
+    await store.getState().resetTimer();
+    store.getState().setFocusDuration(DEFAULT_FOCUS_SECONDS);
   });
 
   /** Fire the session alarm the way the browser would at the end of the countdown. */
@@ -75,7 +82,7 @@ describe('popup App composition (M3.T4)', () => {
 
     expect(screen.getByRole('tablist')).toBeInTheDocument();
     expect(screen.getByRole('tabpanel')).toBeInTheDocument();
-    expect(screen.getByText('00:25:00')).toBeInTheDocument();
+    expect(screen.getByText('00:30:00')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 
@@ -84,7 +91,7 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
     await flushAsync();
-    expect(screen.getByText('00:25:00')).toBeInTheDocument();
+    expect(screen.getByText('00:30:00')).toBeInTheDocument();
 
     // The popup projects the countdown from the session's end time, so moving
     // the deadline (as a background reconciliation would) immediately changes
@@ -138,6 +145,28 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
 
+  it('changes the session length from the picker before starting', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: '10 min' }));
+    await flushAsync();
+
+    // The command reached the background (read-only popup) and came back via sync.
+    await waitFor(() => {
+      expect(useAppStore.getState().timer.durationSeconds).toBe(10 * 60);
+    });
+    expect(screen.getByText('00:10:00')).toBeInTheDocument();
+  });
+
+  it('disables the duration picker while a session is running', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await flushAsync();
+
+    expect(screen.getByRole('button', { name: '10 min' })).toBeDisabled();
+  });
+
   it('grows the city after a simulated tick while the session runs', async () => {
     render(<App />);
 
@@ -145,7 +174,7 @@ describe('popup App composition (M3.T4)', () => {
     await flushAsync();
     const empty = useAppStore.getState().city.layers;
 
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await act(async () => {
       await fakeBrowser.runtime.sendMessage({
         type: 'TIMER_TICK',

@@ -2,7 +2,7 @@ import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
 import { selectThemeId } from '@/lib/city/theme-registry';
-import { growCity } from '@/lib/city/growth-engine';
+import { growCityByTicks } from '@/lib/city/growth-engine';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
@@ -84,10 +84,11 @@ const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
-  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCity`
-  // receives the seed derived from the session id by the city slice, so the
-  // running app actually builds a city instead of the placeholder identity.
-  growthEngine: growCity,
+  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCityByTicks`
+  // receives the whole ticks the background derived from the elapsed focus time
+  // and the session cadence, so the running app actually builds a city instead
+  // of the placeholder identity.
+  growthEngine: growCityByTicks,
   // Each session gets a deterministic biome from the theme registry (M2.T13b),
   // replacing the placeholder fixed default.
   selectThemeId,
@@ -178,7 +179,32 @@ function buildStore(storage: BrowserStateStorage, dependencies: StoreDependencie
       name: STORE_NAME,
       storage: createJSONStorage<PersistedState>(() => storage),
       partialize,
+      // Slice-aware `merge` (store-analysis CI-2). Without it zustand's shallow
+      // merge drops any *newly added* field that a persisted snapshot predates,
+      // so `timer.durationSeconds` would come back `undefined` for an existing
+      // user. Merging per slice keeps the fresh default in that case.
+      //
+      // A slice that was *not* persisted keeps its current reference: rebuilding
+      // it every hydration would churn references the app already observes
+      // (breaking `selectCity`-style identity checks) and could clobber state
+      // written between store creation and the async hydration completing.
       version: 1,
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<PersistedState>;
+        return {
+          ...current,
+          ...saved,
+          timer: saved.timer ? { ...current.timer, ...saved.timer } : current.timer,
+          city: saved.city ? { ...current.city, ...saved.city } : current.city,
+          blocklist: saved.blocklist
+            ? { ...current.blocklist, ...saved.blocklist }
+            : current.blocklist,
+          score: saved.score ? { ...current.score, ...saved.score } : current.score,
+          sessionHistory: saved.sessionHistory
+            ? { ...current.sessionHistory, ...saved.sessionHistory }
+            : current.sessionHistory,
+        };
+      },
     }),
   );
   // Expose the raw adapter so `attachStoreSync` can consult its self-write

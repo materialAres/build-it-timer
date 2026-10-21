@@ -9,6 +9,7 @@ const SESSION_ID = 'session-1';
 
 const runningTimer: TimerState = {
   status: 'running',
+  durationSeconds: 1500,
   remainingSeconds: 1500,
   sessionStartedAt: T0,
   sessionId: SESSION_ID,
@@ -22,6 +23,7 @@ describe('restoreTimer (M2.T2)', () => {
     const alarmProvider = new FakeAlarmProvider(T0);
     const idle: TimerState = {
       status: 'idle',
+      durationSeconds: 1500,
       remainingSeconds: 1500,
       sessionStartedAt: null,
       sessionId: null,

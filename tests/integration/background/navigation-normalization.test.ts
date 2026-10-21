@@ -24,6 +24,7 @@ function createRunningStore(blockedSites: ReadonlyArray<string> = []): AppStore 
     blocklist: lists,
     timer: {
       status: 'running',
+      durationSeconds: 1500,
       remainingSeconds: 1500,
       sessionStartedAt: T0,
       endsAt: T0 + 1_500_000,

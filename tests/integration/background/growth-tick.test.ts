@@ -4,15 +4,17 @@ import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, selectPopulation } from '@/store';
-import {
-  growCity,
-  seedFromSession,
-  GROWTH_TICK_MS,
-} from '@/lib/city/growth-engine';
+import { growCityByTicks, seedFromSession } from '@/lib/city/growth-engine';
 import { calculatePopulation } from '@/lib/score/calculate-population';
+import {
+  DEFAULT_FOCUS_PRESET,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
+/** Cadence of the default preset: a session tick, not the legacy 2s constant. */
+const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
 function countOccupied(layers: CityLayers): number {
   return [layers.background, layers.middleground, layers.foreground].reduce(
@@ -52,17 +54,17 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     const empty = store.getState().city.layers;
     const seed = seedFromSession(store.getState().city.sessionId);
 
-    // First tick, 2s of focus after the session started.
-    now = T0 + GROWTH_TICK_MS;
+    // First tick, one session tick of focus after the session started.
+    now = T0 + TICK_MS;
     await tick();
-    let expected = growCity(empty, GROWTH_TICK_MS, seed);
+    let expected = growCityByTicks(empty, 1, seed);
     expect(store.getState().city.layers).toEqual(expected);
     expect(countOccupied(store.getState().city.layers)).toBe(1);
 
     // Second tick: another single character, never a block.
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await tick();
-    expected = growCity(expected, GROWTH_TICK_MS, seed);
+    expected = growCityByTicks(expected, 1, seed);
     expect(store.getState().city.layers).toEqual(expected);
     expect(countOccupied(store.getState().city.layers)).toBe(2);
 
@@ -74,13 +76,13 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     await handle.ready;
 
     await store.getState().startTimer();
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await tick();
     await store.getState().pauseTimer();
     const frozen = store.getState().city.layers;
 
     // Ticks keep arriving (a naive emitter) but the paused interval is not focus.
-    now = T0 + GROWTH_TICK_MS * 10;
+    now = T0 + TICK_MS * 10;
     await tick();
 
     expect(store.getState().city.layers).toBe(frozen);
@@ -92,21 +94,21 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     await handle.ready;
 
     const before = store.getState().city.layers;
-    now = T0 + GROWTH_TICK_MS * 3;
+    now = T0 + TICK_MS * 3;
     await tick();
 
     expect(store.getState().city.layers).toBe(before);
     handle.dispose();
   });
 
-  it('does not grow for a sub-tick delta (less than 2s of focus)', async () => {
+  it('does not grow for a sub-tick delta (less than one session tick of focus)', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await store.getState().startTimer();
     const empty = store.getState().city.layers;
 
-    now = T0 + GROWTH_TICK_MS - 1;
+    now = T0 + TICK_MS - 1;
     await tick();
 
     expect(store.getState().city.layers).toBe(empty);
@@ -121,18 +123,22 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     const empty = store.getState().city.layers;
     const seed = seedFromSession(store.getState().city.sessionId);
 
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await tick();
     await store.getState().pauseTimer();
 
     // Ten seconds pass paused, then the session resumes.
-    now = T0 + GROWTH_TICK_MS * 5;
+    now = T0 + TICK_MS * 5;
     await store.getState().startTimer();
-    now = T0 + GROWTH_TICK_MS * 6;
+    now = T0 + TICK_MS * 6;
     await tick();
 
-    // Only the two 2s running stretches count, not the paused gap.
-    const expected = growCity(growCity(empty, GROWTH_TICK_MS, seed), GROWTH_TICK_MS, seed);
+    // Only the two running stretches count, not the paused gap.
+    const expected = growCityByTicks(
+      growCityByTicks(empty, 1, seed),
+      1,
+      seed,
+    );
     expect(store.getState().city.layers).toEqual(expected);
     expect(countOccupied(store.getState().city.layers)).toBe(2);
     handle.dispose();
@@ -165,12 +171,12 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds } });
   }
 
-  /** Start a session and let `ms` of focus elapse through the 2s tick cadence. */
+  /** Start a session and let `ms` of focus elapse through the session cadence. */
   async function runFocused(ms: number): Promise<number> {
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
-    const ticks = Math.floor(ms / GROWTH_TICK_MS);
+    const ticks = Math.floor(ms / TICK_MS);
     for (let t = 1; t <= ticks; t += 1) {
-      now = T0 + t * GROWTH_TICK_MS;
+      now = T0 + t * TICK_MS;
       await tick();
     }
     return ticks;
@@ -180,32 +186,32 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
-    // 10 minutes of focus: one +5 batch per completed 2-second tick.
+    // 10 minutes of focus: one +5 batch per completed session tick.
     const ticks = await runFocused(10 * 60_000);
     expect(selectPopulation(store.getState())).toBe(
-      calculatePopulation(ticks * GROWTH_TICK_MS),
+      calculatePopulation(ticks * TICK_MS, 0, TICK_MS),
     );
     expect(selectPopulation(store.getState())).toBe(ticks * 5);
 
     handle.dispose();
   });
 
-  it('adds 5 inhabitants every 2 seconds while running', async () => {
+  it('adds 5 inhabitants every session tick while running', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
     expect(selectPopulation(store.getState())).toBe(0);
 
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await tick();
     expect(selectPopulation(store.getState())).toBe(5);
 
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await tick();
     expect(selectPopulation(store.getState())).toBe(10);
 
-    now = T0 + GROWTH_TICK_MS * 3;
+    now = T0 + TICK_MS * 3;
     await tick();
     expect(selectPopulation(store.getState())).toBe(15);
 
@@ -240,9 +246,9 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     await runFocused(6 * 60_000);
     const afterTicks = store.getState().score;
 
-    // A sub-tick delta completes no new 2-second tick, so the population is
+    // A sub-tick delta completes no new session tick, so the population is
     // unchanged and the slice must keep the same reference (no persist/re-render).
-    now = T0 + 6 * 60_000 + GROWTH_TICK_MS - 1;
+    now = T0 + 6 * 60_000 + TICK_MS - 1;
     await tick();
     expect(store.getState().score).toBe(afterTicks);
 
@@ -272,7 +278,7 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     // instead of restarting at zero.
     expect(selectPopulation(restartedStore.getState())).toBe(before);
 
-    now += GROWTH_TICK_MS;
+    now += TICK_MS;
     await tick();
     expect(selectPopulation(restartedStore.getState())).toBe(before + 5);
 
@@ -309,20 +315,20 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
 
     // Two clean focus ticks: +5 each.
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await tick();
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await tick();
     expect(selectPopulation(store.getState())).toBe(10);
     const cityBefore = store.getState().city.layers;
 
     // Navigate to the blocked site: the elapsed stretch is now distraction.
     reflectTabUpdate('https://x.com/feed');
-    now = T0 + GROWTH_TICK_MS * 3;
+    now = T0 + TICK_MS * 3;
     await tick();
     expect(selectPopulation(store.getState())).toBe(5);
 
-    now = T0 + GROWTH_TICK_MS * 4;
+    now = T0 + TICK_MS * 4;
     await tick();
     expect(selectPopulation(store.getState())).toBe(0);
 
@@ -360,9 +366,9 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
 
     // Distracted from the start: two ticks of penalty, clamped at zero.
     reflectTabUpdate('https://x.com/feed');
-    now = T0 + GROWTH_TICK_MS;
+    now = T0 + TICK_MS;
     await tick();
-    now = T0 + GROWTH_TICK_MS * 2;
+    now = T0 + TICK_MS * 2;
     await tick();
     expect(selectPopulation(store.getState())).toBe(0);
 
@@ -370,20 +376,20 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     // so the two ticks of distraction debt are paid back first: still 0 after
     // one and two focus ticks...
     reflectTabUpdate('https://example.com/');
-    now = T0 + GROWTH_TICK_MS * 3;
+    now = T0 + TICK_MS * 3;
     await tick();
     expect(selectPopulation(store.getState())).toBe(0);
 
-    now = T0 + GROWTH_TICK_MS * 4;
+    now = T0 + TICK_MS * 4;
     await tick();
     expect(selectPopulation(store.getState())).toBe(0);
 
     // ...and the population grows again from the third focus tick onward.
-    now = T0 + GROWTH_TICK_MS * 5;
+    now = T0 + TICK_MS * 5;
     await tick();
     expect(selectPopulation(store.getState())).toBe(5);
 
-    now = T0 + GROWTH_TICK_MS * 6;
+    now = T0 + TICK_MS * 6;
     await tick();
     expect(selectPopulation(store.getState())).toBe(10);
 

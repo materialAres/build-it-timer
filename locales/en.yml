@@ -11,6 +11,8 @@ timer:
   start: Start
   pause: Pause
   reset: Reset
+  durationLabel: Focus duration
+  durationOption: '$1 min'
 
 tabs:
   ariaLabel: Popup sections

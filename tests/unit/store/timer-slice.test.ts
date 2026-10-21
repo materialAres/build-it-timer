@@ -42,6 +42,7 @@ describe('timerSlice (M2.T1)', () => {
     const { timer } = createStore().getState();
 
     expect(timer.status).toBe('idle');
+    expect(timer.durationSeconds).toBe(DEFAULT_FOCUS_SECONDS);
     expect(timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS);
     expect(timer.sessionStartedAt).toBeNull();
     expect(timer.sessionId).toBeNull();
@@ -135,7 +136,7 @@ describe('timerSlice (M2.T1)', () => {
     await store.getState().pauseTimer();
 
     // The frozen value is the *actual* remaining time, so the display does not
-    // jump back to 25:00 when the session is paused.
+    // jump back to the full session length when the session is paused.
     expect(store.getState().timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS - 300);
   });
 
@@ -191,6 +192,61 @@ describe('timerSlice (M2.T1)', () => {
     expect(timer.sessionStartedAt).toBeNull();
     expect(timer.sessionId).toBeNull();
     expect(alarmProvider.scheduledAlarms).toEqual([]);
+  });
+
+  it('setFocusDuration applies an offered preset while idle', () => {
+    const store = createStore();
+
+    store.getState().setFocusDuration(10 * 60);
+
+    const { timer } = store.getState();
+    expect(timer.durationSeconds).toBe(600);
+    // The idle countdown shows the chosen length until the session starts.
+    expect(timer.remainingSeconds).toBe(600);
+  });
+
+  it('setFocusDuration ignores a value that is not a preset', () => {
+    const store = createStore();
+    const before = store.getState().timer;
+
+    store.getState().setFocusDuration(before.durationSeconds + 7);
+
+    expect(store.getState().timer).toBe(before);
+  });
+
+  it('setFocusDuration is a no-op while running or paused', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    const running = store.getState().timer.durationSeconds;
+
+    store.getState().setFocusDuration(600);
+    expect(store.getState().timer.durationSeconds).toBe(running);
+
+    await store.getState().pauseTimer();
+    store.getState().setFocusDuration(600);
+    expect(store.getState().timer.durationSeconds).toBe(running);
+  });
+
+  it('setFocusDuration is a no-op when the value is unchanged', () => {
+    const store = createStore();
+    const before = store.getState().timer;
+
+    store.getState().setFocusDuration(before.durationSeconds);
+
+    expect(store.getState().timer).toBe(before);
+  });
+
+  it('resetTimer returns to the *selected* duration, not the default', async () => {
+    const store = createStore();
+    store.getState().setFocusDuration(600);
+    await store.getState().startTimer();
+
+    await store.getState().resetTimer();
+
+    const { timer } = store.getState();
+    expect(timer.status).toBe('idle');
+    expect(timer.durationSeconds).toBe(600);
+    expect(timer.remainingSeconds).toBe(600);
   });
 
   it('delegates to the injected provider instead of touching browser.alarms', async () => {

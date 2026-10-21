@@ -23,15 +23,17 @@ export { DEFAULT_THEME_ID } from '@/lib/city/theme-registry';
 
 /**
  * The growth engine port (principle D): the pure function that computes the new
- * layer state from the current one, an elapsed focus time and the session seed.
- * Injected so the slice stays a thin delegation layer and the concrete engine
- * (`lib/city/growth-engine.ts`, M2.T12) can be plugged in from the outside.
- * `seedFromSession` (M2.T15) is what makes the same session always rebuild the
- * same city; the default is the identity, i.e. "no growth engine wired yet".
+ * layer state from the current one, a number of whole ticks and the session
+ * seed. Ticks (not elapsed ms) are the unit so the session cadence stays a timer
+ * concern (`lib/timer/focus-presets.ts`). Injected so the slice stays a thin
+ * delegation layer and the concrete engine (`lib/city/growth-engine.ts`, M2.T12)
+ * can be plugged in from the outside. `seedFromSession` (M2.T15) is what makes
+ * the same session always rebuild the same city; the default is the identity,
+ * i.e. "no growth engine wired yet".
  */
 export type CityGrowthEngine = (
   layers: CityLayers,
-  elapsedMs: number,
+  ticks: number,
   seed: number,
 ) => CityLayers;
 
@@ -64,8 +66,8 @@ export interface CitySlice {
    * its own city.
    */
   resetCityForNewSession(sessionId: string, themeId?: string): void;
-  /** Grow the city by delegating to the injected growth engine (M2.T12). */
-  growCity(elapsedMs: number): void;
+  /** Grow the city by whole ticks, delegating to the injected engine (M2.T12). */
+  growCityByTicks(ticks: number): void;
   /** Shrink the city by delegating to the malus function (M2.T10). */
   applyMalusToCity(ticks: number): void;
 }
@@ -115,11 +117,11 @@ export function createCitySlice(
       });
     },
 
-    growCity(elapsedMs: number): void {
+    growCityByTicks(ticks: number): void {
       const { city } = get();
       const layers = growthEngine(
         city.layers,
-        elapsedMs,
+        ticks,
         seedFromSession(city.sessionId),
       );
       // Same reference means the engine computed no change: skip the write so a

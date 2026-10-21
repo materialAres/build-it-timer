@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
-import { useAppStore, DEFAULT_FOCUS_SECONDS } from '@/store';
+import { useAppStore } from '@/store';
 import type { TimerState } from '@/store/store.types';
 
 const T0 = 1_700_000_000_000;
+/** Length of the fixture session; the tests hardcode it in the projections. */
+const SESSION_SECONDS = 1500;
 
 const idleTimer: TimerState = {
   status: 'idle',
-  remainingSeconds: DEFAULT_FOCUS_SECONDS,
+  durationSeconds: SESSION_SECONDS,
+  remainingSeconds: SESSION_SECONDS,
   sessionStartedAt: null,
   sessionId: null,
   endsAt: null,
@@ -30,7 +33,7 @@ describe('useCountdownEstimate (I001)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(T0);
     useAppStore.setState({ timer: { ...idleTimer } });
-    useAppStore.getState().setLiveRemainingSeconds(DEFAULT_FOCUS_SECONDS);
+    useAppStore.getState().setLiveRemainingSeconds(SESSION_SECONDS);
   });
 
   afterEach(() => {
@@ -41,7 +44,7 @@ describe('useCountdownEstimate (I001)', () => {
   it('publishes the persisted value while idle', () => {
     render(<Probe />);
 
-    expect(useAppStore.getState().ui.liveRemainingSeconds).toBe(DEFAULT_FOCUS_SECONDS);
+    expect(useAppStore.getState().ui.liveRemainingSeconds).toBe(SESSION_SECONDS);
   });
 
   it('counts down once per second while running', () => {

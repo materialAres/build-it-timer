@@ -9,6 +9,7 @@ import type { TimerState } from '@/store/store.types';
 
 const idleTimer: TimerState = {
   status: 'idle',
+  durationSeconds: 1500,
   remainingSeconds: 1500,
   sessionStartedAt: null,
   sessionId: null,

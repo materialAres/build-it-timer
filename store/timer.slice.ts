@@ -1,12 +1,20 @@
 import type { StateCreator } from 'zustand';
 import type { AlarmProvider } from '@/lib/timer/alarm-adapter';
+import {
+  DEFAULT_FOCUS_PRESET,
+  isPresetDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import { generateSessionId, timerAlarmName } from '@/lib/timer/session';
 import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
 import type { TimerState, TimerStatus } from './store.types';
 import type { AppState } from '.';
 
-/** Default focus session length, in seconds (25 minutes). */
-export const DEFAULT_FOCUS_SECONDS = 25 * 60;
+/**
+ * Default focus session length, in seconds. Kept as a named export for existing
+ * callers; it now derives from {@link DEFAULT_FOCUS_PRESET} (the centralized
+ * preset table) instead of a hard-coded 25 minutes.
+ */
+export const DEFAULT_FOCUS_SECONDS = DEFAULT_FOCUS_PRESET.durationSeconds;
 
 /**
  * Injected collaborators of the slice (principle D). The slice never imports
@@ -47,7 +55,7 @@ export interface TimerSlice {
   /**
    * Record undistracted focus time accumulated by the growth tracker
    * (M2.T15/M2.T18). The tracker measures the running-only elapsed time on
-   * each 2s tick and hands the running total here; the field is persisted so
+   * each sampling tick and hands the running total here; the field is persisted so
    * the accumulator survives a service worker restart mid-session. A
    * non-finite or negative value degrades to 0 (§1.4).
    */
@@ -60,6 +68,19 @@ export interface TimerSlice {
    * degrades to 0 (§1.4).
    */
   recordDistractedMs(distractedMs: number): void;
+  /**
+   * Change the session length to one of the offered presets. Only legal while
+   * the timer is idle or completed: changing it mid-run would desync `endsAt`,
+   * the pending alarm and the growth cadence. An unknown or non-preset value is
+   * ignored (§1.4 defensive boundary).
+   */
+  setFocusDuration(durationSeconds: number): void;
+  /**
+   * Ask the background (the timer's owner) to change the session length
+   * (read-only popup, M1.T9). The popup's answer arrives through the M1.T8 sync
+   * bridge, exactly like the other timer commands.
+   */
+  requestSetDuration(durationSeconds: number): void;
   /**
    * Ask the background to start/resume the session (M3.T3b). A read-only
    * context (the popup, M1.T9) must not run `startTimer` locally: that would
@@ -76,6 +97,7 @@ export interface TimerSlice {
 
 const initialTimerState: TimerState = {
   status: 'idle',
+  durationSeconds: DEFAULT_FOCUS_SECONDS,
   remainingSeconds: DEFAULT_FOCUS_SECONDS,
   sessionStartedAt: null,
   sessionId: null,
@@ -135,6 +157,7 @@ export function createTimerSlice(
       set({
         timer: {
           status: 'running',
+          durationSeconds: timer.durationSeconds,
           remainingSeconds: timer.remainingSeconds,
           sessionStartedAt: startedAt,
           sessionId,
@@ -172,8 +195,12 @@ export function createTimerSlice(
     },
 
     async resetTimer(): Promise<void> {
-      const { sessionId } = get().timer;
-      set({ timer: { ...initialTimerState } });
+      const { sessionId, durationSeconds } = get().timer;
+      // Reset returns to the *selected* duration, not a fixed default, so the
+      // user's choice survives a reset (the cadence keys off it too).
+      set({
+        timer: { ...initialTimerState, durationSeconds, remainingSeconds: durationSeconds },
+      });
       // Cancel by the *previous* session's name: after the reset the store no
       // longer remembers which alarm was pending.
       if (sessionId !== null) {
@@ -192,6 +219,7 @@ export function createTimerSlice(
       set({
         timer: {
           status: 'completed',
+          durationSeconds: timer.durationSeconds,
           remainingSeconds: 0,
           sessionStartedAt: timer.sessionStartedAt,
           sessionId,
@@ -226,9 +254,31 @@ export function createTimerSlice(
       set({ timer: { ...timer, distractedMs: safe } });
     },
 
+    setFocusDuration(durationSeconds: number): void {
+      const { timer } = get();
+      // Changing the length mid-session would desync the projected end time, the
+      // pending alarm and the growth cadence: it is a no-op outside idle/completed.
+      if (timer.status === 'running' || timer.status === 'paused') return;
+      if (!isPresetDurationSeconds(durationSeconds)) return;
+      if (timer.durationSeconds === durationSeconds) return;
+      set({
+        timer: {
+          ...timer,
+          durationSeconds,
+          // A new idle session shows the chosen length; `remainingSeconds` is
+          // derived from it until the countdown starts.
+          remainingSeconds: durationSeconds,
+        },
+      });
+    },
+
     // The request actions never touch the local state: the popup's copy is
     // read-only (M1.T9) and the background's answer arrives through the M1.T8
     // sync bridge, so the UI converges on the state the owner actually applied.
+    requestSetDuration(durationSeconds: number): void {
+      sendMutation?.({ type: 'TIMER_SET_DURATION', payload: { durationSeconds } });
+    },
+
     requestStartTimer(): void {
       sendMutation?.({ type: 'TIMER_STARTED', payload: {} });
     },

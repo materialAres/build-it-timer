@@ -6,6 +6,7 @@ const T0 = 1_700_000_000_000;
 
 const running: TimerState = {
   status: 'running',
+  durationSeconds: 1500,
   remainingSeconds: 1500,
   sessionStartedAt: T0,
   sessionId: 'session-1',
