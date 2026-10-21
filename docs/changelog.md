@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **I005** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped).
+> Updated to: **M4.T3a** (Milestone 3 completed, Milestone 4 in progress; five post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -15,9 +15,9 @@ description: Rules for updating the changelog
 - Milestone 1 (base infrastructure) — **completed**: M1.T1 … M1.T10 all done.
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
-- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a … M4.T3e, M4.T4 … M4.T5 remaining.
+- Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); M4.T3a done; M4.T3b … M4.T3e, M4.T4 … M4.T5 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus).
-- Tests: `bun run test` → **642 passing tests** across 70 files (unit + integration + component).
+- Tests: `bun run test` → **652 passing tests** across 71 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -79,6 +79,7 @@ description: Rules for updating the changelog
 | M3.T9 | Internationalization (i18n) — WXT `@wxt-dev/i18n` module setup (EN default) | completed | `46b9678` |
 | M3.T10 | IT translation (language auto-detected from browser) | completed | `51f3b19` |
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | completed (nice-to-have) | `5d665bb` (adapted to the session cadence by `de0ffe8`, I005) |
+| M4.T3a | Error hardening — centralized logger foundation | completed | working tree (commit pending) |
 | I001 | Countdown never decremented (timer display frozen) | fixed | `1797de6` |
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
@@ -740,6 +741,20 @@ description: Rules for updating the changelog
 
 ### M4.T2 — *(Nice to have)* TexturePacker / building sprite sheet integration — skipped
 - **Decision**: the task is skipped for now. It is an optional nice-to-have and is not needed at this time; the city keeps its current ASCII renderer unchanged.
+
+### M4.T3a — Centralized logger foundation
+- `utils/logger.ts` (new) — the shared logging primitive consumed by the rest of M4.T3:
+  - `createLogger(scope, { sink?, minLevel? })` exposes `debug`/`info`/`warn`/`error` and `child(scope)`. Records are `{ level, scope, message, details }`; the default sink writes `[buildit:<scope>] <message>` to the matching console method, while tests inject a sink and assert the record directly (no exact-console-text coupling).
+  - Level filtering is real: the default threshold is `debug` in development and `warn` in production, and `minLevel` overrides it. `child('dnr')` appends the segment (`background:dnr`) and inherits the sink and threshold; an empty child scope leaves the scope unchanged.
+  - `error(message, cause?, context?)` accepts `unknown`, preserves an existing `Error` (and its stack), turns a non-empty string into an `Error`, wraps any other value with the original as `cause`, and appends the technical context after it. Context is deliberately limited to technical fields (message type, storage key, export format) — no URLs, domains or payloads — and there is no remote transport or persistence.
+  - A throwing sink is swallowed: logging is best-effort and must never turn a handled error into a new failure for the caller.
+- `tests/unit/utils/logger.test.ts` (new) — 10 tests (unit): scoped record + context; threshold filtering; child scope/sink/threshold inheritance; empty child scope; `Error` identity + context order; string and object cause normalization; empty details; throwing sink; default console prefix.
+- Files created/modified: `utils/logger.ts` (new), `tests/unit/utils/logger.test.ts` (new).
+- Dependencies added: none.
+- Tests: `bun run test` → **652 passing tests** across 71 files (baseline 642/70; +10 tests/+1 file). `bun run compile` and `bun run lint` are clean; `bun run build` (Chrome) and `bun run build:firefox` (Firefox) both succeed.
+- Relevant notes/decisions: no call site was changed in this subtask, so the existing three `console.error` calls in `entrypoints/background.ts` remain until M4.T3b. For the same reason `no-console` is deferred to M4.T3e; enabling it now would fail immediately.
+- Commit: working tree (commit pending).
+- Acceptance criteria: verified — the logger has levels, scope/child context and an injectable sink; the threshold is configurable; the error cause is preserved/normalized; context carries no user data; logging cannot break the caller.
 
 ---
 
