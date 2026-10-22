@@ -15,6 +15,7 @@ const idleTimer: TimerState = {
   endsAt: null,
   focusedMs: 0,
   distractedMs: 0,
+  lastAccountedAt: null,
 };
 
 function setTimer(partial: Partial<TimerState>): void {

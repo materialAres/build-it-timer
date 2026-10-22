@@ -49,12 +49,28 @@ export async function restoreTimer(
   const { sessionId } = timer;
 
   if (sessionId === null) {
-    return { timer: { ...timer, status: 'paused', endsAt: null }, changed: true };
+    return {
+      timer: {
+        ...timer,
+        status: 'paused',
+        endsAt: null,
+        lastAccountedAt: null,
+      },
+      changed: true,
+    };
   }
 
   const dueAt = await alarmProvider.getScheduledTime(timerAlarmName(sessionId));
   if (dueAt === undefined) {
-    return { timer: { ...timer, status: 'paused', endsAt: null }, changed: true };
+    return {
+      timer: {
+        ...timer,
+        status: 'paused',
+        endsAt: null,
+        lastAccountedAt: null,
+      },
+      changed: true,
+    };
   }
 
   const remainingSeconds = Math.max(0, Math.round((dueAt - now()) / 1000));
@@ -65,5 +81,8 @@ export async function restoreTimer(
     return { timer, changed: false };
   }
 
-  return { timer: { ...timer, remainingSeconds, endsAt: dueAt }, changed: true };
+  return {
+    timer: { ...timer, remainingSeconds, endsAt: dueAt },
+    changed: true,
+  };
 }

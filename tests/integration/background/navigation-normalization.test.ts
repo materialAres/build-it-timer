@@ -31,6 +31,7 @@ function createRunningStore(blockedSites: ReadonlyArray<string> = []): AppStore 
       sessionId: 'session-1',
       focusedMs: 0,
       distractedMs: 0,
+      lastAccountedAt: T0,
     },
   });
 

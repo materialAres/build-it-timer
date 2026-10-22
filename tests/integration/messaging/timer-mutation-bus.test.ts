@@ -2,9 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
-import { createAppStore, attachStoreSync, STORE_NAME, selectPopulation } from '@/store';
+import {
+  createAppStore,
+  attachStoreSync,
+  STORE_NAME,
+  selectPopulation,
+} from '@/store';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
-import { timerAlarmName } from '@/lib/timer/session';
+import { timerAlarmName, TIMER_PROGRESS_ALARM } from '@/lib/timer/session';
 import {
   DEFAULT_FOCUS_PRESET,
   FOCUS_PRESETS,
@@ -63,9 +68,14 @@ describe('popup → background timer path (M3.T3b)', () => {
     const { timer } = store.getState();
     expect(timer.status).toBe('running');
     expect(timer.sessionId).not.toBeNull();
-    // The alarm lives on the *background's* provider, not on the popup's copy.
-    expect(alarmProvider.scheduledAlarms).toHaveLength(1);
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(timer.sessionId ?? ''))).toBeDefined();
+    // The alarms live on the *background's* provider, not on the popup's copy:
+    // the session deadline plus the progress heartbeat that advances the city
+    // and population while the popup is closed.
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(timer.sessionId ?? '')),
+    ).toBeDefined();
+    expect(alarmProvider.getScheduledWhen(TIMER_PROGRESS_ALARM)).toBeDefined();
+    expect(alarmProvider.scheduledAlarms).toHaveLength(2);
 
     handle.dispose();
   });
@@ -79,7 +89,9 @@ describe('popup → background timer path (M3.T3b)', () => {
     await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
 
     expect(store.getState().timer.status).toBe('paused');
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(sessionId)),
+    ).toBeUndefined();
 
     handle.dispose();
   });
@@ -104,7 +116,8 @@ describe('popup → background timer path (M3.T3b)', () => {
     await handle.ready;
 
     const chosen = FOCUS_PRESETS.find(
-      (preset) => preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
+      (preset) =>
+        preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
     );
     if (chosen === undefined) throw new Error('expected more than one preset');
 
@@ -169,14 +182,19 @@ describe('popup → background timer path (M3.T3b)', () => {
       dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
     });
     await backgroundStore.persist.rehydrate();
-    const handle = startBackground({ store: backgroundStore, alarmProvider, now: () => now });
+    const handle = startBackground({
+      store: backgroundStore,
+      alarmProvider,
+      now: () => now,
+    });
 
     const popupStore = createAppStore({ readOnly: true });
     await popupStore.persist.rehydrate();
     attachStoreSync(popupStore);
 
     const chosen = FOCUS_PRESETS.find(
-      (preset) => preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
+      (preset) =>
+        preset.durationSeconds !== DEFAULT_FOCUS_PRESET.durationSeconds,
     );
     if (chosen === undefined) throw new Error('expected more than one preset');
 
@@ -237,7 +255,11 @@ describe('popup → background timer path (M3.T3b)', () => {
       dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
     });
     await backgroundStore.persist.rehydrate();
-    const handle = startBackground({ store: backgroundStore, alarmProvider, now: () => now });
+    const handle = startBackground({
+      store: backgroundStore,
+      alarmProvider,
+      now: () => now,
+    });
 
     // A popup-like context: read-only store + sync attached, as in main.tsx.
     const popupStore = createAppStore({ readOnly: true });
@@ -260,7 +282,11 @@ describe('popup → background timer path (M3.T3b)', () => {
       dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
     });
     await backgroundStore.persist.rehydrate();
-    const handle = startBackground({ store: backgroundStore, alarmProvider, now: () => now });
+    const handle = startBackground({
+      store: backgroundStore,
+      alarmProvider,
+      now: () => now,
+    });
 
     const popupStore = createAppStore({ readOnly: true });
     await popupStore.persist.rehydrate();
@@ -272,12 +298,18 @@ describe('popup → background timer path (M3.T3b)', () => {
     // Two ticks of focus: the popup must see +5 each time through the sync
     // bridge, not only at session completion.
     now = T0 + TICK_MS;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_500 },
+    });
     await flushAsync();
     expect(selectPopulation(popupStore.getState())).toBe(5);
 
     now = T0 + TICK_MS * 2;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_498 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_498 },
+    });
     await flushAsync();
     expect(selectPopulation(popupStore.getState())).toBe(10);
 
@@ -292,11 +324,17 @@ describe('popup → background timer path (M3.T3b)', () => {
     const empty = store.getState().city.layers;
 
     now = T0 + TICK_MS;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_500 },
+    });
     expect(countOccupied(store.getState().city.layers)).toBe(1);
 
     now = T0 + TICK_MS * 2;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_498 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_498 },
+    });
     expect(countOccupied(store.getState().city.layers)).toBe(2);
     expect(store.getState().city.layers).not.toBe(empty);
 
@@ -309,12 +347,18 @@ describe('popup → background timer path (M3.T3b)', () => {
 
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
     now = T0 + TICK_MS;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_500 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_500 },
+    });
     await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
     const frozen = store.getState().city.layers;
 
     now = T0 + TICK_MS * 10;
-    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_480 } });
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_480 },
+    });
 
     expect(store.getState().city.layers).toBe(frozen);
     handle.dispose();

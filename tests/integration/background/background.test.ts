@@ -87,7 +87,8 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     await vi.waitFor(() => {
       expect(
         records.some(
-          (record) => record.message === 'tab distraction tracker failed to start',
+          (record) =>
+            record.message === 'tab distraction tracker failed to start',
         ),
       ).toBe(true);
     });
@@ -128,7 +129,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     const handle = startBackground();
 
     // Passive M1.T1 variants plus the M1.T10/M3.T3b mutation variants.
-    expect(addListener).toHaveBeenCalledTimes(MESSAGE_TYPES.length + MUTATION_TYPES.length);
+    expect(addListener).toHaveBeenCalledTimes(
+      MESSAGE_TYPES.length + MUTATION_TYPES.length,
+    );
     expect(MESSAGE_TYPES).toHaveLength(4);
 
     handle.dispose();
@@ -141,7 +144,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
 
     const handle = startBackground({ alarmProvider });
 
-    expect(onFire).toHaveBeenCalledTimes(1);
+    // Session completion (M3.T3c) + the 60s progress heartbeat that keeps the
+    // city/population advancing while the popup is closed.
+    expect(onFire).toHaveBeenCalledTimes(2);
 
     handle.dispose();
   });
@@ -158,15 +163,26 @@ describe('background orchestrator skeleton (M1.T7)', () => {
         type: 'SITE_BLOCKED_ATTEMPT',
         payload: { domain: 'facebook.com', choice: 'proceed' },
       },
-      { type: 'MALUS_APPLIED', payload: { domain: 'facebook.com', charactersRemoved: 1 } },
+      {
+        type: 'MALUS_APPLIED',
+        payload: { domain: 'facebook.com', charactersRemoved: 1 },
+      },
       {
         type: 'SESSION_ENDED',
-        payload: { sessionId: 'session-1', score: 'good', population: 10, endedAt: 0 },
+        payload: {
+          sessionId: 'session-1',
+          score: 'good',
+          population: 10,
+          endedAt: 0,
+        },
       },
     ];
 
     for (const message of messages) {
-      await expect(sendMessage(message)).resolves.toEqual({ ok: true, value: undefined });
+      await expect(sendMessage(message)).resolves.toEqual({
+        ok: true,
+        value: undefined,
+      });
     }
 
     handle.dispose();
@@ -199,7 +215,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     const tag: Tag = { id: 'focus', label: 'Focus' };
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: JSON.stringify({
-        state: { blocklist: { ...store.getState().blocklist, customTags: [tag] } },
+        state: {
+          blocklist: { ...store.getState().blocklist, customTags: [tag] },
+        },
         version: 1,
       }),
     });
@@ -239,7 +257,10 @@ describe('background timer restore (M2.T2)', () => {
     await persistRunningTimer(DEFAULT_FOCUS_SECONDS);
     const alarmProvider = new FakeAlarmProvider(T0);
     // The alarm survived the restart; 5 minutes of wall-clock time elapsed.
-    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + DEFAULT_FOCUS_SECONDS * 1000);
+    await alarmProvider.schedule(
+      timerAlarmName(SESSION_ID),
+      T0 + DEFAULT_FOCUS_SECONDS * 1000,
+    );
     const now = T0 + 300 * 1000;
 
     const handle = startBackground({ alarmProvider, now: () => now });

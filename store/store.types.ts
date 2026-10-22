@@ -43,6 +43,17 @@ export interface TimerState {
    * session. Reset to 0 on every new session.
    */
   readonly distractedMs: number;
+  /**
+   * Epoch ms up to which `focusedMs`/`distractedMs` already account for time,
+   * or `null` when no running stretch is open (idle/paused/completed).
+   *
+   * Progress is derived from wall-clock time rather than sampled ticks: any
+   * background opportunity (a popup tick, the 60s progress alarm, a worker
+   * wake-up) credits `now() - lastAccountedAt` and moves this checkpoint
+   * forward. Persisting it is what lets the city and population catch up after
+   * the popup was closed or the machine was asleep instead of freezing.
+   */
+  readonly lastAccountedAt: number | null;
 }
 
 // derived from remainingSeconds from a formatting function
