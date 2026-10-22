@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useAppStore, attachStoreSync } from '@/store';
 import './style.css';
 
@@ -16,6 +17,8 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );

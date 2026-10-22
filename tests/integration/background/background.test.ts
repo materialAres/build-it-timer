@@ -1,17 +1,28 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { browser } from 'wxt/browser';
-import { startBackground, MESSAGE_TYPES } from '@/entrypoints/background';
+import {
+  bootstrapBackground,
+  startBackground,
+  MESSAGE_TYPES,
+} from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 import { MUTATION_TYPES } from '@/lib/messaging/messages.types';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, DEFAULT_FOCUS_SECONDS, STORE_NAME } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
+import { createLogger, type LogRecord } from '@/utils/logger';
 import type { Tag } from '@/store/store.types';
+import type { TabEventSource } from '@/lib/timer/tab-distraction-tracker';
 
 describe('background orchestrator skeleton (M1.T7)', () => {
   beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
     fakeBrowser.reset();
   });
 
@@ -26,13 +37,101 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     handle.dispose();
   });
 
+  it('logs a synchronous startup failure and returns null instead of throwing (M4.T3b)', () => {
+    const store = createAppStore();
+    vi.spyOn(store, 'getState').mockImplementation(() => {
+      throw new Error('store unavailable');
+    });
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+
+    const handle = bootstrapBackground({ store, logger });
+
+    expect(handle).toBeNull();
+    const failure = records.find(
+      (record) => record.message === 'background failed to start',
+    );
+    expect(failure).toBeDefined();
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('background-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ boundary: 'bootstrap' });
+  });
+
+  it('logs a failed tab-tracker startup without crashing the worker (M4.T3b)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    const tabEventSource: TabEventSource = {
+      queryTabs: () => Promise.reject(new Error('tabs unavailable')),
+      onUpdated: () => () => undefined,
+      onRemoved: () => () => undefined,
+    };
+
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(0),
+      tabEventSource,
+      logger,
+    });
+    await handle.ready;
+
+    await vi.waitFor(() => {
+      expect(
+        records.some(
+          (record) =>
+            record.message === 'tab distraction tracker failed to start',
+        ),
+      ).toBe(true);
+    });
+    expect(handle.store.getState().timer.status).toBe('idle');
+
+    handle.dispose();
+  });
+
+  it('logs a failed startup reconciliation and keeps ready resolved (M4.T3b)', async () => {
+    const store = createAppStore();
+    vi.spyOn(store.persist, 'rehydrate').mockRejectedValue(
+      new Error('hydration failed'),
+    );
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+
+    const handle = startBackground({ store, logger });
+    await expect(handle.ready).resolves.toBeUndefined();
+
+    const failure = records.find(
+      (record) => record.message === 'startup reconciliation failed',
+    );
+    expect(failure).toBeDefined();
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ boundary: 'startup' });
+
+    handle.dispose();
+  });
+
   it('registers one message listener per RuntimeMessage type (spy)', () => {
     const addListener = vi.spyOn(browser.runtime.onMessage, 'addListener');
 
     const handle = startBackground();
 
     // Passive M1.T1 variants plus the M1.T10/M3.T3b mutation variants.
-    expect(addListener).toHaveBeenCalledTimes(MESSAGE_TYPES.length + MUTATION_TYPES.length);
+    expect(addListener).toHaveBeenCalledTimes(
+      MESSAGE_TYPES.length + MUTATION_TYPES.length,
+    );
     expect(MESSAGE_TYPES).toHaveLength(4);
 
     handle.dispose();
@@ -45,7 +144,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
 
     const handle = startBackground({ alarmProvider });
 
-    expect(onFire).toHaveBeenCalledTimes(1);
+    // Session completion (M3.T3c) + the 60s progress heartbeat that keeps the
+    // city/population advancing while the popup is closed.
+    expect(onFire).toHaveBeenCalledTimes(2);
 
     handle.dispose();
   });
@@ -62,15 +163,26 @@ describe('background orchestrator skeleton (M1.T7)', () => {
         type: 'SITE_BLOCKED_ATTEMPT',
         payload: { domain: 'facebook.com', choice: 'proceed' },
       },
-      { type: 'MALUS_APPLIED', payload: { domain: 'facebook.com', charactersRemoved: 1 } },
+      {
+        type: 'MALUS_APPLIED',
+        payload: { domain: 'facebook.com', charactersRemoved: 1 },
+      },
       {
         type: 'SESSION_ENDED',
-        payload: { sessionId: 'session-1', score: 'good', population: 10, endedAt: 0 },
+        payload: {
+          sessionId: 'session-1',
+          score: 'good',
+          population: 10,
+          endedAt: 0,
+        },
       },
     ];
 
     for (const message of messages) {
-      await expect(sendMessage(message)).resolves.toEqual({ ok: true, value: undefined });
+      await expect(sendMessage(message)).resolves.toEqual({
+        ok: true,
+        value: undefined,
+      });
     }
 
     handle.dispose();
@@ -103,7 +215,9 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     const tag: Tag = { id: 'focus', label: 'Focus' };
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: JSON.stringify({
-        state: { blocklist: { ...store.getState().blocklist, customTags: [tag] } },
+        state: {
+          blocklist: { ...store.getState().blocklist, customTags: [tag] },
+        },
         version: 1,
       }),
     });
@@ -143,7 +257,10 @@ describe('background timer restore (M2.T2)', () => {
     await persistRunningTimer(DEFAULT_FOCUS_SECONDS);
     const alarmProvider = new FakeAlarmProvider(T0);
     // The alarm survived the restart; 5 minutes of wall-clock time elapsed.
-    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + DEFAULT_FOCUS_SECONDS * 1000);
+    await alarmProvider.schedule(
+      timerAlarmName(SESSION_ID),
+      T0 + DEFAULT_FOCUS_SECONDS * 1000,
+    );
     const now = T0 + 300 * 1000;
 
     const handle = startBackground({ alarmProvider, now: () => now });

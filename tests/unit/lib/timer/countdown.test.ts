@@ -13,6 +13,7 @@ const running: TimerState = {
   endsAt: T0 + 1500 * 1000,
   focusedMs: 0,
   distractedMs: 0,
+  lastAccountedAt: T0,
 };
 
 describe('estimateRemainingSeconds (I001)', () => {

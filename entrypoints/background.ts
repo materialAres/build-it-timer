@@ -1,10 +1,7 @@
-import {
-  createAppStore,
-  attachStoreSync,
-  type AppStore,
-} from '@/store';
+import { createAppStore, attachStoreSync, type AppStore } from '@/store';
 import {
   createBrowserAlarmProvider,
+  ALARM_MIN_TICK_MS,
   type AlarmProvider,
 } from '@/lib/timer/alarm-adapter';
 import { restoreTimer } from '@/lib/timer/restore-timer';
@@ -23,7 +20,8 @@ import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { calculatePopulation } from '@/lib/score/calculate-population';
 import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
-import { timerAlarmName } from '@/lib/timer/session';
+import { TIMER_PROGRESS_ALARM, timerAlarmName } from '@/lib/timer/session';
+import { advanceProgress } from '@/lib/timer/session-progress';
 import type { SessionSummary, TimerState } from '@/store/store.types';
 import {
   createBrowserTabEventSource,
@@ -33,6 +31,7 @@ import {
 } from '@/lib/timer/tab-distraction-tracker';
 import type { CityLayers } from '@/components/city/city.types';
 import { malusForDistractionTicks } from '@/lib/score/apply-malus';
+import { createLogger, type Logger } from '@/utils/logger';
 
 /**
  * The passive `RuntimeMessage` variants defined in M1.T1. The background
@@ -62,6 +61,8 @@ export interface BackgroundDependencies {
   readonly ruleApplier?: RuleApplier;
   /** Tab event source for distraction tracking (M2.T10/M2.T16). */
   readonly tabEventSource?: TabEventSource;
+  /** Centralized logger (M4.T3b). Injectable so tests assert records, not console text. */
+  readonly logger?: Logger;
 }
 
 export interface BackgroundHandle {
@@ -78,23 +79,27 @@ export interface BackgroundHandle {
 
 /**
  * Growth wiring (M2.T15, extended): the fine-grained character-insertion tick
- * arrives as the typed `TIMER_TICK` message from the active context (popup) — a
- * sampling clock deliberately separate from the 60s `browser.alarms` countdown
- * clock (M1.T5). What one character *costs in time* is not fixed: it is the
- * chosen session's cadence (`lib/timer/focus-presets.ts`), so a longer focus
- * builds the same city more slowly (duration-neutral).
+ * originally arrived only as the typed `TIMER_TICK` message from the active
+ * context (popup) — a sampling clock deliberately separate from the 60s
+ * `browser.alarms` countdown clock (M1.T5). That made the reward depend on a
+ * transient UI context, which is why the city and population froze whenever the
+ * popup was closed or the browser lost focus.
  *
- * On each tick the *undistracted* focus time elapsed since the previous tick is
- * measured with the injected clock and accumulated; the whole session ticks it
- * now covers are handed to `citySlice.growCityByTicks` (M2.T11), which delegates
- * to the session-seeded engine (M2.T12). Deriving the target from the *total*
- * focus time (not the per-tick delta) is what lets a cadence longer than the
- * sampling interval work without stalling: the leftover fraction of a tick is
- * carried by construction. A tick that arrives while the timer is not `running`
- * neither grows the city nor moves the baseline, so paused/idle time is never
- * counted as focus time. The baseline is set to "now" on the first tick of a
- * running stretch (never to `sessionStartedAt`), so a service-worker restart
- * cannot replay the whole session into the city a second time.
+ * Accounting is now wall-clock based: `timer.lastAccountedAt` is a persisted
+ * checkpoint, and every wake-up (popup tick, progress alarm, worker restart,
+ * timer command, session completion) credits the elapsed stretch at once. What
+ * one character *costs in time* is still the chosen session's cadence
+ * (`lib/timer/focus-presets.ts`), so a longer focus builds the same city more
+ * slowly (duration-neutral).
+ *
+ * The whole session ticks the accumulated focus time covers are handed to
+ * `citySlice.growCityByTicks` (M2.T11), which delegates to the session-seeded
+ * engine (M2.T12). Deriving the target from the *total* focus time (not the
+ * per-tick delta) is what makes catch-up idempotent: any number of missed
+ * samples is recovered by the next accounting step, and the leftover fraction
+ * of a tick is carried by construction. Time spent while the timer is not
+ * `running` is never credited because the checkpoint is cleared on pause/reset/
+ * completion, so paused/idle time is not counted as focus.
  *
  * The tracker also accumulates the same running-only elapsed time as
  * `focusedMs`, which is what session completion (M3.T3c) feeds to
@@ -106,6 +111,13 @@ export interface BackgroundHandle {
 export interface GrowthTickHandle {
   /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
   readonly handleTick: () => void;
+  /**
+   * Credit every millisecond elapsed since the persisted checkpoint. This is
+   * the authoritative accounting step: the popup tick, the 60s progress alarm,
+   * startup reconciliation, timer commands and session completion all call it,
+   * so progress no longer depends on the popup staying open.
+   */
+  readonly account: () => void;
   /** Running-only focus time accumulated so far, in ms (M3.T3c). */
   readonly getFocusedMs: () => number;
   /** Running-only distraction time accumulated so far, in ms (M2.T18). */
@@ -128,90 +140,81 @@ export interface GrowthTickDependencies {
 
 /** Whole growth ticks a timer's accumulated focus time is worth, at its cadence. */
 function sessionTicks(timer: TimerState): number {
-  return Math.floor(timer.focusedMs / tickMsForDurationSeconds(timer.durationSeconds));
+  return Math.floor(
+    timer.focusedMs / tickMsForDurationSeconds(timer.durationSeconds),
+  );
 }
 
+/**
+ * Wall-clock accounting for a running session (M2.T15/M2.T18).
+ *
+ * The previous design measured elapsed time *between sampling ticks* and reset
+ * its baseline to "now" on every transition or service-worker wake-up. That is
+ * correct only while the popup is open and emitting `TIMER_TICK`: closing the
+ * popup (or switching away from the browser) stopped the clock entirely and
+ * froze both the city and the population, while the alarm-backed countdown
+ * kept running.
+ *
+ * Now every wake-up runs {@link account}: it reads the persisted
+ * `timer.lastAccountedAt` checkpoint and credits the whole gap at once. Because
+ * growth and population are derived from the resulting totals, catch-up is
+ * idempotent — any number of lost ticks is recovered by the next opportunity,
+ * and the `endsAt` cap prevents crediting time past the session deadline.
+ */
 function createGrowthTick({
   store,
   now,
   isDistracted = () => false,
 }: GrowthTickDependencies): GrowthTickHandle {
-  let lastGrowthAt: number | null = null;
-  let status = store.getState().timer.status;
   let sessionId = store.getState().timer.sessionId;
-  // Growth ticks already reflected in the persisted city. Initialized from the
-  // persisted focus time so a service-worker restart neither replays the session
-  // into the city nor loses growth (M2.T15).
+  // Growth ticks already reflected in the persisted city. Re-based when the
+  // session changes (a new session zeroes `focusedMs`); the persisted focus
+  // total is the authority, so a worker restart continues rather than replays.
   let appliedTicks = sessionTicks(store.getState().timer);
 
-  // Detect the transitions into/out of `running` even when no tick arrives:
-  // resuming must start measuring from the resume moment, not from the last
-  // running tick before the pause (otherwise the paused gap would count as focus).
-  // Rehydration flips the status the same way, so the baseline after a service
-  // worker restart is the wake-up instant — the sleep gap is never replayed.
   const unsubscribe = store.subscribe(() => {
     const state = store.getState();
-    if (state.timer.status !== status) {
-      status = state.timer.status;
-      lastGrowthAt = status === 'running' ? now() : null;
-    }
-    // A new session (or a reset) zeroes `focusedMs`: restart the applied
-    // baseline so the fresh city is not credited with the previous session.
-    if (state.timer.sessionId !== sessionId) {
-      sessionId = state.timer.sessionId;
-      appliedTicks = sessionTicks(state.timer);
-    }
+    if (state.timer.sessionId === sessionId) return;
+    sessionId = state.timer.sessionId;
+    appliedTicks = sessionTicks(state.timer);
   });
 
-  const handleTick = (): void => {
-    const { timer } = store.getState();
-    if (timer.status !== 'running') {
-      lastGrowthAt = null;
-      return;
-    }
-    const current = now();
-    const baseline = lastGrowthAt ?? current;
-    lastGrowthAt = current;
-    const elapsed = current - baseline;
-    if (elapsed <= 0) return;
+  const account = (): void => {
+    const { timer, score } = store.getState();
+    const progress = advanceProgress(timer, now(), {
+      distracted: isDistracted(),
+      tickMs: tickMsForDurationSeconds(timer.durationSeconds),
+    });
+    if (progress === undefined) return;
 
-    // The elapsed stretch is either focus or distraction, never both: while a
-    // blocked site is open the city does not grow and the time is booked against
-    // the population instead. The two accumulators live in the persisted timer
-    // (not in closures), so they survive a service worker restart for free and
-    // `startTimer` resetting them on a new session needs no extra wiring here.
-    const distracted = isDistracted();
-    const focusedMs = distracted ? timer.focusedMs : timer.focusedMs + elapsed;
-    const distractedMs = distracted ? timer.distractedMs + elapsed : timer.distractedMs;
+    // One write for both accumulators and the checkpoint: `timer` is persisted,
+    // so this is the moment the session's progress becomes crash-durable.
+    store
+      .getState()
+      .recordProgress(
+        progress.focusedMs,
+        progress.distractedMs,
+        progress.lastAccountedAt,
+      );
 
-    if (distracted) store.getState().recordDistractedMs(distractedMs);
-    else store.getState().recordFocusedMs(focusedMs);
-
-    // Cumulative-target growth (user-selectable duration): the target is derived
-    // from the *total* focus time and the session cadence, so a cadence longer
-    // than the sampling interval can never stall — the leftover fraction of a
-    // tick is carried for free by the next call.
-    const tickMs = tickMsForDurationSeconds(timer.durationSeconds);
-    const targetTicks = Math.floor(focusedMs / tickMs);
-    if (targetTicks > appliedTicks) {
-      store.getState().growCityByTicks(targetTicks - appliedTicks);
-      appliedTicks = targetTicks;
+    // Cumulative-target growth: the target comes from the *total* focus time,
+    // so a gap covering many ticks grows the city in one batch, and a leftover
+    // fraction is carried for free by the next accounting step.
+    if (progress.targetTicks > appliedTicks) {
+      store.getState().growCityByTicks(progress.targetTicks - appliedTicks);
+      appliedTicks = progress.targetTicks;
     }
 
-    // Live population (M2.T18): +5 per completed focus tick, -5 per completed
-    // distraction tick, clamped at zero. Same measures as the city and the
-    // malus, so the counter always agrees with what actually happened. The write
-    // is skipped while the value is unchanged — `score` is persisted, and a
-    // needless per-tick write would churn `storage.local` and re-broadcast sync
-    // messages for nothing.
-    const population = calculatePopulation(focusedMs, distractedMs, tickMs);
-    if (population !== store.getState().score.population) {
-      store.getState().setPopulation(population);
+    // Live population (M2.T18): same measures as the city and the malus. The
+    // write is skipped while the value is unchanged — `score` is persisted.
+    if (progress.population !== score.population) {
+      store.getState().setPopulation(progress.population);
     }
   };
 
   return {
-    handleTick,
+    handleTick: account,
+    account,
     getFocusedMs: () => store.getState().timer.focusedMs,
     getDistractedMs: () => store.getState().timer.distractedMs,
     dispose: unsubscribe,
@@ -236,6 +239,13 @@ export interface SessionCompletionDependencies {
   readonly getFocusedMs: () => number;
   /** Running-only distraction time accumulated by the tab tracker (M2.T16). */
   readonly getDistractedMs: () => number;
+  /**
+   * Credit the final stretch before the session is closed. The checkpoint is
+   * cleared by `completeTimer`, so without this the interval since the last
+   * wake-up (up to a minute with the progress alarm, or much longer if the
+   * popup was closed) would be lost from the summary.
+   */
+  readonly account: () => void;
   /** Clock used to stamp `endedAt`; injectable for determinism. */
   readonly now: () => number;
   /** Message sink, injectable so the handler is testable without the bus. */
@@ -265,6 +275,7 @@ export function createSessionCompletion({
   store,
   getFocusedMs,
   getDistractedMs,
+  account,
   now,
   send = defaultSend,
 }: SessionCompletionDependencies): SessionCompletion {
@@ -274,6 +285,10 @@ export function createSessionCompletion({
       if (timer.status !== 'running') return;
       if (timer.sessionId === null) return;
       if (name !== timerAlarmName(timer.sessionId)) return;
+
+      // Account the last (possibly long, if the popup was closed) stretch
+      // before the checkpoint is cleared by `completeTimer`.
+      account();
 
       const population = calculatePopulation(
         getFocusedMs(),
@@ -318,7 +333,9 @@ export function createDistractionPredicate(
 
 export interface MalusWiring {
   /** React to the overlay's answer (M2.T8): only `proceed` starts the malus. */
-  handleAttempt(message: Extract<RuntimeMessage, { type: 'SITE_BLOCKED_ATTEMPT' }>): void;
+  handleAttempt(
+    message: Extract<RuntimeMessage, { type: 'SITE_BLOCKED_ATTEMPT' }>,
+  ): void;
   /** Apply the distraction ticks accrued since the previous call. */
   handleTick(): void;
   /** Detach the session subscription owned by the wiring. */
@@ -383,7 +400,9 @@ export function createMalusWiring({
   // instant itself.
   const pump = (): void => {
     if (!active) return;
-    const tickMs = tickMsForDurationSeconds(store.getState().timer.durationSeconds);
+    const tickMs = tickMsForDurationSeconds(
+      store.getState().timer.durationSeconds,
+    );
     const elapsedMs = tracker.getAccumulatedMs() - baselineMs;
     const elapsedTicks = elapsedMs > 0 ? Math.floor(elapsedMs / tickMs) : 0;
     const expected = 1 + malusForDistractionTicks(elapsedTicks);
@@ -394,7 +413,8 @@ export function createMalusWiring({
     store.getState().applyMalusToCity(pending);
     applied += pending;
 
-    const charactersRemoved = before - countOccupied(store.getState().city.layers);
+    const charactersRemoved =
+      before - countOccupied(store.getState().city.layers);
     if (charactersRemoved <= 0) return;
     send({ type: 'MALUS_APPLIED', payload: { domain, charactersRemoved } });
   };
@@ -428,6 +448,8 @@ export function createMalusWiring({
 export function startBackground(
   dependencies: BackgroundDependencies = {},
 ): BackgroundHandle {
+  const log = dependencies.logger ?? createLogger('background');
+
   // The background is the single writer of the persisted store (M1.T9): it owns
   // the writable instance, while every other context gets a read-only one.
   //
@@ -452,7 +474,7 @@ export function startBackground(
   const syncRules = (): void => {
     void rulesSync.sync(store.getState()).catch((error: unknown) => {
       // Known boundary (§1.4): a failed rule update must not crash the worker.
-      console.error('[background] DNR rule sync failed', error);
+      log.error('DNR rule sync failed', error, { boundary: 'dnr' });
     });
   };
 
@@ -472,9 +494,13 @@ export function startBackground(
     now,
   });
   // The tracker's initial tab read is best-effort: a failure must not become an
-  // unhandled rejection that kills the service worker (§1.4).
-  void distractionTracker.ready.catch((error: unknown) => {
-    console.error('[background] tab distraction tracker failed to start', error);
+  // unhandled rejection that kills the service worker (§1.4). It is awaited by
+  // startup reconciliation before attributing a sleep gap, so an open blocked
+  // tab is known when the gap is classified as focus or distraction.
+  const trackerReady = distractionTracker.ready.catch((error: unknown) => {
+    log.error('tab distraction tracker failed to start', error, {
+      boundary: 'tab-tracker',
+    });
   });
   const malus = createMalusWiring({ store, tracker: distractionTracker });
   disposers.push(() => {
@@ -496,9 +522,63 @@ export function startBackground(
     growthTick.dispose();
   });
 
+  // Progress heartbeat: the background's own clock, so the city and population
+  // keep advancing when the popup is closed (the previous design only advanced
+  // on its `TIMER_TICK`). One-shot and self-rescheduling: `browser.alarms`
+  // cannot fire faster than the 60s platform minimum anyway, and every firing
+  // catches up the whole gap since the persisted checkpoint.
+  const armProgressAlarm = (): void => {
+    if (store.getState().timer.status !== 'running') return;
+    void alarmProvider.schedule(
+      TIMER_PROGRESS_ALARM,
+      now() + ALARM_MIN_TICK_MS,
+    );
+  };
+  const handleProgressAlarm = (name: string): void => {
+    if (name !== TIMER_PROGRESS_ALARM) return;
+    growthTick.account();
+    malus.handleTick();
+    armProgressAlarm();
+  };
+  disposers.push(alarmProvider.onFire(handleProgressAlarm));
+
+  let lastTimerStatus = store.getState().timer.status;
+
+  /**
+   * Start the accounting clock for a running session, in the background's clock
+   * domain. A rehydrated running snapshot already carries its persisted
+   * checkpoint — that is what makes a sleep/closed-popup gap catch up — so it is
+   * only initialized when absent (a fresh start/resume, or an old snapshot).
+   */
+  const startAccountingClock = (): void => {
+    const { timer } = store.getState();
+    if (timer.status !== 'running' || Number.isFinite(timer.lastAccountedAt)) {
+      return;
+    }
+    store.getState().recordProgress(timer.focusedMs, timer.distractedMs, now());
+  };
+
+  disposers.push(
+    store.subscribe(() => {
+      const status = store.getState().timer.status;
+      if (status === lastTimerStatus) return;
+      lastTimerStatus = status;
+      if (status === 'running') {
+        startAccountingClock();
+        armProgressAlarm();
+      } else {
+        void alarmProvider.clear(TIMER_PROGRESS_ALARM);
+      }
+    }),
+  );
+  // Covers the case where the store was already running before the subscription
+  // above was installed (a worker that started with a live session).
+  startAccountingClock();
+  armProgressAlarm();
+
   // Passive variants: the malus consumes `SITE_BLOCKED_ATTEMPT` and the same
-  // 2s `TIMER_TICK` that drives growth; every other variant stays a placeholder
-  // until its owning task (M2.T2/M2.T7) lands.
+  // sampling `TIMER_TICK` that drives growth; every other variant stays a
+  // placeholder until its owning task (M2.T2/M2.T7) lands.
   const handlePassiveMessage = (message: RuntimeMessage): void => {
     if (message.type === 'TIMER_TICK') {
       growthTick.handleTick();
@@ -508,8 +588,9 @@ export function startBackground(
     }
   };
 
+  const busLog = log.child('bus');
   for (const type of MESSAGE_TYPES) {
-    disposers.push(onMessage(type, handlePassiveMessage));
+    disposers.push(onMessage(type, handlePassiveMessage, busLog));
   }
 
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
@@ -518,7 +599,25 @@ export function startBackground(
   // provider.
   const handleMutation = createMutationHandler(store);
   for (const type of MUTATION_TYPES) {
-    disposers.push(onMessage(type, handleMutation));
+    disposers.push(
+      onMessage(
+        type,
+        (message) => {
+          // Pause/reset clear the checkpoint inside the slice: credit the
+          // stretch since the last wake-up before it is lost. `account` is a
+          // no-op when the timer is not running, so this is cheap for every
+          // mutation.
+          if (
+            message.type === 'TIMER_PAUSED' ||
+            message.type === 'TIMER_RESET'
+          ) {
+            growthTick.account();
+          }
+          handleMutation(message);
+        },
+        busLog,
+      ),
+    );
   }
 
   // Any change to the blocklist/allowlist or to the timer status re-evaluates
@@ -533,6 +632,7 @@ export function startBackground(
     store,
     getFocusedMs: growthTick.getFocusedMs,
     getDistractedMs: growthTick.getDistractedMs,
+    account: growthTick.account,
     now,
   });
   disposers.push(alarmProvider.onFire(completion.handleAlarm));
@@ -544,21 +644,41 @@ export function startBackground(
   // yet and the reconciliation would see the default idle state.
   const ready = (async (): Promise<void> => {
     await store.persist.rehydrate();
+    // Seed the open-blocked-tab set before classifying the sleep gap, otherwise
+    // a stretch spent on a blocked site could be credited as focus.
+    await trackerReady;
     const { timer } = store.getState();
     const restored = await restoreTimer(timer, {
       alarmProvider,
       now,
     });
     if (restored.changed) store.setState({ timer: restored.timer });
+    // Ensure the checkpoint exists before crediting a rehydrated running
+    // session; it is preserved when the snapshot already had one.
+    startAccountingClock();
+    // Credit the time the worker was asleep / the popup was closed. The
+    // checkpoint survives in storage, so this is the catch-up that used to be
+    // lost when the sampling ticks stopped.
+    growthTick.account();
+    // If the deadline passed while no alarm could fire (machine asleep, alarm
+    // coalesced), close the session now instead of leaving it `running` at 0.
+    const current = store.getState().timer;
+    if (
+      current.status === 'running' &&
+      current.sessionId !== null &&
+      current.endsAt !== null &&
+      now() >= current.endsAt
+    ) {
+      completion.handleAlarm(timerAlarmName(current.sessionId));
+    }
     // Awaited so `ready` also means "the dynamic ruleset reflects the restored
     // state": a session that did not survive the restart must not leave the
     // previous session's blocking rules active.
     await rulesSync.sync(store.getState());
   })().catch((error: unknown) => {
     // The startup path is a known boundary (§1.4): a failure here must not
-    // become an unhandled rejection that kills the service worker. Logged with
-    // context; centralized logging replaces this in M4.T3.
-    console.error('[background] startup reconciliation failed', error);
+    // become an unhandled rejection that kills the service worker.
+    log.error('startup reconciliation failed', error, { boundary: 'startup' });
   });
 
   return {
@@ -572,6 +692,26 @@ export function startBackground(
   };
 }
 
+/**
+ * Production bootstrap (M4.T3b): `startBackground` is synchronous, so a failure
+ * while wiring the worker (a malformed dependency, an unavailable browser API)
+ * would otherwise escape the WXT callback. Catch it, log it with context and
+ * return `null`: the worker stays alive and the failure is diagnosable instead
+ * of silent. Asynchronous startup failures are already contained by `ready`.
+ */
+export function bootstrapBackground(
+  dependencies: BackgroundDependencies = {},
+): BackgroundHandle | null {
+  const log = dependencies.logger ?? createLogger('background');
+
+  try {
+    return startBackground({ ...dependencies, logger: log });
+  } catch (error: unknown) {
+    log.error('background failed to start', error, { boundary: 'bootstrap' });
+    return null;
+  }
+}
+
 export default defineBackground(() => {
-  startBackground();
+  bootstrapBackground();
 });

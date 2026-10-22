@@ -8,6 +8,7 @@ import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 import { STORE_NAME } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
+import { createLogger, type LogRecord } from '@/utils/logger';
 
 type DnrRule = Browser.declarativeNetRequest.Rule;
 
@@ -235,9 +236,18 @@ describe('background DNR rule application (M2.T7)', () => {
 
   it('keeps a usable store when the rule update fails', async () => {
     installFailingDynamicRules();
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const records: LogRecord[] = [];
+    const logger = createLogger('background-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
 
-    const handle = startBackground({ alarmProvider: new FakeAlarmProvider(0) });
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(0),
+      logger,
+    });
     await handle.ready;
 
     expect(handle.store.getState().timer.status).toBe('idle');
@@ -245,10 +255,12 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await flush();
 
-    expect(errorLog).toHaveBeenCalledWith(
-      '[background] DNR rule sync failed',
-      expect.any(Error),
-    );
+    const failure = records.find((record) => record.message === 'DNR rule sync failed');
+    expect(failure).toBeDefined();
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('background-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect(failure?.details[1]).toEqual({ boundary: 'dnr' });
     expect(handle.store.getState().timer.status).toBe('running');
 
     handle.dispose();

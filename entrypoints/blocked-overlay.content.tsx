@@ -6,6 +6,7 @@ import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { parseStoreSnapshot, STORE_STORAGE_KEY, type StoreSnapshot } from '@/lib/blocking/store-snapshot';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { sendMessage } from '@/lib/messaging/bus';
+import { createLogger, type Logger } from '@/utils/logger';
 
 /**
  * Marks the shadow host so a second run of this script on the same page (WXT
@@ -13,6 +14,8 @@ import { sendMessage } from '@/lib/messaging/bus';
  * recognise its own overlay instead of stacking a duplicate on top of it.
  */
 const HOST_ID = 'buildit-blocked-overlay';
+
+const defaultLogger = createLogger('content:blocked-overlay');
 
 /** Read-only view of the persisted store, kept up to date while the page lives. */
 export interface StoreReader {
@@ -34,13 +37,30 @@ export interface StoreReader {
  * so there is no divergence; the key and the envelope shape are owned by
  * `parseStoreSnapshot`.
  */
-export function createStoreReader(): StoreReader {
+export function createStoreReader(
+  logger: Logger = createLogger('content:store-reader'),
+): StoreReader {
   let snapshot: StoreSnapshot | undefined;
 
   const refresh = async (): Promise<StoreSnapshot | undefined> => {
     const raw = await browser.storage.local.get(STORE_STORAGE_KEY);
-    const parsed = parseStoreSnapshot(raw[STORE_STORAGE_KEY]);
-    snapshot = parsed.ok ? parsed.value : undefined;
+    const rawValue = raw[STORE_STORAGE_KEY];
+    const parsed = parseStoreSnapshot(rawValue);
+    if (!parsed.ok) {
+      // A missing key is the normal pre-onboarding state and stays silent.
+      // Only a *present* value that cannot be parsed is a diagnostic. Do not
+      // attach the parse cause: V8 can quote the persisted JSON (which holds
+      // the user's domains) in a SyntaxError message.
+      if (rawValue !== undefined) {
+        logger.error('unreadable persisted snapshot', undefined, {
+          key: STORE_STORAGE_KEY,
+        });
+      }
+      snapshot = undefined;
+      return snapshot;
+    }
+
+    snapshot = parsed.value;
     return snapshot;
   };
 
@@ -77,6 +97,8 @@ export interface BlockedOverlayDependencies {
   readonly sendAttempt?: (domain: string, choice: BlockedChoice) => Promise<void>;
   /** Navigates the tab back after "No"; defaults to `history.back()`. */
   readonly goBack?: () => void;
+  /** Diagnostics sink (M4.T3e); defaults to scope `content:blocked-overlay`. */
+  readonly logger?: Logger;
 }
 
 /**
@@ -94,12 +116,20 @@ export function startBlockedOverlay(
   ctx: ContentScriptContext,
   dependencies: BlockedOverlayDependencies = {},
 ): () => void {
-  const reader = dependencies.storeReader ?? createStoreReader();
+  const logger = dependencies.logger ?? defaultLogger;
+  const reader =
+    dependencies.storeReader ?? createStoreReader(logger.child('store-reader'));
   const url = dependencies.url ?? window.location.href;
   const sendAttempt =
     dependencies.sendAttempt ??
     (async (domain: string, choice: BlockedChoice): Promise<void> => {
-      await sendMessage({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain, choice } });
+      const result = await sendMessage({
+        type: 'SITE_BLOCKED_ATTEMPT',
+        payload: { domain, choice },
+      });
+      // `sendMessage` turns a missing listener into a failed Result instead of
+      // a rejection. Surface it as a rejection so the caller's boundary logs it.
+      if (!result.ok) throw result.error;
     });
   const goBack =
     dependencies.goBack ??
@@ -117,6 +147,21 @@ export function startBlockedOverlay(
     root?.unmount();
     root = undefined;
     host()?.remove();
+  };
+
+  // The background may be absent, restarting, or rejecting the message. The
+  // user's choice is fire-and-forget, but its failure must not become an
+  // unhandled rejection. Log the choice only — the domain is user data.
+  const reportAttempt = (domain: string, choice: BlockedChoice): void => {
+    const onFailure = (error: unknown): void => {
+      logger.error('blocked attempt could not be sent', error, { choice });
+    };
+
+    try {
+      void sendAttempt(domain, choice).catch(onFailure);
+    } catch (error: unknown) {
+      onFailure(error);
+    }
   };
 
   const mount = (domain: string): void => {
@@ -138,12 +183,12 @@ export function startBlockedOverlay(
           dismissed={dismissed}
           onProceed={() => {
             unmount();
-            void sendAttempt(domain, 'proceed');
+            reportAttempt(domain, 'proceed');
           }}
           onGoBack={() => {
             // Reported even though no malus follows: the background learns the
             // user backed off, and the payload is what M2.T10 keys on.
-            void sendAttempt(domain, 'go-back');
+            reportAttempt(domain, 'go-back');
             // The encouragement replaces the question rather than the overlay
             // disappearing: `goBack` may be a no-op when the tab has no history
             // to return to, and then the message is the only feedback left.
@@ -177,16 +222,27 @@ export function startBlockedOverlay(
     mount(domain.value);
   };
 
-  void reader.refresh().then(() => {
-    if (!ctx.isValid) return;
-    evaluate();
-  });
+  const onRefreshFailure = (error: unknown): void => {
+    logger.error('store refresh failed', error, { key: STORE_STORAGE_KEY });
+  };
+
+  const refreshAndEvaluate = (): void => {
+    try {
+      void reader.refresh().then(() => {
+        if (!ctx.isValid) return;
+        evaluate();
+      }, onRefreshFailure);
+    } catch (error: unknown) {
+      // A custom reader may throw before returning its promise. Treat it like
+      // a rejection so the page and the overlay lifecycle stay alive.
+      onRefreshFailure(error);
+    }
+  };
+
+  refreshAndEvaluate();
 
   const unsubscribe = reader.subscribe(() => {
-    void reader.refresh().then(() => {
-      if (!ctx.isValid) return;
-      evaluate();
-    });
+    refreshAndEvaluate();
   });
 
   const detach = (): void => {

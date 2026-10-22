@@ -62,7 +62,10 @@ describe('timerSlice (M2.T1)', () => {
     expect(timer.endsAt).toBe(START_MS + DEFAULT_FOCUS_SECONDS * 1000);
     // One alarm, named after the session, due when the countdown reaches zero.
     expect(alarmProvider.scheduledAlarms).toEqual([
-      { name: timerAlarmName(sessionId), whenMs: START_MS + DEFAULT_FOCUS_SECONDS * 1000 },
+      {
+        name: timerAlarmName(sessionId),
+        whenMs: START_MS + DEFAULT_FOCUS_SECONDS * 1000,
+      },
     ]);
   });
 
@@ -75,6 +78,18 @@ describe('timerSlice (M2.T1)', () => {
 
     expect(store.getState().timer).toBe(running);
     expect(alarmProvider.scheduledAlarms).toHaveLength(1);
+  });
+
+  it('startTimer is a no-op on a completed session (Reset is the only way out)', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    await store.getState().completeTimer();
+    const completed = store.getState().timer;
+
+    await store.getState().startTimer();
+
+    expect(store.getState().timer).toBe(completed);
+    expect(alarmProvider.scheduledAlarms).toHaveLength(0);
   });
 
   it('startTimer after pause resumes the same session without resetting progress', async () => {
@@ -124,7 +139,9 @@ describe('timerSlice (M2.T1)', () => {
     // Pausing clears the projected end time: there is no deadline to estimate
     // from while the countdown is frozen (I001).
     expect(timer.endsAt).toBeNull();
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(sessionId)),
+    ).toBeUndefined();
   });
 
   it('pauseTimer persists the elapsed countdown instead of the full duration (I001)', async () => {
@@ -137,7 +154,9 @@ describe('timerSlice (M2.T1)', () => {
 
     // The frozen value is the *actual* remaining time, so the display does not
     // jump back to the full session length when the session is paused.
-    expect(store.getState().timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS - 300);
+    expect(store.getState().timer.remainingSeconds).toBe(
+      DEFAULT_FOCUS_SECONDS - 300,
+    );
   });
 
   it('resuming after a pause continues from the frozen countdown (I001)', async () => {
@@ -276,7 +295,9 @@ describe('timerSlice (M2.T1)', () => {
     expect(timer.sessionId).toBe(sessionId);
     // No deadline remains, so the popup stops estimating (I001).
     expect(timer.endsAt).toBeNull();
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(sessionId)),
+    ).toBeUndefined();
   });
 
   it('completeTimer while idle is a safe no-op', async () => {
@@ -311,11 +332,15 @@ describe('timerSlice (M2.T1)', () => {
 
 describe('session helpers (M2.T1)', () => {
   it('derives a session id deterministically from the injected clock and entropy', () => {
-    expect(generateSessionId(42, () => 0.5)).toBe(generateSessionId(42, () => 0.5));
+    expect(generateSessionId(42, () => 0.5)).toBe(
+      generateSessionId(42, () => 0.5),
+    );
   });
 
   it('produces different ids for different entropy', () => {
-    expect(generateSessionId(42, () => 0.1)).not.toBe(generateSessionId(42, () => 0.2));
+    expect(generateSessionId(42, () => 0.1)).not.toBe(
+      generateSessionId(42, () => 0.2),
+    );
   });
 
   it('namespaces the alarm name by session id', () => {

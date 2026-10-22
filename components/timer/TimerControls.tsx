@@ -14,7 +14,9 @@ import { useAppStore, selectTimerStatus } from '@/store';
  *
  * The buttons are disabled according to the current status so the UI cannot
  * request a transition the slice would treat as a no-op (e.g. pausing an idle
- * timer).
+ * timer). A `completed` session is not resumable — its whole duration has
+ * already elapsed — so Start stays disabled until Reset returns it to `idle`;
+ * Reset is the only action that can move it out of that state.
  */
 export function TimerControls() {
   const status = useAppStore(selectTimerStatus);
@@ -26,7 +28,7 @@ export function TimerControls() {
         onClick={() => {
           useAppStore.getState().requestStartTimer();
         }}
-        disabled={status === 'running'}
+        disabled={status === 'running' || status === 'completed'}
       >
         {i18n.t('timer.start')}
       </button>

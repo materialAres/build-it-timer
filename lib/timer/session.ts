@@ -35,3 +35,13 @@ export function generateSessionId(
 export function timerAlarmName(sessionId: string): string {
   return `timer:${sessionId}`;
 }
+
+/**
+ * Name of the periodic progress heartbeat (fix for the frozen city/population).
+ *
+ * Unlike the session alarm it is not namespaced by session id: it is a single
+ * worker wake-up that advances whichever running session exists at firing time.
+ * It is scheduled while the timer is `running` and cleared otherwise, so a
+ * stale heartbeat can never credit a paused session.
+ */
+export const TIMER_PROGRESS_ALARM = 'timer:progress';

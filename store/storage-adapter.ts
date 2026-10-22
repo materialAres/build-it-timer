@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import type { StateStorage } from 'zustand/middleware';
+import { createLogger, type Logger } from '@/utils/logger';
 
 // Zustand `persist` storage backed by `browser.storage.local` instead of
 // `localStorage`: the MV3 background service worker has no `window`, so
@@ -25,7 +26,9 @@ export interface SelfWriteTracker {
 /** Symbol key so the tracker travels with the storage without widening its API. */
 export const SELF_WRITE: unique symbol = Symbol('self-write-tracker');
 
-export function createBrowserStorage(): BrowserStateStorage {
+export function createBrowserStorage(
+  logger: Logger = createLogger('storage'),
+): BrowserStateStorage {
   // Values written per key by this context, in write order; consumed on the
   // matching `onChanged`. A queue (not a single slot) is needed because one
   // action may write twice in a row (e.g. `startTimer` resets the city and then
@@ -41,9 +44,16 @@ export function createBrowserStorage(): BrowserStateStorage {
     async getItem(name: string): Promise<string | null> {
       const result = await browser.storage.local.get(name);
       const value = result[name];
+
       // Persisted values are JSON strings; anything else is treated as absent
-      // rather than crashing the rehydration flow.
-      return typeof value === 'string' ? value : null;
+      // rather than crashing the rehydration flow. `undefined` is the normal
+      // "key not found" result (also what `fakeBrowser` returns), so it stays
+      // silent; any *other* unexpected shape is a real diagnostic (CI-3). Log
+      // the key, never the value itself, then keep the fallback unchanged.
+      if (value === undefined) return null;
+      if (typeof value === 'string') return value;
+      logger.warn('ignoring non-string persisted value', { key: name });
+      return null;
     },
     async setItem(name: string, value: string): Promise<void> {
       selfWrites.set(name, [...(selfWrites.get(name) ?? []), value]);

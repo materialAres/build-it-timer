@@ -78,3 +78,6 @@ overlay:
 common:
   add: Aggiungi
   remove: 'Rimuovi $1'
+  errorTitle: Qualcosa è andato storto
+  errorBody: Il popup ha riscontrato un errore imprevisto. Ricarica per riprovare.
+  reload: Ricarica

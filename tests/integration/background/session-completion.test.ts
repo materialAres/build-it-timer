@@ -47,7 +47,10 @@ describe('session completion (M3.T3c)', () => {
     const ticks = Math.floor(ms / TICK_MS);
     for (let tick = 1; tick <= ticks; tick += 1) {
       now = T0 + tick * TICK_MS;
-      await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: FOCUS_SECONDS } });
+      await sendMessage({
+        type: 'TIMER_TICK',
+        payload: { remainingSeconds: FOCUS_SECONDS },
+      });
     }
     return ticks;
   }
@@ -56,12 +59,21 @@ describe('session completion (M3.T3c)', () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
-    // 10 minutes of focus: the 5' base and the 10' floor are unlocked.
+    // Only the first 10 minutes are sampled by popup ticks, then the popup is
+    // closed: the remaining 20 minutes must still be credited on completion
+    // (regression: the city/population used to freeze without TIMER_TICKs).
     const ticks = await runSession(10 * 60_000);
-    const expectedPopulation = calculatePopulation(ticks * TICK_MS, 0, TICK_MS);
+    const sampledPopulation = calculatePopulation(ticks * TICK_MS, 0, TICK_MS);
 
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);
+
+    const expectedPopulation = calculatePopulation(
+      FOCUS_SECONDS * 1000,
+      0,
+      TICK_MS,
+    );
+    expect(expectedPopulation).toBeGreaterThan(sampledPopulation);
 
     const { sessionHistory, score, timer } = store.getState();
     expect(sessionHistory.sessions).toHaveLength(1);
@@ -91,7 +103,9 @@ describe('session completion (M3.T3c)', () => {
 
     expect(received).toHaveLength(1);
     const summary = (received[0] as { payload: SessionSummary }).payload;
-    expect(summary.sessionId).toBe(store.getState().sessionHistory.sessions[0]?.sessionId);
+    expect(summary.sessionId).toBe(
+      store.getState().sessionHistory.sessions[0]?.sessionId,
+    );
     expect(summary.population).toBe(store.getState().score.population);
 
     unsubscribe();
@@ -105,7 +119,8 @@ describe('session completion (M3.T3c)', () => {
     await runSession(4 * 60_000);
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);
-    const sessionId = store.getState().sessionHistory.sessions[0]?.sessionId ?? '';
+    const sessionId =
+      store.getState().sessionHistory.sessions[0]?.sessionId ?? '';
 
     // A re-emitted summary for the same session (M2.T19 dedup contract).
     store.getState().recordSession({
@@ -178,15 +193,22 @@ describe('session completion (M3.T3c)', () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
-    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { list: 'blocklist', site: 'x.com' } });
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'x.com' },
+    });
     await runSession(4 * 60_000);
     const sessionId = store.getState().timer.sessionId ?? '';
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeDefined();
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(sessionId)),
+    ).toBeDefined();
 
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);
 
-    expect(alarmProvider.getScheduledWhen(timerAlarmName(sessionId))).toBeUndefined();
+    expect(
+      alarmProvider.getScheduledWhen(timerAlarmName(sessionId)),
+    ).toBeUndefined();
     // Blocking is on exclusively during a running session (M2.T7). The rule sync
     // is fire-and-forget, so let the promise chain settle first.
     await new Promise((resolve) => {
@@ -208,7 +230,10 @@ describe('session completion (M3.T3c)', () => {
 
     const raw = await fakeBrowser.storage.local.get(STORE_NAME);
     const parsed = JSON.parse(raw[STORE_NAME] as string) as {
-      state: { sessionHistory: { sessions: SessionSummary[] }; timer: { status: string } };
+      state: {
+        sessionHistory: { sessions: SessionSummary[] };
+        timer: { status: string };
+      };
     };
     expect(parsed.state.sessionHistory.sessions).toHaveLength(1);
     expect(parsed.state.timer.status).toBe('completed');

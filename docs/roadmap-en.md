@@ -72,7 +72,11 @@ Each task is a standalone card, with this fixed format:
 | M3.T10 | IT translation (language auto-detected from browser) | 3 | M3.T9 |
 | M4.T1 | *(Nice to have)* Malus proportional to time spent on the blocked site | 4 | M2.T10 |
 | M4.T2 | *(Nice to have)* TexturePacker / building sprite sheet integration | 4 | M2.T14 |
-| M4.T3 | Error hardening and centralized logging | 4 | M3.T4 |
+| M4.T3a | Error hardening — centralized logger foundation | 4 | M0.T2 |
+| M4.T3b | Error hardening — background and message-bus boundaries | 4 | M4.T3a, M1.T6, M2.T7 |
+| M4.T3c | Error hardening — persistence read/rehydration (CI-3) | 4 | M4.T3a, M1.T9 |
+| M4.T3d | Error hardening — popup React error boundary | 4 | M4.T3a, M3.T4, M3.T10 |
+| M4.T3e | Error hardening — content/export boundaries + logging guardrails | 4 | M4.T3a, M2.T8, M3.T8 |
 | M4.T4 | Popup accessibility polish | 4 | M3.T4 |
 | M4.T5 | Full multi-scenario e2e suite | 4 | M3.T6 |
 | M5.T1 | Message bus hardening: runtime validation + sender provenance | 5 | M1.T6 |
@@ -605,13 +609,72 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - No visual regression compared to the base ASCII behavior (ASCII remains the fallback/default if the sprite is unavailable).
 
-#### M4.T3 — Error hardening and centralized logging
-* **Objective**: introduce a centralized logger (levels, context) used at the boundaries defined in Section 1.4, replacing any scattered `console.log` calls.
-* **Files**: `utils/logger.ts`, refactor of the boundary points in `entrypoints/background.ts`, React error boundary in the popup.
-* **Dependencies**: M3.T4
+> **Split note (planning, before implementation).** The original M4.T3 bundled five
+> independent concerns — a shared logger, the background/bus boundaries, persistence
+> diagnostics, the popup error boundary and the remaining UI/content boundaries — plus
+> a lint guardrail. That is too much for one reviewable change, so M4.T3 is now an
+> **umbrella** split into `M4.T3a` … `M4.T3e`; there is no standalone M4.T3 deliverable.
+> Each subtask is independently shippable and verifiable. Order: **a first**, then
+> b/c/d/e in any order (each depends only on a and on the feature it hardens).
+> The changelog records the subtasks as they close; the M4.T3 umbrella is complete when
+> all five are done.
+
+#### M4.T3a — Centralized logger foundation
+* **Objective**: provide the shared, dependency-free logging primitive that every other subtask consumes: levels, a scope/prefix, structured context and an injectable sink, with no call-site changes yet.
+* **Files**: `utils/logger.ts` (new), `tests/unit/utils/logger.test.ts` (new).
+* **Dependencies**: M0.T2
 * **Acceptance criteria**:
-  - No empty `catch {}` remains in the codebase (verifiable via a dedicated lint rule or manual search).
-  - A simulated error in the background is logged with context (not silenced) and does not crash the whole service worker.
+  - API: `createLogger(scope, { sink?, minLevel? })` returns `debug`/`info`/`warn`/`error` plus `child(scope)`, so a module can log as `[buildit:background:dnr]`.
+  - Levels are real and filtered by threshold: `debug`/`info` are enabled in development, `warn`/`error` in production; the threshold is overridable for tests. Default sink is `console`, but a test can inject a fake without spying on console.
+  - `error(message, cause?, context?)` accepts `unknown`, normalizes non-`Error` values to `Error` (preserving the stack when available) and carries technical context. No throw from the logger itself.
+  - No remote transport, no persistence and no user data in the context: scopes and technical fields only (message type, storage key, export format), never URLs, domains or message payloads.
+  - Unit tests cover level thresholds, prefix/child scopes, cause/context forwarding, sink injection and a missing/failing sink (the logger must not throw into the caller).
+* **Notes/decisions**: `no-console` enforcement is deliberately deferred to M4.T3e: enabling it here would fail on the three existing `console.error` calls in the background, which M4.T3b removes.
+
+#### M4.T3b — Background and message-bus error boundaries
+* **Objective**: route every asynchronous background boundary through the logger and stop an async message handler from becoming an unhandled rejection.
+* **Files**: `entrypoints/background.ts`, `lib/messaging/bus.ts`, `tests/integration/background/background.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/messaging/bus.test.ts`.
+* **Dependencies**: M4.T3a, M1.T6, M2.T7
+* **Acceptance criteria**:
+  - The three `console.error` calls in `entrypoints/background.ts` are replaced by a scoped logger: DNR rule sync, tab-distraction-tracker startup and startup reconciliation. Messages and causes are preserved (and asserted through an injected logger/sink, not exact console text).
+  - A `bootstrapBackground()` wrapper catches synchronous failures from `startBackground()`, logs scope + cause and returns `null`, so a failed initialization cannot kill the service worker; the default WXT entrypoint calls the wrapper. Asynchronous `ready` failures remain caught.
+  - `onMessage` wraps handler invocation (sync throws **and** async rejections) and logs `error` with `{ type }`; the listener still returns `void` to the browser and a rejecting handler does not surface as an unhandled rejection.
+  - A simulated DNR failure is logged with context and the service worker remains usable (store still starts a timer); the normal session-completion path still logs nothing.
+  - Tests: failing DNR fake → logger error + `handle.ready` resolves + store usable; throwing/rejecting handler → log + no propagation; bootstrap failure → log + `null`.
+
+#### M4.T3c — Persistence read/rehydration hardening (CI-3)
+* **Objective**: close store-analysis CI-3 by making corrupt or unexpected persisted values visible instead of silently degrading to defaults, without changing the fallback behaviour itself.
+* **Files**: `store/storage-adapter.ts`, `store/index.ts`, `tests/integration/store/storage-adapter.test.ts`, `tests/integration/store/store.test.ts`.
+* **Dependencies**: M4.T3a, M1.T9
+* **Acceptance criteria**:
+  - A missing storage key still returns `null` **without logging** (first hydration is normal). A present but non-string value logs `warn` with the key and still returns `null`; the adapter accepts an optional logger for tests.
+  - `onRehydrateStorage` logs `error` when the persisted JSON cannot be parsed/migrated, then the store keeps its existing defaults; a malformed payload no longer disappears without a diagnostic.
+  - Logs contain the storage key and the error only — never the raw persisted value or user domains.
+  - Tests: non-string value → warn + `null`; absent key → no warn; corrupt JSON → error + default state; a valid payload logs nothing.
+
+#### M4.T3d — Popup React error boundary
+* **Objective**: ensure a render/lifecycle error in a popup component logs with component context and shows a localized recovery screen instead of a blank/dead popup.
+* **Files**: `components/common/ErrorBoundary.tsx` (new), `entrypoints/popup/main.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/unit/components/common/ErrorBoundary.test.tsx` (new).
+* **Dependencies**: M4.T3a, M3.T4, M3.T10
+* **Acceptance criteria**:
+  - A class-based `ErrorBoundary` implements `getDerivedStateFromError` + `componentDidCatch`, logs the error and `componentStack` through the scoped logger and renders an accessible fallback (`role="alert"`).
+  - The fallback is fully localized: three new `common` keys (`errorTitle`, `errorBody`, `reload`) exist in **both** `locales/en.yml` and `locales/it.yml`, so the M3.T10 drift test stays green. The reload button calls `window.location.reload()` by default; `onReset`/`onError` props allow deterministic tests and a future reset strategy.
+  - `<App />` is wrapped in the boundary in `entrypoints/popup/main.tsx`; the normal popup composition and all existing tests are unchanged.
+  - Test: a child that throws is contained, the injected logger/error hook receives the error, the fallback text is translated, and reset recovers when the child stops throwing.
+  - Scope limit: event-handler and async errors are not caught here; they are covered by M4.T3b (bus), M4.T3c (store) and M4.T3e (content/export).
+
+#### M4.T3e — Content/export boundaries + logging guardrails
+* **Objective**: close the remaining silent boundaries and make the “no empty catch / no scattered console” rule enforceable, so the next feature cannot regress M4.T3.
+* **Files**: `entrypoints/blocked-overlay.content.tsx`, `components/city/ExportCityButton.tsx`, `eslint.config.js`, `tests/integration/content/blocked-overlay.test.ts`, `tests/unit/components/city/ExportCityButton.test.tsx`.
+* **Dependencies**: M4.T3a, M2.T8, M3.T8
+* **Acceptance criteria**:
+  - The content script logs (with scope) a rejected `reader.refresh()`, an unreadable persisted snapshot and a rejected `sendAttempt`; the overlay still unmounts/mounts correctly and a failed background send leaves the page alive. No URL/domain is logged.
+  - `ExportCityButton` logs a failed `Result` and a rejected exporter promise (format as context) while keeping the existing localized user-facing error; the popup never throws.
+  - ESLint enforces `no-empty` with `allowEmptyCatch: false` and `no-console` (exceptions: `utils/logger.ts` and `tests/**`). The intentional `apply-rules.ts` queue guard `.catch(() => undefined)` stays, with its comment explaining that the returned promise still rejects; it is not an empty catch and does not silence the caller.
+  - Manual search `rg -n 'catch\s*(\([^)]*\))?\s*\{\s*\}' entrypoints components lib store utils` returns zero results; `bun run compile`, `bun run lint`, `bun run test`, `bun run build` and `bun run build:firefox` are green.
+  - This subtask closes the umbrella's original acceptance criteria: every known boundary logs with context and the simulated background failure does not crash the worker.
+
+> **Changelog convention for the split.** Each subtask gets its own changelog entry (files, tests, commit) when it closes; the final M4.T3e entry records the full-suite/build verification and marks M4.T3a–e complete. Do not rewrite the historical M4.T2 “skipped” entry.
 
 #### M4.T4 — Popup accessibility polish
 * **Objective**: a pass on color contrast (particularly the CRT glow effect), keyboard focus, and ARIA labels on timer/blocklist controls.

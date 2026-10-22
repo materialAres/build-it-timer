@@ -11,6 +11,7 @@ import {
   STORE_NAME,
 } from '@/store';
 import type { SessionSummary, Tag } from '@/store/store.types';
+import { createLogger, type LogRecord } from '@/utils/logger';
 
 const testTag: Tag = { id: 'focus', label: 'Focus' };
 
@@ -116,6 +117,68 @@ describe('useAppStore', () => {
     expect(selectRemainingSeconds(state)).toBe(DEFAULT_FOCUS_SECONDS);
     expect(selectCustomTags(state)).toEqual([]);
     expect(selectActiveTab(state)).toBe('timer');
+  });
+
+  it('logs a corrupt persisted payload and keeps the default state (M4.T3c)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('store-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    const store = createAppStore({ logger });
+    await store.persist.rehydrate();
+
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: 'facebook.com',
+    });
+    await store.persist.rehydrate();
+
+    expect(store.getState().timer.status).toBe('idle');
+    expect(store.getState().timer.remainingSeconds).toBe(DEFAULT_FOCUS_SECONDS);
+    expect(store.getState().blocklist.blocklist).toEqual([]);
+    expect(selectSessionHistory(store.getState())).toEqual([]);
+
+    const failure = records.find(
+      (record) => record.message === 'store rehydration failed',
+    );
+    expect(failure?.level).toBe('error');
+    expect(failure?.scope).toBe('store-test');
+    expect(failure?.details[0]).toBeInstanceOf(Error);
+    expect((failure?.details[0] as Error).message).toBe(
+      'persisted store JSON is malformed',
+    );
+    expect(failure?.details[1]).toEqual({ key: STORE_NAME });
+    // The diagnostic must not leak the raw persisted payload or a domain.
+    expect(JSON.stringify(records)).not.toContain('facebook.com');
+  });
+
+  it('logs nothing when a valid persisted payload is rehydrated (M4.T3c)', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('store-test', {
+      sink: (record) => {
+        records.push(record);
+      },
+      minLevel: 'debug',
+    });
+    const store = createAppStore({ logger });
+    await store.persist.rehydrate();
+
+    const persisted = partialize(store.getState());
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          ...persisted,
+          blocklist: { ...persisted.blocklist, customTags: [testTag] },
+        },
+        version: 1,
+      }),
+    });
+    await store.persist.rehydrate();
+
+    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(records).toEqual([]);
   });
 
   it('fills fields a persisted snapshot predates (slice-aware merge, CI-2)', async () => {

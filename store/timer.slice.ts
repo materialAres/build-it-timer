@@ -69,6 +69,18 @@ export interface TimerSlice {
    */
   recordDistractedMs(distractedMs: number): void;
   /**
+   * Persist one accounting step produced by `advanceProgress` (M2.T15/M2.T18):
+   * the two running-only accumulators and the new wall-clock checkpoint. The
+   * background calls it on every wake (tick, progress alarm, restart) so a gap
+   * with no sampling ticks is still credited. One `set` for all three fields
+   * keeps it a single persist. Non-finite/negative totals degrade to 0 (§1.4).
+   */
+  recordProgress(
+    focusedMs: number,
+    distractedMs: number,
+    lastAccountedAt: number,
+  ): void;
+  /**
    * Change the session length to one of the offered presets. Only legal while
    * the timer is idle or completed: changing it mid-run would desync `endsAt`,
    * the pending alarm and the growth cadence. An unknown or non-preset value is
@@ -104,6 +116,7 @@ const initialTimerState: TimerState = {
   endsAt: null,
   focusedMs: 0,
   distractedMs: 0,
+  lastAccountedAt: null,
 };
 
 /**
@@ -131,14 +144,29 @@ export function createTimerSlice(
       // due time drift away from the countdown it is supposed to represent.
       if (timer.status === 'running') return;
 
+      // A completed session has no remaining time and is not resumable: its
+      // whole duration has elapsed. Starting it again would create a
+      // zero-length session, so Reset is the only way back to `idle`.
+      if (timer.status === 'completed') return;
+
       if (timer.status === 'paused') {
         const { sessionId } = timer;
         // Resuming re-arms the countdown from *now*, so the projected end time
         // moves with it (I001): the popup estimates from this value.
-        const endsAt = now() + timer.remainingSeconds * 1000;
+        const resumedAt = now();
+        const endsAt = resumedAt + timer.remainingSeconds * 1000;
         // The accumulated focus time is kept: a resume continues the same
-        // session's city and population, it does not restart them.
-        set({ timer: { ...timer, status: 'running', endsAt } });
+        // session's city and population, it does not restart them. The
+        // checkpoint is (re)initialized by the background on the running
+        // transition, so it uses the same clock as the accounting step.
+        set({
+          timer: {
+            ...timer,
+            status: 'running',
+            endsAt,
+            lastAccountedAt: null,
+          },
+        });
         if (sessionId !== null) {
           await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
         }
@@ -163,9 +191,11 @@ export function createTimerSlice(
           sessionId,
           endsAt,
           // A brand-new session starts with an empty focus accumulator; the
-          // previous session's total must not bleed into the new city.
+          // previous session's total must not bleed into the new city. The
+          // background initializes the checkpoint when it observes `running`.
           focusedMs: 0,
           distractedMs: 0,
+          lastAccountedAt: null,
         },
       });
       await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);
@@ -188,7 +218,15 @@ export function createTimerSlice(
         timer.endsAt === null
           ? timer.remainingSeconds
           : Math.max(0, Math.ceil((timer.endsAt - now()) / 1000));
-      set({ timer: { ...timer, status: 'paused', remainingSeconds, endsAt: null } });
+      set({
+        timer: {
+          ...timer,
+          status: 'paused',
+          remainingSeconds,
+          endsAt: null,
+          lastAccountedAt: null,
+        },
+      });
       if (sessionId !== null) {
         await alarmProvider.clear(timerAlarmName(sessionId));
       }
@@ -199,7 +237,11 @@ export function createTimerSlice(
       // Reset returns to the *selected* duration, not a fixed default, so the
       // user's choice survives a reset (the cadence keys off it too).
       set({
-        timer: { ...initialTimerState, durationSeconds, remainingSeconds: durationSeconds },
+        timer: {
+          ...initialTimerState,
+          durationSeconds,
+          remainingSeconds: durationSeconds,
+        },
       });
       // Cancel by the *previous* session's name: after the reset the store no
       // longer remembers which alarm was pending.
@@ -228,6 +270,9 @@ export function createTimerSlice(
           // summary and the population are derived from it, M3.T3c).
           focusedMs: timer.focusedMs,
           distractedMs: timer.distractedMs,
+          // No running stretch is open any more; the background accounts the
+          // final interval before calling this action.
+          lastAccountedAt: null,
         },
       });
       // The alarm has already fired, but clearing is idempotent and keeps the
@@ -249,9 +294,44 @@ export function createTimerSlice(
 
     recordDistractedMs(distractedMs: number): void {
       const { timer } = get();
-      const safe = Number.isFinite(distractedMs) ? Math.max(0, distractedMs) : 0;
+      const safe = Number.isFinite(distractedMs)
+        ? Math.max(0, distractedMs)
+        : 0;
       if (safe === timer.distractedMs) return;
       set({ timer: { ...timer, distractedMs: safe } });
+    },
+
+    recordProgress(
+      focusedMs: number,
+      distractedMs: number,
+      lastAccountedAt: number,
+    ): void {
+      const { timer } = get();
+      // Guard the untrusted boundary (§1.4): these values come from a helper
+      // fed by the injected clock, so a non-finite total must not reach the
+      // persisted state/render.
+      const safeFocused = Number.isFinite(focusedMs)
+        ? Math.max(0, focusedMs)
+        : 0;
+      const safeDistracted = Number.isFinite(distractedMs)
+        ? Math.max(0, distractedMs)
+        : 0;
+      if (!Number.isFinite(lastAccountedAt)) return;
+      if (
+        safeFocused === timer.focusedMs &&
+        safeDistracted === timer.distractedMs &&
+        lastAccountedAt === timer.lastAccountedAt
+      ) {
+        return;
+      }
+      set({
+        timer: {
+          ...timer,
+          focusedMs: safeFocused,
+          distractedMs: safeDistracted,
+          lastAccountedAt,
+        },
+      });
     },
 
     setFocusDuration(durationSeconds: number): void {
@@ -276,7 +356,10 @@ export function createTimerSlice(
     // read-only (M1.T9) and the background's answer arrives through the M1.T8
     // sync bridge, so the UI converges on the state the owner actually applied.
     requestSetDuration(durationSeconds: number): void {
-      sendMutation?.({ type: 'TIMER_SET_DURATION', payload: { durationSeconds } });
+      sendMutation?.({
+        type: 'TIMER_SET_DURATION',
+        payload: { durationSeconds },
+      });
     },
 
     requestStartTimer(): void {
@@ -295,7 +378,8 @@ export function createTimerSlice(
 
 export const selectTimer = (state: TimerSlice): TimerState => state.timer;
 
-export const selectTimerStatus = (state: TimerSlice): TimerStatus => state.timer.status;
+export const selectTimerStatus = (state: TimerSlice): TimerStatus =>
+  state.timer.status;
 
 export const selectRemainingSeconds = (state: TimerSlice): number =>
   state.timer.remainingSeconds;
