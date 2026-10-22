@@ -88,8 +88,8 @@ description: Rules for updating the changelog
 | I003 | Popup city area enlarged (60 × 20) + growth engine floor ceiling raised | fixed | `934727e` |
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
 | I005 | User-selectable focus duration (duration-neutral growth, malus and population) | implemented | `de0ffe8` |
-| I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | working tree |
-| I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | working tree |
+| I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | `aa0a20c` |
+| I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
 
 ---
 
@@ -916,6 +916,7 @@ description: Rules for updating the changelog
 - Files created/modified: `lib/timer/session-progress.ts` (new), `entrypoints/background.ts`, `lib/timer/session.ts`, `lib/timer/restore-timer.ts`, `store/store.types.ts`, `store/timer.slice.ts`, the `TimerState` fixtures, and the background/messaging suites.
 - Dependencies added: none.
 - Tests: `tests/unit/lib/timer/session-progress.test.ts` (new, 9 tests) — non-running/missing-checkpoint/invalid-delta no-ops; full-gap focus credit; distracted stretches booked as penalty; `endsAt` cap; invalid cadence; untrusted accumulator clamping; idempotence. `tests/integration/background/growth-tick.test.ts` (+5 regression tests) — catch-up after the popup stops emitting ticks; catch-up across a worker restart; the trailing stretch before a pause; no credit past the deadline; the progress heartbeat advances the city and re-arms/clears with the timer status. `tests/integration/background/session-completion.test.ts` now asserts that the un-sampled remainder is included in the summary. Run: `bun run test` → **682 passing tests across 73 files**; `bun run compile` and `bun run lint` clean.
+- Commit: `aa0a20c fix: city and population did not grow/increase when the extension popup was closed`.
 - Relevant notes/decisions: the checkpoint is a wall-clock value, not a tick sum, so catch-up is idempotent and a long gap cannot be lost or double-counted. Growth and population remain derived from the same `focusedMs`/`distractedMs` measures. Paused/idle/completed time is never credited because the checkpoint is cleared on those transitions. The whole-gap classification uses the tab state observed at wake-up; without per-interval history, a mixed focus/distraction gap is attributed to that observation (the sampling limitation was already present between ticks). Malus across a worker restart is still a separate known gap.
 
 ---
@@ -926,6 +927,7 @@ description: Rules for updating the changelog
 - `components/timer/TimerControls.tsx` — Start is disabled while `completed` as well as while `running`. Pause was already disabled outside `running` and Reset is enabled outside `idle`, so at completion Reset is the only active control.
 - `store/timer.slice.ts` — `startTimer` now early-returns on `completed`, matching the documented invariant and preventing a stale/programmatic start from creating a zero-length session.
 - Tests: `tests/unit/components/timer/TimerControls.test.tsx` (+1) — completed leaves Start/Pause disabled and Reset enabled; `tests/unit/store/timer-slice.test.ts` (+1) — `startTimer` on a completed timer keeps the same state and schedules no alarm; `tests/integration/popup/app-composition.test.tsx` (+1) — after the real session alarm fires and the popup syncs, only Reset is active. Run: `bun run test` → **685 passing tests across 73 files**; `bun run compile` and `bun run lint` clean.
+- Commit: `e7939b6 feat(TimerControls): disable Start button when session is completed; update changelog for I007`.
 
 ---
 
