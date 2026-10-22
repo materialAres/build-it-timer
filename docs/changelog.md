@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; six post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; seven post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,8 +16,8 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed).
-- Tests: `bun run test` → **682 passing tests** across 73 files (unit + integration + component).
+- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed).
+- Tests: `bun run test` → **685 passing tests** across 73 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -89,6 +89,7 @@ description: Rules for updating the changelog
 | I004 | Population counter frozen at 0 while the timer runs (live update + restart-safe accumulator) | fixed | `c11f74e` + `74fbfe7` |
 | I005 | User-selectable focus duration (duration-neutral growth, malus and population) | implemented | `de0ffe8` |
 | I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | working tree |
+| I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | working tree |
 
 ---
 
@@ -916,6 +917,15 @@ description: Rules for updating the changelog
 - Dependencies added: none.
 - Tests: `tests/unit/lib/timer/session-progress.test.ts` (new, 9 tests) — non-running/missing-checkpoint/invalid-delta no-ops; full-gap focus credit; distracted stretches booked as penalty; `endsAt` cap; invalid cadence; untrusted accumulator clamping; idempotence. `tests/integration/background/growth-tick.test.ts` (+5 regression tests) — catch-up after the popup stops emitting ticks; catch-up across a worker restart; the trailing stretch before a pause; no credit past the deadline; the progress heartbeat advances the city and re-arms/clears with the timer status. `tests/integration/background/session-completion.test.ts` now asserts that the un-sampled remainder is included in the summary. Run: `bun run test` → **682 passing tests across 73 files**; `bun run compile` and `bun run lint` clean.
 - Relevant notes/decisions: the checkpoint is a wall-clock value, not a tick sum, so catch-up is idempotent and a long gap cannot be lost or double-counted. Growth and population remain derived from the same `focusedMs`/`distractedMs` measures. Paused/idle/completed time is never credited because the checkpoint is cleared on those transitions. The whole-gap classification uses the tab state observed at wake-up; without per-interval history, a mixed focus/distraction gap is attributed to that observation (the sampling limitation was already present between ticks). Malus across a worker restart is still a separate known gap.
+
+---
+
+### I007 — Start stayed clickable after the session completed
+
+- **Problem**: when the countdown reached zero the timer entered `completed`, but `TimerControls` only disabled Start while `running`. The button remained clickable; pressing it requested `TIMER_STARTED`, which fell through `startTimer`'s idle branch with `remainingSeconds = 0` and produced a zero-length session (immediately finalized), so it appeared to do nothing. A completed session is not resumable — only Reset can return it to `idle`.
+- `components/timer/TimerControls.tsx` — Start is disabled while `completed` as well as while `running`. Pause was already disabled outside `running` and Reset is enabled outside `idle`, so at completion Reset is the only active control.
+- `store/timer.slice.ts` — `startTimer` now early-returns on `completed`, matching the documented invariant and preventing a stale/programmatic start from creating a zero-length session.
+- Tests: `tests/unit/components/timer/TimerControls.test.tsx` (+1) — completed leaves Start/Pause disabled and Reset enabled; `tests/unit/store/timer-slice.test.ts` (+1) — `startTimer` on a completed timer keeps the same state and schedules no alarm; `tests/integration/popup/app-composition.test.tsx` (+1) — after the real session alarm fires and the popup syncs, only Reset is active. Run: `bun run test` → **685 passing tests across 73 files**; `bun run compile` and `bun run lint` clean.
 
 ---
 

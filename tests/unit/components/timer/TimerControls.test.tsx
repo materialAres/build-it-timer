@@ -19,7 +19,9 @@ const idleTimer: TimerState = {
 };
 
 function setTimer(partial: Partial<TimerState>): void {
-  useAppStore.setState({ timer: { ...useAppStore.getState().timer, ...partial } });
+  useAppStore.setState({
+    timer: { ...useAppStore.getState().timer, ...partial },
+  });
 }
 
 describe('TimerDisplay (M2.T3)', () => {
@@ -115,6 +117,21 @@ describe('TimerControls (M2.T3)', () => {
 
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pause' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled();
+  });
+
+  it('leaves only Reset active once the session is completed', () => {
+    setTimer({
+      status: 'completed',
+      remainingSeconds: 0,
+      endsAt: null,
+      sessionId: 'session-1',
+    });
+
+    render(<TimerControls />);
+
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled();
   });
 });

@@ -144,6 +144,11 @@ export function createTimerSlice(
       // due time drift away from the countdown it is supposed to represent.
       if (timer.status === 'running') return;
 
+      // A completed session has no remaining time and is not resumable: its
+      // whole duration has elapsed. Starting it again would create a
+      // zero-length session, so Reset is the only way back to `idle`.
+      if (timer.status === 'completed') return;
+
       if (timer.status === 'paused') {
         const { sessionId } = timer;
         // Resuming re-arms the countdown from *now*, so the projected end time

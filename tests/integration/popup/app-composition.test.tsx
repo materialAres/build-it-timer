@@ -109,12 +109,16 @@ describe('popup App composition (M3.T4)', () => {
   it('shows one section at a time behind the tab bar', async () => {
     render(<App />);
 
-    expect(screen.queryByRole('img', { name: /city/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('img', { name: /city/i }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'City' }));
 
     expect(screen.getByRole('img', { name: /city/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Start' }),
+    ).not.toBeInTheDocument();
   });
 
   it('reaches every section from the single entry point', async () => {
@@ -129,8 +133,12 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('group', { name: 'Presets' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Blocked sites' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Allowed sites' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Blocked sites' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Allowed sites' }),
+    ).toBeInTheDocument();
   });
 
   it('starts the session from the UI and updates the display through the background', async () => {
@@ -190,7 +198,9 @@ describe('popup App composition (M3.T4)', () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('tab', { name: 'City' }));
-    expect(screen.queryByRole('group', { name: /export/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: /export/i }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -200,8 +210,24 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'City' }));
     await waitFor(() => {
-      expect(screen.getByRole('group', { name: /export/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('group', { name: /export/i }),
+      ).toBeInTheDocument();
     });
+  });
+
+  it('leaves only Reset active once the session completes', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await flushAsync();
+    await fireSessionAlarm();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+    });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled();
   });
 
   it('records the completed session in the history shown by the score section', async () => {
@@ -215,7 +241,9 @@ describe('popup App composition (M3.T4)', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Score' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('No completed sessions yet.')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No completed sessions yet.'),
+      ).not.toBeInTheDocument();
     });
     expect(screen.getByRole('list')).toBeInTheDocument();
   });
