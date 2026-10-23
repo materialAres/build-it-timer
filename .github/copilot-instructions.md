@@ -6,6 +6,9 @@
 
 ---
 
+## 0. Important introductory note
+Always use Serena’s MCP tools for code search, navigation, editing and project memory, and never call Repowise tools.
+
 ## 1. Foreword — Code quality standards
 
 This section defines the binding rules for all code written in the project, regardless of who (or which AI) writes it. Every task in Section 2 must comply with them: they are an implicit prerequisite of every acceptance criterion.
