@@ -39,6 +39,5 @@ Thumbs.db
 # Note: docs/ is tracked (contains roadmap and project documentation)
 
 # Miscellaneous
-.repowise/
 .mcp.json
 opencode.jsonc
