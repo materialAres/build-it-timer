@@ -7,7 +7,7 @@
 ---
 
 ## 0. Important introductory note
-Always use Serena’s MCP tools for code search, navigation, editing and project memory, and never call Repowise tools.
+Before any coding task, call Serena’s initial_instructions. For any question about a symbol (function, class, variable): where it is defined, where it is used, what calls it, use Serena’s symbol and reference tools, even when the name is known and a single grep would seem faster. Use grep or text search only for non-code content (docs, changelogs, comments, config strings) or when Serena returns nothing. Use Serena for editing code symbols and for project memory. Consult project memory at the start of every task, and at the end update it.
 
 ## 1. Foreword — Code quality standards
 
