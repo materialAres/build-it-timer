@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; seven post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; eight post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,8 +16,8 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed).
-- Tests: `bun run test` → **685 passing tests** across 73 files (unit + integration + component).
+- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes").
+- Tests: `bun run test` → **686 passing tests** across 73 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -90,6 +90,7 @@ description: Rules for updating the changelog
 | I005 | User-selectable focus duration (duration-neutral growth, malus and population) | implemented | `de0ffe8` |
 | I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | `aa0a20c` |
 | I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
+| I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | — (to be committed) |
 
 ---
 
@@ -928,6 +929,18 @@ description: Rules for updating the changelog
 - `store/timer.slice.ts` — `startTimer` now early-returns on `completed`, matching the documented invariant and preventing a stale/programmatic start from creating a zero-length session.
 - Tests: `tests/unit/components/timer/TimerControls.test.tsx` (+1) — completed leaves Start/Pause disabled and Reset enabled; `tests/unit/store/timer-slice.test.ts` (+1) — `startTimer` on a completed timer keeps the same state and schedules no alarm; `tests/integration/popup/app-composition.test.tsx` (+1) — after the real session alarm fires and the popup syncs, only Reset is active. Run: `bun run test` → **685 passing tests across 73 files**; `bun run compile` and `bun run lint` clean.
 - Commit: `e7939b6 feat(TimerControls): disable Start button when session is completed; update changelog for I007`.
+
+---
+
+### I008 — Blocked-site overlay reappeared after choosing "Yes"
+
+- **Problem**: on a blocked site, pressing **Yes** closed the overlay and then immediately re-mounted it, so the confirmation had to be answered twice. `unmount()` itself was correct: the content script re-evaluates on every persisted-store change (`reader.subscribe` → `refreshAndEvaluate` → `evaluate`), and the user's own choice triggers that change — `SITE_BLOCKED_ATTEMPT` with `choice: 'proceed'` starts the malus (M2.T10/M2.T16), the background persists the store, and the content script observes the write. `evaluate` only checked `dismissed`, which is the **No** path (it keeps the encouragement on screen); nothing recorded the **Yes** decision, so the still-blocked/running snapshot mounted a fresh overlay.
+- `entrypoints/blocked-overlay.content.tsx` — new per-instance `proceeded` flag, set in `onProceed` before `unmount()` and `reportAttempt(...)`. `evaluate` now early-returns on `dismissed || proceeded`, so no later refresh (store write from the attempt, blocklist edit, background wake-up) can resurrect the overlay for that visit. Lifecycle/detach behaviour is unchanged.
+- Files created/modified: `entrypoints/blocked-overlay.content.tsx`, `tests/integration/content/blocked-overlay.test.ts`, `docs/issue/I008-overlay-reappears-after-proceed.md` (new).
+- Dependencies added: none.
+- Tests: `tests/integration/content/blocked-overlay.test.ts` (+1 test, integration with `fakeBrowser`) — after **Yes** the overlay closes, a simulated store refresh (the exact effect of the attempt) does not re-mount it, and the attempt is reported once. Verified red against the unfixed `evaluate` (overlay present after the refresh) and green with the flag. Run: `bun run test` → **686 passing tests across 73 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
+- Relevant notes/decisions: the decision is tracked per content-script instance — that is the "visit" the user expects; a new document gets its own instance, as before. **No** keeps its existing meaning (`dismissed` renders the encouragement instead of removing the overlay, because the tab may have no history to return to).
+- Acceptance criteria: verified — a single **Yes** dismisses the overlay for the rest of the visit; later store changes do not re-mount it; the **No** encouragement path, shadow-root isolation, idempotence, error logging and teardown tests are unchanged and green. Not re-confirmed in a live browser in this session.
 
 ---
 
