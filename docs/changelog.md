@@ -90,7 +90,7 @@ description: Rules for updating the changelog
 | I005 | User-selectable focus duration (duration-neutral growth, malus and population) | implemented | `de0ffe8` |
 | I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | `aa0a20c` |
 | I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
-| I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | — (to be committed) |
+| I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | `f1c9b87` |
 
 ---
 
@@ -941,6 +941,7 @@ description: Rules for updating the changelog
 - Tests: `tests/integration/content/blocked-overlay.test.ts` (+1 test, integration with `fakeBrowser`) — after **Yes** the overlay closes, a simulated store refresh (the exact effect of the attempt) does not re-mount it, and the attempt is reported once. Verified red against the unfixed `evaluate` (overlay present after the refresh) and green with the flag. Run: `bun run test` → **686 passing tests across 73 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
 - Relevant notes/decisions: the decision is tracked per content-script instance — that is the "visit" the user expects; a new document gets its own instance, as before. **No** keeps its existing meaning (`dismissed` renders the encouragement instead of removing the overlay, because the tab may have no history to return to).
 - Acceptance criteria: verified — a single **Yes** dismisses the overlay for the rest of the visit; later store changes do not re-mount it; the **No** encouragement path, shadow-root isolation, idempotence, error logging and teardown tests are unchanged and green. Not re-confirmed in a live browser in this session.
+- Commit: `f1c9b87 fix: resolve overlay reappearance issue after confirmation on blocked sites`.
 
 ---
 
