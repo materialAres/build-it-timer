@@ -91,7 +91,7 @@ description: Rules for updating the changelog
 | I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | `aa0a20c` |
 | I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
 | I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | `f1c9b87` |
-| I009 | Malus not applied to a blocked site already open at session start | fixed | — (to be committed) |
+| I009 | Malus not applied to a blocked site already open at session start | fixed | `afc2224` |
 
 ---
 
@@ -957,6 +957,7 @@ description: Rules for updating the changelog
 - Tests: `tests/integration/background/malus.test.ts` (+1 test) — a tab that is already open when the session starts still produces a per-tick `MALUS_APPLIED` after **Yes**; verified red before the fix (only the proceed message, no tick message). `tests/unit/lib/timer/tab-distraction-tracker.test.ts` (+2 tests) — `refresh()` registers a tab that was open while the predicate was still false (idle) and credits the following stretch; it drops a tab that navigated away during the re-read while keeping the stretch accrued before it. Run: `bun run test` → **689 passing tests across 73 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
 - Relevant notes/decisions: the refresh is deliberately tied to the **running** transition (start, resume, rehydrate), not to every store write — the store changes on every tick, so querying the tabs there would be wasteful. The malus still begins only on the overlay's "Yes" (pre-`proceed` time stays forgiven, M2.T10); the fix does not auto-apply a malus for a tab the user never confirmed. **Known follow-up (not addressed here)**: adding a domain to the blocklist while its tab is already open has the same stale-set shape; it would need a refresh on blocklist/allowlist changes.
 - Acceptance criteria: verified — the already-open blocked tab charges the city from the first session tick after **Yes**; the pre-refresh stretch is preserved and a departed tab is dropped; the `onUpdated` path for newly opened sites is unchanged. Not re-confirmed in a live browser in this session.
+- Commit: `afc2224 fix: apply malus to blocked sites already open at session start and enhance distraction tracking`.
 
 ---
 
