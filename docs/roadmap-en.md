@@ -756,9 +756,9 @@ This section tracks change requests that modify already-planned or already-imple
 - A domain is blocked **only** when it is in the blocklist and the timer is `running`.
 - There is no second list, no cross-list move, no "allowlist wins" rule, and no way to exempt a blocklisted domain.
 - Existing persisted data is migrated so the new effective blocklist equals `old blocklist − old allowlist`: a domain that was on both lists stays unblocked, preserving the behavior the user currently observes. Domains present only in the old allowlist are dropped because they were already allowed by default.
-- The only remaining reference to `allowlist` may be the one-time legacy migration code and its tests; no runtime path may read, write, expose, or enforce an allowlist.
+- The only remaining reference to `allowlist` may be the one-time legacy migration code and the tests that intentionally exercise legacy payloads; no runtime path may read, write, expose, or enforce an allowlist.
 
-**Sequencing note.** The tasks are ordered so that the UI and protocol stop exposing the allowlist first, then persisted data is migrated, then enforcement stops reading it, then the state model is collapsed. The final task is the verification gate for the whole change request. From CR1.T3 onward the migration must be in place before CR1.T4 changes blocking behavior.
+**Sequencing note.** The tasks are ordered so that the UI and protocol stop exposing the allowlist first, then persisted data is migrated, then enforcement stops reading it, then the state model is collapsed — split into the implementation (`CR1.T5a`) and two test-migration tasks of six test files each (`CR1.T5b`, `CR1.T5c`) so each diff stays reviewable. The final task is the verification gate for the whole change request. From CR1.T3 onward the migration must be in place before CR1.T4 changes blocking behavior.
 
 ### 2.2 Task summary
 
@@ -768,8 +768,10 @@ This section tracks change requests that modify already-planned or already-imple
 | CR1.T2 | Remove the `list` discriminator from mutation messages | CR1.T1 |
 | CR1.T3 | Migrate persisted allowlist data to the effective blocklist | CR1.T2 |
 | CR1.T4 | Remove the allowlist from blocking enforcement | CR1.T3 |
-| CR1.T5 | Collapse the store state and mutation helpers to a single blocklist | CR1.T1, CR1.T2, CR1.T3, CR1.T4 |
-| CR1.T6 | Cleanup, documentation, regression coverage, and final verification | CR1.T5 |
+| CR1.T5a | Collapse the store state and runtime call sites to a single blocklist | CR1.T1, CR1.T2, CR1.T3, CR1.T4 |
+| CR1.T5b | Migrate the store and component tests to the single blocklist | CR1.T5a |
+| CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | CR1.T5b |
+| CR1.T6 | Cleanup, documentation, regression coverage, and final verification | CR1.T5a, CR1.T5b, CR1.T5c |
 
 ### 2.3 Task cards
 
@@ -779,11 +781,11 @@ This section tracks change requests that modify already-planned or already-imple
 * **Dependencies**: —
 * **Acceptance criteria**:
   - `BlocklistSection` renders exactly one `SiteList`, for the blocklist; the `<SiteList list="allowlist" />` mount is gone.
-  - `SiteList` no longer accepts or reads a `list` prop and always reads `selectBlocklist`; its add/remove/tag calls explicitly target the blocklist until CR1.T5 removes the parameter from the store API.
+  - `SiteList` no longer accepts or reads a `list` prop and always reads `selectBlocklist`; its add/remove/tag calls explicitly target the blocklist until CR1.T5a removes the parameter from the store API.
   - The `LIST_KEYS` allowlist branch, the `otherEntries` lookup, and the "Moved … from the allowlist" feedback are removed. Duplicate feedback and the "Enter a valid URL" feedback remain unchanged.
   - The i18n keys `blocklist.allowedSites`, `blocklist.allowlistName`, and `blocklist.movedFromList` are removed from **both** `locales/en.yml` and `locales/it.yml`; no key is left unused.
   - Component tests cover: one blocked-sites list, add with normalization, duplicate feedback, invalid-input feedback, remove, and absence of any allowlist label.
-* **Notes/decisions**: this task only removes the UI surface. The store still carries an unused `allowlist` field and the mutation protocol still has a `list` discriminator until CR1.T5; keeping those temporarily lets this task stay compilable and independently reviewable.
+* **Notes/decisions**: this task only removes the UI surface. The store still carries an unused `allowlist` field and the mutation protocol still has a `list` discriminator until CR1.T5a; keeping those temporarily lets this task stay compilable and independently reviewable.
 
 #### CR1.T2 — Remove the `list` discriminator from mutation messages
 * **Objective**: make every blocklist/tag mutation address the single blocklist, with no protocol-level concept of an allowlist.
@@ -791,7 +793,7 @@ This section tracks change requests that modify already-planned or already-imple
 * **Dependencies**: CR1.T1
 * **Acceptance criteria**:
   - The payloads of `BLOCKLIST_ADD_SITE`, `BLOCKLIST_REMOVE_SITE`, `TAG_ASSIGN`, and `TAG_UNASSIGN` no longer contain `list`.
-  - `isListName` is deleted; the background mutation handler applies these messages to the blocklist only. Until CR1.T5 removes the parameter, it may call the existing helpers with the literal `'blocklist'`.
+  - `isListName` is deleted; the background mutation handler applies these messages to the blocklist only. Until CR1.T5a removes the parameter, it may call the existing helpers with the literal `'blocklist'`.
   - An old/extra `list` field in a received payload is ignored, never used to select a target collection.
   - `BLOCKLIST_APPLY_PRESET`, `TAG_UPSERT`, `TAG_REMOVE`, and the `MUTATION_TYPES` list keep their current shape.
   - The mutation-bus test covers add/remove/tag/preset against the blocklist and asserts that no message can mutate a second list.
@@ -823,9 +825,9 @@ This section tracks change requests that modify already-planned or already-imple
   - Tests prove the two enforcement layers agree: a blocklisted domain is blocked by both DNR and the overlay, a non-blocklisted domain by neither, a previously allowlisted-but-blocklisted domain is no longer blocked after migration, and behavior outside `running` is unchanged.
 * **Notes/decisions**: after this task no runtime allowlist has any effect. The migration helper remains the only legacy read path.
 
-#### CR1.T5 — Collapse the store state and mutation helpers to a single blocklist
-* **Objective**: remove the `allowlist` field and the two-list abstraction from the Zustand slice, its pure helpers, actions, and selectors.
-* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts` (exports), `lib/messaging/apply-mutation.ts` (call sites), `components/blocklist/SiteList.tsx` (call sites already fixed in CR1.T1), `tests/unit/store/blocklist-mutations.test.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-sites.test.ts`, `tests/unit/store/blocklist-tags.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`, other store fixtures.
+#### CR1.T5a — Collapse the store model and runtime call sites to a single blocklist
+* **Objective**: remove the `allowlist` field and the two-list abstraction from the Zustand slice, its pure helpers, actions, selectors, and every runtime call site, so production code models exactly one blocklist.
+* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts` (exports), `lib/messaging/apply-mutation.ts` (call sites), `components/blocklist/SiteList.tsx` (action call sites), `components/blocklist/TagEditor.tsx` (action call sites).
 * **Dependencies**: CR1.T1, CR1.T2, CR1.T3, CR1.T4
 * **Acceptance criteria**:
   - `BlocklistState` is exactly `{ blocklist: ReadonlyArray<BlocklistEntry>; customTags: ReadonlyArray<Tag> }`; `allowlist` and `BlocklistListName` are removed.
@@ -833,15 +835,53 @@ This section tracks change requests that modify already-planned or already-imple
   - Pure helpers lose the `list` parameter and are renamed for the single-list world: `addSiteToList` → `addBlocklistSite`, `removeSiteFromList` → `removeBlocklistSite`, `addPresetToList` → `addPresetToBlocklist`; `attachPresetTag`, `assignTagToSite`, and `unassignTagFromSite` keep their behavior without a list argument.
   - `oppositeList`, `resolveListConflicts`, and `selectAllowlist` are deleted; `removeTag` detaches the tag only from blocklist entries; `filterEntriesByTag` is unchanged.
   - `store/index.ts` exports only the new helper/selector names; persisted state and `partialize` use the new two-field shape.
-  - Tests cover add/remove, duplicate no-op, normalization, preset expansion/dedup/tagging, tag assignment/removal, and the absence of any cross-list move behavior.
-* **Notes/decisions**: this is the final shape change. The migration from CR1.T3 already writes the new shape, so no additional persistence migration is needed here; `merge` keeps the fresh defaults for fields a persisted snapshot predates.
+  - `lib/messaging/apply-mutation.ts`, `SiteList`, and `TagEditor` call the new API; the temporary `TARGET_LIST` literal introduced by CR1.T2 is removed, and no runtime code passes a list name to a blocklist action or helper.
+  - `bun run build` and `bun run build:firefox` succeed (the production bundle does not include tests). `bun run compile`/`bun run test` may still fail **only** in the test files that use the removed two-list API — CR1.T5b and CR1.T5c close those and restore the green gate; no production module hides a stale call site behind `as`/`@ts-expect-error`.
+* **Notes/decisions**: this is the final shape change in production code. The migration from CR1.T3 already writes the new shape, so no additional persistence migration is needed; `merge` keeps the fresh defaults for fields a persisted snapshot predates. The test migration is deliberately split into CR1.T5b and CR1.T5c (six test files each) so each diff stays reviewable; the three tasks land together before CR1.T6.
+
+#### CR1.T5b — Migrate the store and component tests to the single blocklist
+* **Objective**: migrate the four store unit tests and the two blocklist component tests from the two-list model to `{ blocklist, customTags }`, replacing the obsolete cross-list/precedence cases with single-list behavior.
+* **Files to create/modify**:
+  - `tests/unit/store/blocklist-mutations.test.ts`
+  - `tests/unit/store/blocklist-preset.test.ts`
+  - `tests/unit/store/blocklist-sites.test.ts`
+  - `tests/unit/store/blocklist-tags.test.ts`
+  - `tests/unit/components/blocklist/SiteList.test.tsx`
+  - `tests/unit/components/blocklist/TagEditor.test.tsx`
+* **Dependencies**: CR1.T5a
+* **Acceptance criteria**:
+  - Every typed fixture in these six files constructs `BlocklistState` as `{ blocklist, customTags }`; no test passes a list name to a store action or helper.
+  - Store unit tests cover add/remove, duplicate no-op, normalization, preset expansion/dedup/tagging, tag assignment/removal, and `removeTag` detaching the tag only from blocklist entries.
+  - The obsolete cross-list move and "allowlist wins" tests in these files are replaced by assertions that no second list exists (e.g. the store state has no `allowlist` field and adding a site never writes one), not silently deleted.
+  - Component tests seed the single-list state and assert the new action signatures (`addSite(site)`, `removeSite(site)`, `assignTag(site, tagId)`, `unassignTag(site, tagId)`).
+  - The six files pass. `bun run compile`/`bun run lint`/`bun run test` may still fail **only** in the six test files owned by CR1.T5c; `bun run build` and `bun run build:firefox` stay green.
+* **Notes/decisions**: this task only touches the store/component layer, so the API change from CR1.T5a is verified where it is consumed first. The integration and remaining unit files follow in CR1.T5c, which restores the full green gate.
+
+#### CR1.T5c — Migrate the remaining unit and integration tests and restore the green gate
+* **Objective**: migrate the remaining three unit test files and the three integration test files, then prove the whole verification gate is green.
+* **Files to create/modify**:
+  - `tests/unit/components/blocklist/PresetPicker.test.tsx`
+  - `tests/unit/lib/blocking/is-domain-blocked.test.ts`
+  - `tests/unit/lib/timer/tab-distraction-tracker.test.ts` (stale comment)
+  - `tests/integration/store/store.test.ts`
+  - `tests/integration/messaging/mutation-bus.test.ts`
+  - `tests/integration/background/navigation-normalization.test.ts`
+* **Dependencies**: CR1.T5b
+* **Acceptance criteria**:
+  - Every typed fixture in these six files uses the single-list shape; no test passes a list name to a store action or helper.
+  - The mutation-bus test proves the payload's legacy `list` field cannot target a second list (no `allowlist` field is written), and the navigation test no longer injects a residual `allowlist` into the store.
+  - The residual-allowlist case in `is-domain-blocked.test.ts` is removed (the store can no longer hold that field; legacy data is covered by the migration and snapshot-parser tests), and the `tab-distraction-tracker.test.ts` comment no longer describes allowlist precedence.
+  - Integration tests seed/assert the single-list persisted shape.
+  - Tests that intentionally exercise legacy payloads keep **raw** version-1 JSON rather than the typed state: `legacy-blocklist.test.ts`, the legacy cases in `store-snapshot.test.ts`, `blocked-overlay.test.ts`, `store.test.ts`, and `dnr-rules.test.ts`.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, and `bun run build:firefox` are green; the changelog records the real test counts.
+* **Notes/decisions**: this task only touches tests and closes the change-request implementation; the two CR1.T5 test-migration tasks (T5b, T5c) get separate changelog entries from the production change (T5a). Keeping the raw legacy fixtures is deliberate — they are the only tests allowed to mention a legacy `allowlist` field, and they prove the migration still works.
 
 #### CR1.T6 — Cleanup, documentation, regression coverage, and final verification
 * **Objective**: remove the remaining non-historical references, document the change, and prove the full suite is green.
-* **Files to create/modify**: remaining test fixtures; `README.md`; `.github/copilot-instructions.md`; `.serena/memories/core.md`; `docs/store-analysis.md` (if it still describes allowlist/blocklist precedence); `docs/changelog.md`; `docs/change-requests/remove-allowlist.md` (mark the analysis as implemented by CR1.T1–T6).
-* **Dependencies**: CR1.T5
+* **Files to create/modify**: remaining test fixtures; `README.md`; `.github/copilot-instructions.md`; `.serena/memories/core.md`; `docs/store-analysis.md` (if it still describes allowlist/blocklist precedence); `docs/changelog.md`; `docs/change-requests/remove-allowlist.md` (mark the analysis as implemented by CR1.T1–T6, including the CR1.T5a/CR1.T5b/CR1.T5c split).
+* **Dependencies**: CR1.T5a, CR1.T5b, CR1.T5c
 * **Acceptance criteria**:
-  - A repository search for `allowlist`, `Allowlist`, `allowList`, `allowedSites`, and `movedFromList` returns only: the legacy migration module and its tests, the historical roadmap/changelog text, and the change-request analysis. No runtime code, UI, protocol, locale, README, or project-instruction reference remains.
+  - A repository search for `allowlist`, `Allowlist`, `allowList`, `allowedSites`, and `movedFromList` returns only: the legacy migration module, the tests that intentionally exercise legacy payloads (migration, snapshot parser, and the raw version-1 fixtures in store/overlay/background tests), the historical roadmap/changelog text, and the change-request analysis. No runtime code, UI, protocol, locale, README, or project-instruction reference remains.
   - `README.md` describes the feature as a blocklist only (no allowlist, no "allowlist wins").
   - `.github/copilot-instructions.md` and `.serena/memories/core.md` no longer instruct future agents to preserve allowlist precedence or a two-list UI.
   - `docs/changelog.md` records each CR1 task (ID, what changed, files, tests, `Commit: —` until the developer commits) and updates the current-status/test counts.
@@ -854,10 +894,10 @@ The following main-task criteria are intentionally replaced by CR1. They remain 
 
 | Main task | Superseded part | New rule |
 |---|---|---|
-| M2.T4 | `{ allowlist, blocklist, customTags }` state and allowlist CRUD | Single `{ blocklist, customTags }` state (CR1.T5) |
+| M2.T4 | `{ allowlist, blocklist, customTags }` state and allowlist CRUD | Single `{ blocklist, customTags }` state (CR1.T5a) |
 | M2.T6 | "allowlist always wins" precedence and allowlist parameter | `buildDnrRules(blocklist)` only (CR1.T4) |
 | M2.T8 | Allowlist precedence in the overlay decision | `isDomainBlocked({ blocklist }, domain)` only (CR1.T4) |
-| M2.T20 | Allowlist/blocklist mutual exclusion | Task is obsolete: there is no second list (CR1.T5) |
+| M2.T20 | Allowlist/blocklist mutual exclusion | Task is obsolete: there is no second list (CR1.T5a) |
 | M2.T21 | Allowlist precedence during navigation normalization | Navigation matches the blocklist only (CR1.T4) |
 | M3.T3 | `SiteList` generic over allowlist/blocklist and move feedback | Single blocklist `SiteList` (CR1.T1) |
 | M5.T2 / M5.T3 | References to allowlist precedence in hardening criteria | Keep scheme/IDN/`urlFilter` hardening; drop allowlist precedence (CR1.T4) |

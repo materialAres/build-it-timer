@@ -18,13 +18,13 @@ import type { MutationMessage } from '@/lib/messaging/messages.types';
 import {
   migrateBlocklistState,
   sanitizeBlocklistState,
-  type EffectiveBlocklist,
 } from '@/lib/blocking/legacy-blocklist';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
   type BlocklistDependencies,
   type BlocklistSlice,
+  type BlocklistState,
 } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
@@ -69,11 +69,11 @@ export interface PersistedState {
   readonly timer: TimerState;
   readonly city: CitySlice['city'];
   /**
-   * The single-list shape (CR1.T3). The in-memory `blocklist` slice still
-   * carries an (always empty) `allowlist` field until CR1.T5, but it is not
-   * persisted anymore.
+   * The single-list blocklist shape (CR1.T3, collapsed in CR1.T5a): the
+   * persisted payload is exactly the in-memory slice state, so no field can be
+   * lost or drift between the store and storage.
    */
-  readonly blocklist: EffectiveBlocklist;
+  readonly blocklist: BlocklistState;
   readonly score: ScoreSlice['score'];
   readonly sessionHistory: SessionHistorySlice['sessionHistory'];
 }
@@ -315,24 +315,21 @@ export type {
 } from './city.slice';
 export {
   createBlocklistSlice,
-  addSiteToList,
-  addPresetToList,
+  addBlocklistSite,
+  addPresetToBlocklist,
   assignTagToSite,
   unassignTagFromSite,
   filterEntriesByTag,
   generateTagId,
   hasTagLabel,
-  removeSiteFromList,
-  resolveListConflicts,
+  removeBlocklistSite,
   upsertTag,
   removeTag,
-  selectAllowlist,
   selectBlocklist,
   selectCustomTags,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,
-  BlocklistListName,
   BlocklistState,
 } from './blocklist.slice';
 export {

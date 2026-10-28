@@ -112,7 +112,7 @@ export function SiteList() {
       });
       return;
     }
-    useAppStore.getState().addSite('blocklist', domain);
+    useAppStore.getState().addSite(domain);
     setFeedback({ kind: 'info', text: i18n.t('blocklist.added', [domain]) });
     setValue('');
   };
@@ -163,9 +163,7 @@ export function SiteList() {
               type="button"
               aria-label={i18n.t('common.remove', [entry.domain.value])}
               onClick={() => {
-                useAppStore
-                  .getState()
-                  .removeSite('blocklist', entry.domain.value);
+                useAppStore.getState().removeSite(entry.domain.value);
               }}
             >
               ×
