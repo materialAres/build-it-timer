@@ -5,7 +5,10 @@ import { SiteList } from '@/components/blocklist/SiteList';
 import { useAppStore } from '@/store';
 import type { BlocklistEntry } from '@/store/store.types';
 
-const entry = (value: string): BlocklistEntry => ({ domain: { value }, tagIds: [] });
+const entry = (value: string): BlocklistEntry => ({
+  domain: { value },
+  tagIds: [],
+});
 
 const resetBlocklist = (
   allowlist: ReadonlyArray<BlocklistEntry> = [],
@@ -27,17 +30,17 @@ describe('SiteList (M3.T3)', () => {
     cleanup();
   });
 
-  it('renders one row per entry of the addressed list', () => {
+  it('renders one row per blocklist entry', () => {
     resetBlocklist([], [entry('a.com'), entry('b.com')]);
 
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
     expect(screen.getByText('a.com')).toBeInTheDocument();
     expect(screen.getByText('b.com')).toBeInTheDocument();
   });
 
   it('normalizes a full URL to a single registrable entry', async () => {
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
     await userEvent.type(
       screen.getByLabelText('Add to Blocked sites'),
@@ -51,7 +54,7 @@ describe('SiteList (M3.T3)', () => {
   });
 
   it('shows a live normalization preview while typing', async () => {
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
     await userEvent.type(
       screen.getByLabelText('Add to Blocked sites'),
@@ -63,19 +66,27 @@ describe('SiteList (M3.T3)', () => {
 
   it('does not duplicate an already-present domain and gives explicit feedback', async () => {
     resetBlocklist([], [entry('facebook.com')]);
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
-    await userEvent.type(screen.getByLabelText('Add to Blocked sites'), 'facebook.com');
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocked sites'),
+      'facebook.com',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(currentBlocklist().blocklist).toHaveLength(1);
-    expect(screen.getByText('facebook.com is already in the blocklist.')).toBeInTheDocument();
+    expect(
+      screen.getByText('facebook.com is already in the blocklist.'),
+    ).toBeInTheDocument();
   });
 
   it('shows "Enter a valid URL" for a bare public suffix and adds nothing', async () => {
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
-    await userEvent.type(screen.getByLabelText('Add to Blocked sites'), 'co.uk');
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocked sites'),
+      'co.uk',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(screen.getByText('Enter a valid URL')).toBeInTheDocument();
@@ -83,7 +94,7 @@ describe('SiteList (M3.T3)', () => {
   });
 
   it('shows "Enter a valid URL" for empty/whitespace input', async () => {
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
@@ -91,37 +102,28 @@ describe('SiteList (M3.T3)', () => {
     expect(currentBlocklist().blocklist).toEqual([]);
   });
 
-  it('moves a domain already in the opposite list instead of duplicating it', async () => {
-    resetBlocklist([entry('facebook.com')], []);
-    render(<SiteList list="blocklist" />);
+  it('renders only the blocklist, with no allowlist section', () => {
+    render(<SiteList />);
 
-    await userEvent.type(screen.getByLabelText('Add to Blocked sites'), 'facebook.com');
-    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
-
-    expect(values(currentBlocklist().blocklist)).toEqual(['facebook.com']);
-    expect(currentBlocklist().allowlist).toEqual([]);
-    expect(screen.getByText('Moved facebook.com from the allowlist.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Blocked sites' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: 'Allowed sites' }),
+    ).not.toBeInTheDocument();
   });
 
   it('removes an entry through the store action', async () => {
     resetBlocklist([], [entry('a.com')]);
-    render(<SiteList list="blocklist" />);
+    render(<SiteList />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove a.com' }));
 
     expect(currentBlocklist().blocklist).toEqual([]);
   });
 
-  it('renders the allowlist when addressed', () => {
-    resetBlocklist([entry('keep.com')], []);
-
-    render(<SiteList list="allowlist" />);
-
-    expect(screen.getByText('keep.com')).toBeInTheDocument();
-  });
-
   it('carries its own stylesheet', () => {
-    const { container } = render(<SiteList list="blocklist" />);
+    const { container } = render(<SiteList />);
 
     const style = container.querySelector('style');
     expect(style?.textContent).toContain('.site-list');

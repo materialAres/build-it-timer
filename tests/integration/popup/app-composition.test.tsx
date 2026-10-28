@@ -137,8 +137,8 @@ describe('popup App composition (M3.T4)', () => {
       screen.getByRole('region', { name: 'Blocked sites' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'Allowed sites' }),
-    ).toBeInTheDocument();
+      screen.queryByRole('region', { name: 'Allowed sites' }),
+    ).not.toBeInTheDocument();
   });
 
   it('starts the session from the UI and updates the display through the background', async () => {

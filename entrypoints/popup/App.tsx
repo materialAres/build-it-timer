@@ -4,7 +4,11 @@ import {
   selectTimerStatus,
   type PopupTab,
 } from '@/store';
-import { PopupTabs, tabButtonId, tabPanelId } from '@/components/common/PopupTabs';
+import {
+  PopupTabs,
+  tabButtonId,
+  tabPanelId,
+} from '@/components/common/PopupTabs';
 import { TimerDisplay } from '@/components/timer/TimerDisplay';
 import { TimerControls } from '@/components/timer/TimerControls';
 import { DurationPicker } from '@/components/timer/DurationPicker';
@@ -67,10 +71,7 @@ function BlocklistSection() {
     <div className="popup-section popup-section--blocklist">
       <PresetPicker />
       <TagEditor />
-      {/* One instance per list: `SiteList` is generic over the list it edits
-          (M3.T3), so the blocklist and the allowlist are two mounts. */}
-      <SiteList list="blocklist" />
-      <SiteList list="allowlist" />
+      <SiteList />
     </div>
   );
 }

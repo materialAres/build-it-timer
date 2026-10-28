@@ -54,15 +54,12 @@ blocklist:
   deleteTag: 'Elimina $1'
   sites: Siti
   blockedSites: Siti bloccati
-  allowedSites: Siti consentiti
   blocklistName: lista dei bloccati
-  allowlistName: lista dei consentiti
   addTo: 'Aggiungi a $1'
   entriesAriaLabel: '$1 voci'
   exampleDomain: example.com
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
-  movedFromList: 'Spostato $1 dalla $2.'
   added: 'Aggiunto $1.'
 
 overlay:
