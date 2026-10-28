@@ -247,6 +247,33 @@ describe('blocked overlay content script (M2.T8)', () => {
     });
   });
 
+  it('does not bring the overlay back after "Yes" when the store refreshes', async () => {
+    // The attempt itself writes the store (distracted time, malus), so the
+    // reader observes a fresh snapshot of the same running session right after
+    // the click — the exact sequence that used to re-mount the overlay.
+    const sendAttempt = vi.fn(() => Promise.resolve());
+    const { reader, update } = fakeStoreReader(runningSnapshot(['facebook.com']));
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: reader,
+      url: 'https://facebook.com/',
+      sendAttempt,
+    });
+    await vi.waitFor(() => {
+      expect(host()).not.toBeNull();
+    });
+
+    clickShadowButton('Yes');
+    await vi.waitFor(() => {
+      expect(host()).toBeNull();
+    });
+
+    await update(runningSnapshot(['facebook.com']));
+
+    expect(host()).toBeNull();
+    expect(sendAttempt).toHaveBeenCalledTimes(1);
+  });
+
   it('reports "go-back" and navigates back when "No" is chosen, without any malus', async () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
     const goBack = vi.fn();

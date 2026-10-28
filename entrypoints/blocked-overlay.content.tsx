@@ -139,6 +139,11 @@ export function startBlockedOverlay(
 
   let root: Root | undefined;
   let dismissed = false;
+  // "Yes" hands the page over for the rest of the visit. The attempt itself
+  // writes the store (distracted time, malus), so the reader fires a refresh
+  // right afterwards; without this flag `evaluate` would see a still-blocked
+  // running session and mount the overlay again.
+  let proceeded = false;
 
   const host = (): HTMLElement | undefined =>
     document.getElementById(HOST_ID) ?? undefined;
@@ -182,6 +187,7 @@ export function startBlockedOverlay(
           domain={domain}
           dismissed={dismissed}
           onProceed={() => {
+            proceeded = true;
             unmount();
             reportAttempt(domain, 'proceed');
           }}
@@ -217,8 +223,9 @@ export function startBlockedOverlay(
       return;
     }
 
-    // Re-evaluating must not resurrect the overlay the user already dismissed.
-    if (dismissed) return;
+    // Re-evaluating must not resurrect the overlay the user already answered:
+    // "No" keeps the encouragement mounted, "Yes" must leave the page alone.
+    if (dismissed || proceeded) return;
     mount(domain.value);
   };
 

@@ -31,6 +31,12 @@ export interface TabDistractionTracker {
   /** Resolves once the initially open tabs have been read. */
   readonly ready: Promise<void>;
   /**
+   * Re-read the currently open tabs. Needed because a tab that was already open
+   * when the session started never fires `onUpdated` — the startup seed runs
+   * while the timer is idle, when no tab counts as distracted yet.
+   */
+  refresh(): Promise<void>;
+  /**
    * Weighted blocked-tab time accumulated so far, in ms, sampled at `now()`.
    * Each open blocked tab contributes its elapsed time once (N open tabs → N×),
    * so "accumulating distraction time across all simultaneously open blocked
@@ -90,20 +96,32 @@ export function createTabDistractionTracker(
     openBlockedTabs.delete(tabId);
   };
 
+  // Replace the membership with the freshly read tabs: a tab that navigated
+  // away while the read was in flight must stop counting, not linger.
+  const syncTabs = (tabs: ReadonlyArray<TrackedTab>): void => {
+    openBlockedTabs.clear();
+    for (const tab of tabs) {
+      if (dependencies.isDistractedUrl(tab.url)) openBlockedTabs.add(tab.id);
+    }
+    lastSampleMs = dependencies.now();
+  };
+
   const disposers = [
     dependencies.eventSource.onUpdated(track),
     dependencies.eventSource.onRemoved(untrack),
   ];
 
-  const ready = dependencies.eventSource.queryTabs().then((tabs) => {
-    for (const tab of tabs) {
-      if (dependencies.isDistractedUrl(tab.url)) openBlockedTabs.add(tab.id);
-    }
-    lastSampleMs = dependencies.now();
-  });
+  const ready = dependencies.eventSource.queryTabs().then(syncTabs);
 
   return {
     ready,
+    async refresh(): Promise<void> {
+      const tabs = await dependencies.eventSource.queryTabs();
+      // Credit the stretch to the membership that was active during it before
+      // replacing the set with the current tabs.
+      sample();
+      syncTabs(tabs);
+    },
     getAccumulatedMs(): number {
       sample();
       return accumulatedMs;
