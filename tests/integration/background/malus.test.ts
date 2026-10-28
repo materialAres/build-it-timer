@@ -3,7 +3,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage, onMessage } from '@/lib/messaging/bus';
 import { createAppStore } from '@/store';
-import { applyMalus } from '@/lib/score/apply-malus';
+import { applyMalus, malusForDistractionTicks } from '@/lib/score/apply-malus';
 import {
   DEFAULT_FOCUS_PRESET,
   tickMsForDurationSeconds,
@@ -147,4 +147,45 @@ describe('malus linked to building destruction (M2.T16)', () => {
     expect(countOccupied(store.getState().city.layers)).toBe(2);
     handle.dispose();
   });
+
+  it('keeps applying the malus to a blocked tab that was already open when the session started', async () => {
+    // The user opens a blocked site and *then* starts the timer: no
+    // `tabs.onUpdated` event fires at start, so only a re-read of the open tabs
+    // can register the tab with the distraction tracker.
+    tabEventSource.setInitialTabs([{ id: 1, url: 'https://facebook.com/' }]);
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { list: 'blocklist', site: 'facebook.com' },
+    });
+    await store.getState().startTimer();
+    store.getState().growCityByTicks(4);
+
+    const received: RuntimeMessage[] = [];
+    const unsubscribe = onMessage('MALUS_APPLIED', (message) => {
+      received.push(message);
+    });
+
+    await proceed();
+    expect(received).toHaveLength(1);
+
+    // One session tick later, the already-open blocked tab must still be
+    // charging the city, exactly like a tab opened after the session started.
+    now = T0 + TICK_MS;
+    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_400 } });
+
+    expect(received).toHaveLength(2);
+    expect(received[1]).toEqual({
+      type: 'MALUS_APPLIED',
+      payload: {
+        domain: 'facebook.com',
+        charactersRemoved: malusForDistractionTicks(1),
+      },
+    });
+    unsubscribe();
+    handle.dispose();
+  });
 });
+

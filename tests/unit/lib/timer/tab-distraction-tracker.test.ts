@@ -112,6 +112,45 @@ describe('tab distraction tracker (M2.T10)', () => {
     expect(tracker.getAccumulatedMs()).toBe(0);
   });
 
+  it('re-reads the open tabs so a tab opened before the session started is counted', async () => {
+    const eventSource = new FakeTabEventSource();
+    eventSource.setInitialTabs([{ id: 1, url: 'https://facebook.com/' }]);
+    let nowMs = 0;
+    let running = false;
+    const tracker = createTabDistractionTracker({
+      eventSource,
+      // Mirrors `createDistractionPredicate`: only a running session counts.
+      isDistractedUrl: (url) =>
+        running && url !== undefined && url.includes('facebook.com'),
+      now: () => nowMs,
+    });
+    await tracker.ready;
+
+    nowMs += 2_000;
+    expect(tracker.getAccumulatedMs()).toBe(0); // idle during the initial read
+
+    running = true;
+    await tracker.refresh();
+    nowMs += 2_000;
+
+    expect(tracker.getAccumulatedMs()).toBe(2_000);
+  });
+
+  it('stops counting a tab that navigated away when the tabs are re-read', async () => {
+    const { eventSource, tracker, advanceBy } = createHarness(['facebook.com']);
+    await tracker.ready;
+
+    eventSource.emitUpdated({ id: 1, url: 'https://facebook.com/' });
+    advanceBy(2_000);
+
+    eventSource.setInitialTabs([{ id: 1, url: 'https://example.com/' }]);
+    await tracker.refresh();
+    advanceBy(5_000);
+
+    // The stretch before the re-read is kept; the time after it is not charged.
+    expect(tracker.getAccumulatedMs()).toBe(2_000);
+  });
+
   it('stops observing tab events after dispose', async () => {
     const { eventSource, tracker, advanceBy } = createHarness(['facebook.com']);
     await tracker.ready;

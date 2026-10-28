@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; eight post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **M4.T3e** (Milestone 3 completed, Milestone 4 in progress; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,8 +16,8 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes").
-- Tests: `bun run test` → **686 passing tests** across 73 files (unit + integration + component).
+- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
+- Tests: `bun run test` → **689 passing tests** across 73 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -91,6 +91,7 @@ description: Rules for updating the changelog
 | I006 | City/population frozen when the popup is closed or the browser loses focus | fixed | `aa0a20c` |
 | I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
 | I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | `f1c9b87` |
+| I009 | Malus not applied to a blocked site already open at session start | fixed | — (to be committed) |
 
 ---
 
@@ -942,6 +943,20 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the decision is tracked per content-script instance — that is the "visit" the user expects; a new document gets its own instance, as before. **No** keeps its existing meaning (`dismissed` renders the encouragement instead of removing the overlay, because the tab may have no history to return to).
 - Acceptance criteria: verified — a single **Yes** dismisses the overlay for the rest of the visit; later store changes do not re-mount it; the **No** encouragement path, shadow-root isolation, idempotence, error logging and teardown tests are unchanged and green. Not re-confirmed in a live browser in this session.
 - Commit: `f1c9b87 fix: resolve overlay reappearance issue after confirmation on blocked sites`.
+
+---
+
+### I009 — Malus not applied to a blocked site already open at session start
+
+- **Problem**: a blocked tab that was already open when the session started accrued no distraction time: after the overlay's **Yes**, only the single immediate character was attempted (and, because the city is empty at session start, that usually removed nothing), and nothing else happened. `tracker.isDistracted()` also stayed `false`, so the growth engine booked the stay as **focus** and the city/population kept growing on the blocked page. A tab opened *after* the start worked because `tabs.onUpdated` registered it.
+- Root cause: `TabDistractionTracker` seeds its open-tab set once, at construction, from `queryTabs()`, and otherwise reacts only to `tabs.onUpdated`/`tabs.onRemoved`. The injected `createDistractionPredicate` counts a tab only while `timer.status === 'running'`, and at construction the store is still idle (fresh start) or not yet rehydrated (worker restart). A tab already open on a blocked site never emits `onUpdated` at session start, so it was never registered; `handleTick` then saw zero elapsed distraction ticks and `pump()` did nothing.
+- `lib/timer/tab-distraction-tracker.ts` — new `refresh(): Promise<void>` on the tracker: it re-reads the open tabs, samples the elapsed stretch against the previous membership, then replaces the set with the fresh result (so a tab that navigated away stops counting). The initial seed and the refresh share a `syncTabs` helper.
+- `entrypoints/background.ts` — the timer-status subscription (`running` branch) calls the new `refreshDistractionTracker()` (logged at the `tab-tracker` boundary, failures contained). Startup awaits one refresh before `growthTick.account()`, so a rehydrated running session classifies the sleep gap with the already-open tabs known.
+- Files created/modified: `lib/timer/tab-distraction-tracker.ts`, `entrypoints/background.ts`, `tests/unit/lib/timer/tab-distraction-tracker.test.ts`, `tests/integration/background/malus.test.ts`, `docs/issue/I009-malus-already-open-blocked-tab.md` (new).
+- Dependencies added: none.
+- Tests: `tests/integration/background/malus.test.ts` (+1 test) — a tab that is already open when the session starts still produces a per-tick `MALUS_APPLIED` after **Yes**; verified red before the fix (only the proceed message, no tick message). `tests/unit/lib/timer/tab-distraction-tracker.test.ts` (+2 tests) — `refresh()` registers a tab that was open while the predicate was still false (idle) and credits the following stretch; it drops a tab that navigated away during the re-read while keeping the stretch accrued before it. Run: `bun run test` → **689 passing tests across 73 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
+- Relevant notes/decisions: the refresh is deliberately tied to the **running** transition (start, resume, rehydrate), not to every store write — the store changes on every tick, so querying the tabs there would be wasteful. The malus still begins only on the overlay's "Yes" (pre-`proceed` time stays forgiven, M2.T10); the fix does not auto-apply a malus for a tab the user never confirmed. **Known follow-up (not addressed here)**: adding a domain to the blocklist while its tab is already open has the same stale-set shape; it would need a refresh on blocklist/allowlist changes.
+- Acceptance criteria: verified — the already-open blocked tab charges the city from the first session tick after **Yes**; the pre-refresh stretch is preserved and a departed tab is dropped; the `onUpdated` path for newly opened sites is unchanged. Not re-confirmed in a live browser in this session.
 
 ---
 

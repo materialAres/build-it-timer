@@ -502,6 +502,16 @@ export function startBackground(
       boundary: 'tab-tracker',
     });
   });
+  // The initial read runs while the store is still idle (fresh start, or
+  // before `persist.rehydrate()`), so it cannot see a session that starts later.
+  // Re-reading when the timer becomes running is what registers tabs that were
+  // already open on a blocked site — they never fire `tabs.onUpdated`.
+  const refreshDistractionTracker = (): Promise<void> =>
+    distractionTracker.refresh().catch((error: unknown) => {
+      log.error('tab distraction tracker failed to refresh', error, {
+        boundary: 'tab-tracker',
+      });
+    });
   const malus = createMalusWiring({ store, tracker: distractionTracker });
   disposers.push(() => {
     malus.dispose();
@@ -566,6 +576,7 @@ export function startBackground(
       if (status === 'running') {
         startAccountingClock();
         armProgressAlarm();
+        void refreshDistractionTracker();
       } else {
         void alarmProvider.clear(TIMER_PROGRESS_ALARM);
       }
@@ -653,6 +664,12 @@ export function startBackground(
       now,
     });
     if (restored.changed) store.setState({ timer: restored.timer });
+    // Rehydrating a running session is a status transition, but await the
+    // re-read here so the sleep gap is classified with the open tabs already
+    // known (the transition's refresh is fire-and-forget).
+    if (store.getState().timer.status === 'running') {
+      await refreshDistractionTracker();
+    }
     // Ensure the checkpoint exists before crediting a rehydrated running
     // session; it is preserved when the snapshot already had one.
     startAccountingClock();
