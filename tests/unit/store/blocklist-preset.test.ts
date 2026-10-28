@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { createAppStore, addPresetToList, type BlocklistState } from '@/store';
+import { createAppStore, addPresetToBlocklist, type BlocklistState } from '@/store';
 import { PRESETS, getPresetById } from '@/lib/blocking/presets';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { Preset } from '@/store/store.types';
 
-const empty: BlocklistState = { allowlist: [], blocklist: [], customTags: [] };
+const empty: BlocklistState = { blocklist: [], customTags: [] };
 
 function requirePreset(id: string): Preset {
   const preset = getPresetById(id);
@@ -15,7 +15,7 @@ function requirePreset(id: string): Preset {
 
 describe('preset expansion (M3.T1)', () => {
   it('adds every domain of a preset to the blocklist', () => {
-    const next = addPresetToList(empty, 'blocklist', requirePreset('social'));
+    const next = addPresetToBlocklist(empty, requirePreset('social'));
 
     expect(next.blocklist.map((entry) => entry.domain.value)).toEqual([
       'instagram.com',
@@ -26,7 +26,7 @@ describe('preset expansion (M3.T1)', () => {
   });
 
   it('attaches the preset tag to every contributed domain', () => {
-    const next = addPresetToList(empty, 'blocklist', requirePreset('social'));
+    const next = addPresetToBlocklist(empty, requirePreset('social'));
 
     for (const entry of next.blocklist) {
       expect(entry.tagIds).toEqual(['social']);
@@ -47,7 +47,7 @@ describe('preset expansion (M3.T1)', () => {
       domains: [{ value: 'shared.com' }, { value: 'b.com' }],
     };
 
-    const next = addPresetToList(addPresetToList(empty, 'blocklist', first), 'blocklist', second);
+    const next = addPresetToBlocklist(addPresetToBlocklist(empty, first), second);
 
     expect(next.blocklist.map((entry) => entry.domain.value)).toEqual([
       'shared.com',
@@ -58,16 +58,14 @@ describe('preset expansion (M3.T1)', () => {
     expect(next.blocklist[0]?.tagIds).toEqual(['one', 'two']);
   });
 
-  it('moves a domain already in the allowlist onto the blocklist', () => {
-    const allowed: BlocklistState = {
-      allowlist: [{ domain: { value: 'facebook.com' }, tagIds: ['focus'] }],
-      blocklist: [],
+  it('keeps an existing tagged entry and adds the preset tag', () => {
+    const existing: BlocklistState = {
+      blocklist: [{ domain: { value: 'facebook.com' }, tagIds: ['focus'] }],
       customTags: [],
     };
 
-    const next = addPresetToList(allowed, 'blocklist', requirePreset('social'));
+    const next = addPresetToBlocklist(existing, requirePreset('social'));
 
-    expect(next.allowlist).toEqual([]);
     expect(next.blocklist.find((entry) => entry.domain.value === 'facebook.com')?.tagIds).toEqual([
       'focus',
       'social',
@@ -82,26 +80,26 @@ describe('preset expansion (M3.T1)', () => {
       domains: [],
     };
 
-    expect(addPresetToList(empty, 'blocklist', bare)).toBe(empty);
+    expect(addPresetToBlocklist(empty, bare)).toBe(empty);
   });
 
   it('applying the same preset twice returns the same reference and never duplicates', () => {
-    const once = addPresetToList(empty, 'blocklist', requirePreset('social'));
+    const once = addPresetToBlocklist(empty, requirePreset('social'));
 
-    expect(addPresetToList(once, 'blocklist', requirePreset('social'))).toBe(once);
+    expect(addPresetToBlocklist(once, requirePreset('social'))).toBe(once);
   });
 
   it('does not mutate the input state (pure)', () => {
     const before = structuredClone(empty);
 
-    addPresetToList(empty, 'blocklist', requirePreset('social'));
+    addPresetToBlocklist(empty, requirePreset('social'));
 
     expect(empty).toEqual(before);
   });
 
   it('every declared preset is canonical and adds without leftovers', () => {
     for (const preset of PRESETS) {
-      const next = addPresetToList(empty, 'blocklist', preset);
+      const next = addPresetToBlocklist(empty, preset);
       expect(next.blocklist).toHaveLength(preset.domains.length);
     }
   });

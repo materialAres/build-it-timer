@@ -11,10 +11,9 @@ const entry = (value: string): BlocklistEntry => ({
 });
 
 const resetBlocklist = (
-  allowlist: ReadonlyArray<BlocklistEntry> = [],
   blocklist: ReadonlyArray<BlocklistEntry> = [],
 ): void => {
-  useAppStore.setState({ blocklist: { allowlist, blocklist, customTags: [] } });
+  useAppStore.setState({ blocklist: { blocklist, customTags: [] } });
 };
 
 const currentBlocklist = () => useAppStore.getState().blocklist;
@@ -31,7 +30,7 @@ describe('SiteList (M3.T3)', () => {
   });
 
   it('renders one row per blocklist entry', () => {
-    resetBlocklist([], [entry('a.com'), entry('b.com')]);
+    resetBlocklist([entry('a.com'), entry('b.com')]);
 
     render(<SiteList />);
 
@@ -65,7 +64,7 @@ describe('SiteList (M3.T3)', () => {
   });
 
   it('does not duplicate an already-present domain and gives explicit feedback', async () => {
-    resetBlocklist([], [entry('facebook.com')]);
+    resetBlocklist([entry('facebook.com')]);
     render(<SiteList />);
 
     await userEvent.type(
@@ -114,7 +113,7 @@ describe('SiteList (M3.T3)', () => {
   });
 
   it('removes an entry through the store action', async () => {
-    resetBlocklist([], [entry('a.com')]);
+    resetBlocklist([entry('a.com')]);
     render(<SiteList />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove a.com' }));

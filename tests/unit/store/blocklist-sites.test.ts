@@ -18,7 +18,7 @@ describe('site CRUD actions (M3.T3)', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
 
-    store.getState().addSite('blocklist', 'https://m.facebook.com/something');
+    store.getState().addSite('https://m.facebook.com/something');
 
     expect(domainValues(store.getState().blocklist.blocklist)).toEqual(['facebook.com']);
     expect(sendMutation).toHaveBeenCalledTimes(1);
@@ -31,31 +31,31 @@ describe('site CRUD actions (M3.T3)', () => {
   it('addSite to an already-present domain is a silent no-op', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
-    store.getState().addSite('blocklist', 'facebook.com');
+    store.getState().addSite('facebook.com');
 
-    store.getState().addSite('blocklist', 'facebook.com');
+    store.getState().addSite('facebook.com');
 
     expect(store.getState().blocklist.blocklist).toHaveLength(1);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
-  it('addSite to the opposite list moves the domain (no double entry)', () => {
+  it('addSite only ever writes the single blocklist (CR1.T5a)', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
 
-    store.getState().addSite('blocklist', 'x.com');
-    store.getState().addSite('allowlist', 'x.com');
+    store.getState().addSite('x.com');
 
-    expect(domainValues(store.getState().blocklist.blocklist)).toEqual([]);
-    expect(domainValues(store.getState().blocklist.allowlist)).toEqual(['x.com']);
-    expect(sendMutation).toHaveBeenCalledTimes(2);
+    const state = store.getState().blocklist;
+    expect(domainValues(state.blocklist)).toEqual(['x.com']);
+    expect(Object.keys(state).sort()).toEqual(['blocklist', 'customTags']);
+    expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
   it('addSite rejects an invalid domain without sending a mutation', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
 
-    store.getState().addSite('blocklist', 'co.uk');
+    store.getState().addSite('co.uk');
 
     expect(store.getState().blocklist.blocklist).toEqual([]);
     expect(sendMutation).not.toHaveBeenCalled();
@@ -64,9 +64,9 @@ describe('site CRUD actions (M3.T3)', () => {
   it('removeSite removes the entry and sends BLOCKLIST_REMOVE_SITE', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
-    store.getState().addSite('blocklist', 'facebook.com');
+    store.getState().addSite('facebook.com');
 
-    store.getState().removeSite('blocklist', 'facebook.com');
+    store.getState().removeSite('facebook.com');
 
     expect(store.getState().blocklist.blocklist).toEqual([]);
     expect(sendMutation).toHaveBeenLastCalledWith({
@@ -79,7 +79,7 @@ describe('site CRUD actions (M3.T3)', () => {
     const sendMutation = vi.fn<(message: MutationMessage) => void>();
     const store = createStore(sendMutation);
 
-    store.getState().removeSite('blocklist', 'facebook.com');
+    store.getState().removeSite('facebook.com');
 
     expect(sendMutation).not.toHaveBeenCalled();
   });
