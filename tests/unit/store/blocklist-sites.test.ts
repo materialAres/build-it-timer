@@ -24,7 +24,7 @@ describe('site CRUD actions (M3.T3)', () => {
     expect(sendMutation).toHaveBeenCalledTimes(1);
     expect(sendMutation).toHaveBeenCalledWith({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'https://m.facebook.com/something' },
+      payload: { site: 'https://m.facebook.com/something' },
     });
   });
 
@@ -71,7 +71,7 @@ describe('site CRUD actions (M3.T3)', () => {
     expect(store.getState().blocklist.blocklist).toEqual([]);
     expect(sendMutation).toHaveBeenLastCalledWith({
       type: 'BLOCKLIST_REMOVE_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     });
   });
 

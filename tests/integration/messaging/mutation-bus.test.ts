@@ -30,7 +30,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([
@@ -60,7 +60,7 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
 
     // No manual rehydrate call in the test: the sync bridge did it. The
@@ -95,18 +95,18 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     });
     await sendMessage({ type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } });
     await sendMessage({
       type: 'TAG_ASSIGN',
-      payload: { list: 'blocklist', site: 'https://m.facebook.com/x', tagId: 'focus' },
+      payload: { site: 'https://m.facebook.com/x', tagId: 'focus' },
     });
     expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
 
     await sendMessage({
       type: 'TAG_UNASSIGN',
-      payload: { list: 'blocklist', site: 'facebook.com', tagId: 'focus' },
+      payload: { site: 'facebook.com', tagId: 'focus' },
     });
     expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
 
@@ -121,7 +121,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     const forged = {
       type: 'TAG_ASSIGN',
-      payload: { list: 'nonsense', site: 'facebook.com', tagId: 'focus' },
+      payload: { site: 'facebook.com', tagId: 42 },
     } as unknown as RuntimeMessage;
 
     await sendMessage(forged);
@@ -144,11 +144,11 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
     await sendMessage({
       type: 'BLOCKLIST_REMOVE_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([]);
@@ -164,7 +164,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     const forged = {
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'nonsense', site: '' },
+      payload: { site: '' },
     } as unknown as RuntimeMessage;
 
     await expect(sendMessage(forged)).resolves.toEqual({ ok: true, value: undefined });
@@ -239,7 +239,7 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     const message: RuntimeMessage = {
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     };
     await sendMessage(message);
     await sendMessage(message);
@@ -256,7 +256,7 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'https://m.facebook.com/something' },
+      payload: { site: 'https://m.facebook.com/something' },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([
@@ -274,7 +274,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'co.uk' },
+      payload: { site: 'co.uk' },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([]);
@@ -284,25 +284,36 @@ describe('cross-context mutation path (M1.T10)', () => {
     handle.dispose();
   });
 
-  // M2.T20: adding a domain to one list must move it out of the other, so a
-  // canonical domain can never end up on both lists through the mutation path.
-  it('moves a domain from the allowlist to the blocklist (M2.T20)', async () => {
+  // CR1.T2: the protocol has no `list` discriminator anymore. A legacy sender
+  // that still includes the field must not be able to select a collection: the
+  // four site/tag mutations always land on the blocklist, and the (still present
+  // until CR1.T5) allowlist is never touched.
+  it('ignores a legacy `list` field and always mutates the blocklist (CR1.T2)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
-    await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'allowlist', site: 'https://www.facebook.com' },
-    });
-    await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'https://m.facebook.com/something' },
-    });
+    const legacy = (
+      type: 'BLOCKLIST_ADD_SITE' | 'BLOCKLIST_REMOVE_SITE' | 'TAG_ASSIGN' | 'TAG_UNASSIGN',
+      payload: Record<string, unknown>,
+    ): RuntimeMessage =>
+      ({ type, payload: { list: 'allowlist', ...payload } }) as unknown as RuntimeMessage;
 
+    await sendMessage(legacy('BLOCKLIST_ADD_SITE', { site: 'https://www.facebook.com' }));
     expect(store.getState().blocklist.blocklist).toEqual([
       { domain: { value: 'facebook.com' }, tagIds: [] },
     ]);
+
+    await sendMessage({ type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } });
+    await sendMessage(legacy('TAG_ASSIGN', { site: 'facebook.com', tagId: 'focus' }));
+    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
+
+    await sendMessage(legacy('TAG_UNASSIGN', { site: 'facebook.com', tagId: 'focus' }));
+    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
+
+    await sendMessage(legacy('BLOCKLIST_REMOVE_SITE', { site: 'facebook.com' }));
+    expect(store.getState().blocklist.blocklist).toEqual([]);
+
     expect(store.getState().blocklist.allowlist).toEqual([]);
 
     handle.dispose();

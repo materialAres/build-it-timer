@@ -194,7 +194,7 @@ describe('tag store actions (M3.T2)', () => {
     expect(store.getState().blocklist.blocklist[1]?.tagIds).toEqual(['focus']);
     expect(sendMutation).toHaveBeenCalledWith({
       type: 'TAG_ASSIGN',
-      payload: { list: 'blocklist', site: 'facebook.com', tagId: 'focus' },
+      payload: { site: 'facebook.com', tagId: 'focus' },
     });
   });
 
@@ -218,7 +218,7 @@ describe('tag store actions (M3.T2)', () => {
     expect(store.getState().blocklist.blocklist[2]?.tagIds).toEqual(['other']);
     expect(sendMutation).toHaveBeenCalledWith({
       type: 'TAG_UNASSIGN',
-      payload: { list: 'blocklist', site: 'x.com', tagId: 'focus' },
+      payload: { site: 'x.com', tagId: 'focus' },
     });
   });
 });

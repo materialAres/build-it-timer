@@ -62,20 +62,21 @@ interface SessionEndedMessage {
 // --- Cross-context mutations (M1.T10) -------------------------------------
 // A read-only context (the popup) cannot write the persisted store (M1.T9), so
 // it asks the background — the single writer — to apply the change. Only the
-// transport is defined here: the CRUD semantics (normalization, dedup,
-// allowlist precedence, "Enter a valid URL") belong to M2.T4/M2.T20/M2.T21.
+// transport is defined here: the CRUD semantics (normalization, dedup, "Enter a
+// valid URL") belong to M2.T4/M2.T21.
 //
-// `list` discriminates which collection is addressed. `allowlist` wins over
-// `blocklist` when the same canonical domain is present in both (M2.T6/M2.T20).
+// CR1.T2: there is no `list` discriminator — every site/tag mutation addresses
+// the single blocklist. A legacy sender still putting a `list` field in the
+// payload is ignored, never used to select a collection.
 
 interface BlocklistAddSiteMessage {
   readonly type: 'BLOCKLIST_ADD_SITE';
-  readonly payload: { readonly list: 'allowlist' | 'blocklist'; readonly site: string };
+  readonly payload: { readonly site: string };
 }
 
 interface BlocklistRemoveSiteMessage {
   readonly type: 'BLOCKLIST_REMOVE_SITE';
-  readonly payload: { readonly list: 'allowlist' | 'blocklist'; readonly site: string };
+  readonly payload: { readonly site: string };
 }
 
 interface BlocklistApplyPresetMessage {
@@ -99,7 +100,6 @@ interface TagRemoveMessage {
 interface TagAssignMessage {
   readonly type: 'TAG_ASSIGN';
   readonly payload: {
-    readonly list: 'allowlist' | 'blocklist';
     readonly site: string;
     readonly tagId: string;
   };
@@ -108,7 +108,6 @@ interface TagAssignMessage {
 interface TagUnassignMessage {
   readonly type: 'TAG_UNASSIGN';
   readonly payload: {
-    readonly list: 'allowlist' | 'blocklist';
     readonly site: string;
     readonly tagId: string;
   };

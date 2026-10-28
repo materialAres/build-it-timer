@@ -86,7 +86,9 @@ export const createBlocklistSlice =
         set,
         get,
         dependencies,
-        { type: 'BLOCKLIST_ADD_SITE', payload: { list, site } },
+        // CR1.T2: the protocol addresses the blocklist only; `list` still
+        // parameterizes the local action/helper until CR1.T5 collapses it.
+        { type: 'BLOCKLIST_ADD_SITE', payload: { site } },
         (current) => addSiteToList(current, list, site),
       );
     },
@@ -95,7 +97,7 @@ export const createBlocklistSlice =
         set,
         get,
         dependencies,
-        { type: 'BLOCKLIST_REMOVE_SITE', payload: { list, site } },
+        { type: 'BLOCKLIST_REMOVE_SITE', payload: { site } },
         (current) => removeSiteFromList(current, list, site),
       );
     },
@@ -121,13 +123,13 @@ export const createBlocklistSlice =
     assignTag(list, site, tagId) {
       applyBlocklistMutation(set, get, dependencies, {
         type: 'TAG_ASSIGN',
-        payload: { list, site, tagId },
+        payload: { site, tagId },
       }, (current) => assignTagToSite(current, list, site, tagId));
     },
     unassignTag(list, site, tagId) {
       applyBlocklistMutation(set, get, dependencies, {
         type: 'TAG_UNASSIGN',
-        payload: { list, site, tagId },
+        payload: { site, tagId },
       }, (current) => unassignTagFromSite(current, list, site, tagId));
     },
   });

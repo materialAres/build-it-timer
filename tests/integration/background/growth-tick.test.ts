@@ -311,7 +311,7 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     // Block a site and apply it, then start the session.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
 
@@ -364,7 +364,7 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
 

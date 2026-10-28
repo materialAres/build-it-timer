@@ -195,7 +195,7 @@ describe('session completion (M3.T3c)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'x.com' },
+      payload: { site: 'x.com' },
     });
     await runSession(4 * 60_000);
     const sessionId = store.getState().timer.sessionId ?? '';

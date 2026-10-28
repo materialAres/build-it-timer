@@ -43,7 +43,7 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
 
@@ -71,7 +71,7 @@ describe('background DNR rule application (M2.T7)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
 
@@ -91,7 +91,7 @@ describe('background DNR rule application (M2.T7)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await handle.store.getState().startTimer();
     await handle.store.getState().pauseTimer();
@@ -117,12 +117,12 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'instagram.com' },
+      payload: { site: 'instagram.com' },
     });
     await flush();
 
@@ -275,7 +275,7 @@ describe('background DNR rule application (M2.T7)', () => {
     // The blocklist is carried while idle, but the resulting rules stay empty.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
     expect(dnr.updates).toHaveLength(callsAfterStartup);

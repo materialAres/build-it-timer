@@ -23,7 +23,7 @@ WXT MV3 browser extension ("Build-it! Timer Focus"): a focus-session timer that 
 - **Distraction tracking**: `TabDistractionTracker` seeds open tabs once and otherwise follows `tabs.onUpdated`/`onRemoved`, so it must be `refresh()`ed when the timer enters `running` — the construction-time seed runs while the store is idle, and a tab already open on a blocked site never emits an update. Malus accrual starts at the overlay's "Yes" (pre-`proceed` time is forgiven).
 - **Persist**: key `timer-focus-store`, `version: 1`, `partialize` excludes `ui`; keep the slice-aware `merge` so fields added later rehydrate to their default instead of `undefined`.
 - **Both build targets are MV3**; Firefox gets a `background.scripts` event page instead of a service worker. Permissions are declared manually in `wxt.config.ts` (WXT does not infer them).
-- **CR1 (remove allowlist) in progress**: the popup allowlist UI and its locale keys are gone (CR1.T1); the store still carries `allowlist` and enforcement still applies "allowlist wins" until CR1.T4/CR1.T5.
+- **CR1 (remove allowlist) in progress**: the popup allowlist UI and its locale keys are gone (CR1.T1) and the mutation protocol no longer carries a `list` discriminator (CR1.T2); the store still carries `allowlist` and enforcement still applies "allowlist wins" until CR1.T4/CR1.T5.
 
 ## Related memories
 - Language/framework versions and toolchain: `mem:tech_stack`.
