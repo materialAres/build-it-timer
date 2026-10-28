@@ -61,7 +61,6 @@ function fakeStoreReader(initial: StoreSnapshot | undefined) {
 
 const runningSnapshot = (blocklist: string[]): StoreSnapshot => ({
   timerStatus: 'running',
-  allowlist: [],
   blocklist: blocklist.map(entry),
 });
 
@@ -146,23 +145,6 @@ describe('blocked overlay content script (M2.T8)', () => {
     expect(host()).toBeNull();
   });
 
-  it('lets the allowlist win over the blocklist (same rule as M2.T6)', async () => {
-    const { reader } = fakeStoreReader({
-      timerStatus: 'running',
-      allowlist: [entry('facebook.com')],
-      blocklist: [entry('facebook.com')],
-    });
-
-    teardown = startBlockedOverlay(ctx, {
-      storeReader: reader,
-      url: 'https://facebook.com/',
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(host()).toBeNull();
-  });
-
   it('does not crash on a URL without a registrable domain', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
@@ -186,7 +168,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   });
 
   it('reacts to a blocklist change that arrives while the page is open', async () => {
-    const { reader, update } = fakeStoreReader({ timerStatus: 'running', allowlist: [], blocklist: [] });
+    const { reader, update } = fakeStoreReader({ timerStatus: 'running', blocklist: [] });
 
     teardown = startBlockedOverlay(ctx, { storeReader: reader, url: 'https://facebook.com/' });
     await Promise.resolve();
@@ -198,7 +180,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    await update({ timerStatus: 'running', allowlist: [], blocklist: [] });
+    await update({ timerStatus: 'running', blocklist: [] });
     await vi.waitFor(() => {
       expect(host()).toBeNull();
     });
@@ -469,9 +451,9 @@ describe('blocked overlay content script (M2.T8)', () => {
       'timer-focus-store': JSON.stringify({
         state: {
           timer: { status: 'running' },
-          blocklist: { allowlist: [], blocklist: [entry('facebook.com')], customTags: [] },
+          blocklist: { blocklist: [entry('facebook.com')], customTags: [] },
         },
-        version: 1,
+        version: 2,
       }),
     });
 
@@ -484,6 +466,66 @@ describe('blocked overlay content script (M2.T8)', () => {
     });
 
     expect(overlayText()).toContain('facebook.com');
+  });
+
+  it('reads a legacy persisted payload through the migration (CR1.T4)', async () => {
+    // `facebook.com` was on both lists under the old "allowlist wins" rule, so
+    // it must no longer mount; `instagram.com` stays blocked.
+    await fakeBrowser.storage.local.set({
+      'timer-focus-store': JSON.stringify({
+        state: {
+          timer: { status: 'running' },
+          blocklist: {
+            allowlist: [entry('facebook.com')],
+            blocklist: [entry('facebook.com'), entry('instagram.com')],
+            customTags: [],
+          },
+        },
+        version: 1,
+      }),
+    });
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: createStoreReader(),
+      url: 'https://facebook.com/',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(host()).toBeNull();
+
+    teardown();
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: createStoreReader(),
+      url: 'https://instagram.com/',
+    });
+    await vi.waitFor(() => {
+      expect(host()).not.toBeNull();
+    });
+    expect(overlayText()).toContain('instagram.com');
+  });
+
+  it('does not mount for a domain present only in the legacy allowlist (CR1.T4)', async () => {
+    await fakeBrowser.storage.local.set({
+      'timer-focus-store': JSON.stringify({
+        state: {
+          timer: { status: 'running' },
+          blocklist: {
+            allowlist: [entry('facebook.com')],
+            blocklist: [],
+            customTags: [],
+          },
+        },
+        version: 1,
+      }),
+    });
+
+    teardown = startBlockedOverlay(ctx, {
+      storeReader: createStoreReader(),
+      url: 'https://facebook.com/',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(host()).toBeNull();
   });
 
   it('removes the overlay when the content script context is invalidated', async () => {

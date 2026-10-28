@@ -31,7 +31,7 @@ export interface StoreReader {
  * Reads the persisted store straight from `browser.storage.local` (M2.T8).
  *
  * Deliberately *not* the zustand store: the content script needs only two
- * fields (the timer status and the two lists), and pulling the store in would
+ * fields (the timer status and the blocklist), and pulling the store in would
  * drag `persist`, the alarm adapter, and the whole slice graph into every page
  * the user visits. Storage is the same source of truth the store persists to,
  * so there is no divergence; the key and the envelope shape are owned by

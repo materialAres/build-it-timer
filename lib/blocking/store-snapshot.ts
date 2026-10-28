@@ -1,6 +1,7 @@
 import { ok, err, type Result } from '@/utils/result';
 import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
 import type { BlockDecisionInput } from './is-domain-blocked';
+import { migrateBlocklistState } from './legacy-blocklist';
 
 /** The persisted key the store writes to (`store/index.ts`, `STORE_NAME`). */
 export const STORE_STORAGE_KEY = 'timer-focus-store';
@@ -42,6 +43,14 @@ function isTimerStatus(value: unknown): value is TimerStatus {
  * future-version payload must not crash the content script, so every field is
  * validated with a guard and a malformed shape yields `{ ok: false }` instead
  * of a throw (no `as` casts).
+ *
+ * Two blocklist shapes are accepted (CR1.T4): the current one (version 2,
+ * `{ blocklist, customTags }`) and the legacy one (version 1, which also has a
+ * second list). The content script reads the raw value and does not run
+ * zustand's migration, so the legacy shape is delegated to
+ * `migrateBlocklistState` here — the only module allowed to interpret it. A
+ * blocklist field that is present but malformed is still rejected rather than
+ * silently treated as empty.
  */
 export function parseStoreSnapshot(raw: unknown): Result<StoreSnapshot> {
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -62,8 +71,7 @@ export function parseStoreSnapshot(raw: unknown): Result<StoreSnapshot> {
   const { blocklist, timer } = envelope.state;
   if (!isRecord(blocklist)) return err(new Error('Persisted store has no blocklist'));
 
-  const { allowlist, blocklist: blocked } = blocklist;
-  if (!isBlocklistEntryList(allowlist) || !isBlocklistEntryList(blocked)) {
+  if (!isBlocklistEntryList(blocklist.blocklist)) {
     return err(new Error('Persisted blocklist is malformed'));
   }
 
@@ -72,5 +80,8 @@ export function parseStoreSnapshot(raw: unknown): Result<StoreSnapshot> {
     return err(new Error('Persisted store has no valid timer status'));
   }
 
-  return ok({ timerStatus: status, allowlist, blocklist: blocked });
+  return ok({
+    timerStatus: status,
+    blocklist: migrateBlocklistState(blocklist).blocklist,
+  });
 }

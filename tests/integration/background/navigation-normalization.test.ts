@@ -102,10 +102,10 @@ describe('navigation-check normalization (M2.T21)', () => {
     expect(createDistractionPredicate(store)('https://m.facebook.com')).toBe(false);
   });
 
-  it('applies the allowlist-wins precedence on the canonicalized domain', () => {
+  it('no longer lets a residual allowlist field override the blocklist (CR1.T4)', () => {
     const store = createRunningStore(['facebook.com']);
-    // A residual conflict (e.g. from an import or an older persisted state):
-    // the allowlist must win over the blocklist (M2.T6/M2.T8/M2.T20).
+    // The store may still carry the obsolete field until CR1.T5; enforcement
+    // must ignore it instead of restoring the old "allowlist wins" rule.
     store.setState({
       blocklist: {
         allowlist: [{ domain: { value: 'facebook.com' }, tagIds: [] }],
@@ -114,6 +114,6 @@ describe('navigation-check normalization (M2.T21)', () => {
       },
     });
 
-    expect(createDistractionPredicate(store)('https://m.facebook.com')).toBe(false);
+    expect(createDistractionPredicate(store)('https://m.facebook.com')).toBe(true);
   });
 });

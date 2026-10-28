@@ -6,13 +6,13 @@ const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, 
 
 const BLOCK_RESOURCE_TYPES = ['sub_frame'];
 
-describe('buildDnrRules (M2.T6)', () => {
+describe('buildDnrRules (M2.T6, CR1.T4)', () => {
   it('returns no rules for an empty blocklist', () => {
-    expect(buildDnrRules([], [])).toEqual([]);
+    expect(buildDnrRules([])).toEqual([]);
   });
 
   it('generates a blocking rule for a blocklisted domain', () => {
-    const rules = buildDnrRules([entry('facebook.com')], []);
+    const rules = buildDnrRules([entry('facebook.com')]);
 
     expect(rules).toHaveLength(1);
     expect(rules[0]).toEqual({
@@ -26,86 +26,69 @@ describe('buildDnrRules (M2.T6)', () => {
   });
 
   it('anchors the urlFilter to the domain and its subdomains', () => {
-    const [rule] = buildDnrRules([entry('example.com')], []);
+    const [rule] = buildDnrRules([entry('example.com')]);
 
     expect(rule?.condition.urlFilter).toBe('||example.com^');
   });
 
   it('emits a single rule for a domain duplicated in the blocklist', () => {
-    const rules = buildDnrRules([entry('facebook.com'), entry('facebook.com')], []);
+    const rules = buildDnrRules([entry('facebook.com'), entry('facebook.com')]);
 
     expect(rules).toHaveLength(1);
   });
 
-  it('does not block a domain present in both the blocklist and the allowlist', () => {
-    const rules = buildDnrRules([entry('facebook.com')], [entry('facebook.com')]);
+  it('only needs the blocklist: there is no second list to cancel a rule', () => {
+    const rules = buildDnrRules([entry('facebook.com'), entry('instagram.com')]);
 
-    expect(rules).toEqual([]);
-  });
-
-  it('still blocks the other domains when only one is allowlisted', () => {
-    const rules = buildDnrRules(
-      [entry('facebook.com'), entry('instagram.com')],
-      [entry('facebook.com')],
-    );
-
-    expect(rules).toHaveLength(1);
-    expect(rules[0]?.condition.urlFilter).toBe('||instagram.com^');
-  });
-
-  it('generates no rule for an allowlist-only domain', () => {
-    expect(buildDnrRules([], [entry('facebook.com')])).toEqual([]);
+    expect(rules.map((rule) => rule.condition.urlFilter)).toEqual([
+      '||facebook.com^',
+      '||instagram.com^',
+    ]);
   });
 
   it('assigns unique, sequential ids starting at 1', () => {
-    const rules = buildDnrRules(
-      [entry('a.com'), entry('b.com'), entry('c.com')],
-      [],
-    );
+    const rules = buildDnrRules([entry('a.com'), entry('b.com'), entry('c.com')]);
 
     expect(rules.map((rule) => rule.id)).toEqual([1, 2, 3]);
   });
 
   it('is deterministic: the same input yields a deep-equal output', () => {
     const blocklist = [entry('a.com'), entry('b.com')];
-    const allowlist = [entry('b.com')];
 
-    expect(buildDnrRules(blocklist, allowlist)).toEqual(buildDnrRules(blocklist, allowlist));
+    expect(buildDnrRules(blocklist)).toEqual(buildDnrRules(blocklist));
   });
 
-  it('does not mutate its inputs', () => {
+  it('does not mutate its input', () => {
     const blocklist = [entry('a.com')];
-    const allowlist = [entry('a.com')];
-    const blocklistBefore = structuredClone(blocklist);
-    const allowlistBefore = structuredClone(allowlist);
+    const before = structuredClone(blocklist);
 
-    buildDnrRules(blocklist, allowlist);
+    buildDnrRules(blocklist);
 
-    expect(blocklist).toEqual(blocklistBefore);
-    expect(allowlist).toEqual(allowlistBefore);
+    expect(blocklist).toEqual(before);
   });
 
   describe('defensive normalization on consumption (M2.T21)', () => {
     it('canonicalizes a non-canonical stored entry before building the rule', () => {
-      const rules = buildDnrRules([entry('https://m.facebook.com/x')], []);
+      const rules = buildDnrRules([entry('https://m.facebook.com/x')]);
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0]?.condition.urlFilter).toBe('||facebook.com^');
+    });
+
+    it('collapses two variants of the same registrable domain onto one rule', () => {
+      const rules = buildDnrRules([
+        entry('https://m.facebook.com/x'),
+        entry('www.facebook.com'),
+      ]);
 
       expect(rules).toHaveLength(1);
       expect(rules[0]?.condition.urlFilter).toBe('||facebook.com^');
     });
 
     it('drops an entry that is not a valid registrable domain', () => {
-      expect(buildDnrRules([entry('co.uk')], [])).toEqual([]);
-      expect(buildDnrRules([entry('github.io')], [])).toEqual([]);
-      expect(buildDnrRules([entry('not a url')], [])).toEqual([]);
-    });
-
-    it('applies allowlist precedence on the canonicalized domains', () => {
-      const rules = buildDnrRules(
-        [entry('https://m.facebook.com/x')],
-        [entry('facebook.com')],
-      );
-
-      expect(rules).toEqual([]);
+      expect(buildDnrRules([entry('co.uk')])).toEqual([]);
+      expect(buildDnrRules([entry('github.io')])).toEqual([]);
+      expect(buildDnrRules([entry('not a url')])).toEqual([]);
     });
   });
 });

@@ -315,8 +315,8 @@ export function createSessionCompletion({
  * while a focus session is running. The navigation URL is untrusted, so it is
  * canonicalized with `normalizeEntry` (M2.T21) — the same function the entry
  * path uses — before matching; a URL that cannot be normalized does not match
- * any list (no crash, no erroneous block). Reuses `isDomainBlocked` (M2.T8) so
- * the allowlist-wins precedence (M2.T6) is not reimplemented.
+ * the blocklist (no crash, no erroneous block). Reuses `isDomainBlocked`
+ * (M2.T8) so the membership rule is not reimplemented.
  */
 export function createDistractionPredicate(
   store: AppStore,
@@ -631,8 +631,8 @@ export function startBackground(
     );
   }
 
-  // Any change to the blocklist/allowlist or to the timer status re-evaluates
-  // the active rules (M2.T7).
+  // Any change to the blocklist or to the timer status re-evaluates the active
+  // rules (M2.T7).
   disposers.push(store.subscribe(syncRules));
 
   // The alarm provider is wired now so the background owns a single instance for

@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T3** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol and persisted-data migration done; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR1.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol, persisted-data migration and blocking enforcement removal done; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,9 +16,9 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T3 done; CR1.T4 … CR1.T6 remaining.
+- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T4 done; CR1.T5 … CR1.T6 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **703 passing tests** across 74 files (unit + integration + component).
+- Tests: `bun run test` → **707 passing tests** across 74 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -95,7 +95,8 @@ description: Rules for updating the changelog
 | I009 | Malus not applied to a blocked site already open at session start | fixed | `afc2224` |
 | CR1.T1 | Remove the allowlist from the popup UI and locales | completed | `13598d1` |
 | CR1.T2 | Remove the `list` discriminator from mutation messages | completed | `157b6f2` |
-| CR1.T3 | Migrate persisted allowlist data to the effective blocklist | completed | — (to be committed) |
+| CR1.T3 | Migrate persisted allowlist data to the effective blocklist | completed | `eeb9fc7` |
+| CR1.T4 | Remove the allowlist from blocking enforcement | completed | — (to be committed) |
 
 ---
 
@@ -996,6 +997,19 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/blocking/legacy-blocklist.test.ts` (10 tests, unit) — both-list subtraction, allowlist-only drop, canonical preservation, dedup, missing `tagIds`, malformed/absent fields, malformed custom tags, and the sanitizer ignoring a legacy allowlist. `tests/integration/store/store.test.ts` (15 tests, integration with `fakeBrowser`) — version-1 payload with a domain on both lists hydrates it only in the effective blocklist (unblocked), allowlist-only domain dropped, version-2 payload unchanged, malformed legacy payload falls back to defaults, and a new write carries `version: 2` with no `allowlist` key. Run: `bun run test` → **703 passing tests across 74 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
 - Relevant notes/decisions: migration semantics preserve current behavior (`old blocklist − old allowlist`); an allowlist-only domain is dropped because it was already allowed by default. zustand writes the migrated state back once when it reads a version-1 payload (`if (migrated) setItem()`), which is intended: the stored payload upgrades to version 2 on first hydration. **Intermediate state:** the content-script `parseStoreSnapshot` still requires the legacy `allowlist` array, so until CR1.T4 it rejects a version-2 payload and the overlay stays inert (DNR blocking is unaffected, since the rules are built from the effective blocklist). CR1.T4 reworks the parser to delegate to this helper.
 - Acceptance criteria: verified — the helper is total and returns the single-list shape; version-1 payloads migrate and version-2 payloads pass through; `merge` sanitizes and never reintroduces `allowlist`; newly persisted payloads contain only `{ blocklist, customTags }`; full suite, type-check, lint and both builds are green.
+- Commit: `eeb9fc7 feat(CR1.T3): migrate allowlist data to blocklist and update state management`.
+
+### CR1.T4 — Remove the allowlist from blocking enforcement
+- `lib/blocking/rules.ts`: `buildDnrRules(blocklist)` takes a single list; the allowed-set construction and the blocklist filter are gone. Canonicalization on consumption (M2.T21) and the `||<domain>^` `sub_frame` rule shape are unchanged; an empty blocklist still yields `[]`.
+- `lib/blocking/is-domain-blocked.ts`: `BlockDecisionInput` is now `{ blocklist }`; the allowlist short-circuit is removed, so the decision depends only on blocklist membership.
+- `lib/blocking/apply-rules.ts`: `BlockingRulesSource.blocklist` declares only `blocklist`, and `selectActiveRules` calls `buildDnrRules(state.blocklist.blocklist)`.
+- `lib/blocking/store-snapshot.ts`: `StoreSnapshot` extends the new `{ blocklist }` input; `parseStoreSnapshot` validates `blocklist.blocklist` and delegates the payload to `migrateBlocklistState`, so it accepts both the version-2 single-list shape and the legacy two-list shape and returns only `timerStatus` + the effective blocklist. A malformed blocklist is still rejected; a malformed legacy second list degrades to empty through the helper (the migration module remains the only legacy read path).
+- `entrypoints/background.ts`: the distraction predicate and the DNR sync comment no longer mention allowlist precedence. `entrypoints/blocked-overlay.content.tsx`: only comments changed (`evaluate()` already receives the snapshot and asks `isDomainBlocked`). `lib/timer/tab-distraction-tracker.ts`: comment only.
+- Files created/modified: `lib/blocking/rules.ts`, `lib/blocking/apply-rules.ts`, `lib/blocking/is-domain-blocked.ts`, `lib/blocking/store-snapshot.ts`, `entrypoints/background.ts`, `entrypoints/blocked-overlay.content.tsx`, `lib/timer/tab-distraction-tracker.ts`, `tests/unit/lib/blocking/rules.test.ts`, `tests/unit/lib/blocking/apply-rules.test.ts`, `tests/unit/lib/blocking/is-domain-blocked.test.ts`, `tests/unit/lib/blocking/store-snapshot.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/navigation-normalization.test.ts`, `tests/integration/content/blocked-overlay.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/unit/lib/blocking/rules.test.ts` (11 tests, unit) — empty list, rule shape/anchoring, duplicate collapse, canonicalization/dedup, determinism and input immutability, invalid entries dropped. `apply-rules.test.ts` (13 tests, unit) — idle/paused produce no rules, running emits every blocklisted rule, first sync writes, removals on pause/idle, reapply on resume/blocklist change, signature skip, serialization, retry after failure. `is-domain-blocked.test.ts` (6 tests, unit) — membership, empty list, a residual legacy `allowlist` field is ignored. `store-snapshot.test.ts` (13 tests, unit) — current shape parsed, legacy shape migrated (both-list domain dropped, allowlist-only domain dropped), completed status, ignored slices, malformed blocklist rejected, malformed legacy second list tolerated, missing key/envelope/status rejected. `tests/integration/background/dnr-rules.test.ts` (11 tests, integration) — added an agreement test with a legacy persisted payload: DNR and the parsed overlay snapshot/`isDomainBlocked` agree on the migrated blocklist (the both-list domain unblocked, `instagram.com` blocked, `example.com` by neither). `navigation-normalization.test.ts` (7 tests, integration) — the former allowlist-wins test now asserts a residual in-memory allowlist field does not override the blocklist. `blocked-overlay.test.ts` (22 tests, integration) — snapshots updated to the single-list shape; real reader test now uses a version-2 payload; added legacy-payload cases (both-list domain no longer mounts, blocklist-only domain mounts, allowlist-only domain never mounts). Run: `bun run test` → **707 passing tests across 74 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
+- Relevant notes/decisions: after this task no runtime blocking decision reads `allowlist`; the in-memory slice still carries an always-empty field and the store helpers still accept a list name until CR1.T5, which keeps the step compilable and independently reviewable. The content-script parser now accepts the version-2 shape, closing the intermediate state documented in CR1.T3.
+- Acceptance criteria: verified — `buildDnrRules(blocklist)` only; `isDomainBlocked({ blocklist })` only; `BlockingRulesSource`/`StoreSnapshot` have no allowlist; `parseStoreSnapshot` accepts both shapes via `migrateBlocklistState`; DNR and overlay agree on the same state; a previously allowlisted-but-blocklisted domain is no longer blocked after migration; behavior outside `running` is unchanged; full suite, type-check, lint and both builds are green.
 - Commit: — (to be committed).
 
 ---

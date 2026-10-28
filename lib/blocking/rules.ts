@@ -38,30 +38,22 @@ function toCanonicalDomain(entry: BlocklistEntry): string | null {
 }
 
 /**
- * Translates the allow/block state into valid DNR rules (M2.T6).
+ * Translates the blocklist into valid DNR rules (M2.T6, CR1.T4).
  *
  * Pure: no `browser.declarativeNetRequest` call, no I/O — the caller (M2.T7)
  * owns applying the result. Each stored domain is canonicalized defensively on
  * consumption (M2.T21); `urlFilter` escaping/validation is M5.T3's job.
  *
- * Precedence (design decision): the **allowlist always wins**. A domain present
- * in both lists is simply not blocked — its block rule is omitted rather than
- * cancelled by a higher-priority allow rule. This keeps the rule set minimal and
- * independent of DNR priority semantics while satisfying the same guarantee. The
- * comparison is on the canonicalized domains, so `www.`/`m.` variants of the
- * same registrable domain still collapse onto one another.
+ * The blocklist is the only input: everything not listed stays allowed, so no
+ * second list needs to be consulted. The comparison is on the canonicalized
+ * domains, so `www.`/`m.` variants of the same registrable domain still collapse
+ * onto one rule.
  */
-export function buildDnrRules(
-  blocklist: ReadonlyArray<BlocklistEntry>,
-  allowlist: ReadonlyArray<BlocklistEntry>,
-): DnrRule[] {
-  const allowed = new Set(
-    allowlist.map(toCanonicalDomain).filter((domain): domain is string => domain !== null),
-  );
+export function buildDnrRules(blocklist: ReadonlyArray<BlocklistEntry>): DnrRule[] {
   const blocked = new Set(
     blocklist
       .map(toCanonicalDomain)
-      .filter((domain): domain is string => domain !== null && !allowed.has(domain)),
+      .filter((domain): domain is string => domain !== null),
   );
 
   return [...blocked].map((domain, index) => ({
