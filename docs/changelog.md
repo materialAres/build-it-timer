@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T2** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI and mutation-protocol removal done; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR1.T3** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol and persisted-data migration done; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,9 +16,9 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T2 done; CR1.T3 … CR1.T6 remaining.
+- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T3 done; CR1.T4 … CR1.T6 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **688 passing tests** across 73 files (unit + integration + component).
+- Tests: `bun run test` → **703 passing tests** across 74 files (unit + integration + component).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -94,7 +94,8 @@ description: Rules for updating the changelog
 | I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | `f1c9b87` |
 | I009 | Malus not applied to a blocked site already open at session start | fixed | `afc2224` |
 | CR1.T1 | Remove the allowlist from the popup UI and locales | completed | `13598d1` |
-| CR1.T2 | Remove the `list` discriminator from mutation messages | completed | — (to be committed) |
+| CR1.T2 | Remove the `list` discriminator from mutation messages | completed | `157b6f2` |
+| CR1.T3 | Migrate persisted allowlist data to the effective blocklist | completed | — (to be committed) |
 
 ---
 
@@ -985,6 +986,16 @@ description: Rules for updating the changelog
 - Tests: `tests/integration/messaging/mutation-bus.test.ts` (14 tests, integration with `fakeBrowser`) — add/remove/tag/preset still land on the blocklist and persist once; the former M2.T20 cross-list move test is replaced by a CR1.T2 test that sends all four mutations with a legacy `list: 'allowlist'` field and asserts the blocklist is mutated while `allowlist` stays empty; malformed payloads (empty site, non-string `tagId`) are still rejected without a write. `tests/unit/store/blocklist-sites.test.ts` and `blocklist-tags.test.ts` assert the new message payloads. Run: `bun run test` → **688 passing tests across 73 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
 - Relevant notes/decisions: the handler deliberately reads only the fields its variant declares, so an old in-flight message from a pre-CR1.T2 popup build stays harmless. The store action surface is unchanged on purpose: collapsing `addSite(list, site)` etc. into the single-list API belongs to CR1.T5, which keeps this step independently reviewable and compilable.
 - Acceptance criteria: verified — no payload carries `list`; `isListName` is gone; every site/tag mutation targets the blocklist; an extra legacy `list` field is ignored (covered for all four message types); the untouched variants and `MUTATION_TYPES` are unchanged; full suite, type-check, lint and both builds are green.
+- Commit: `157b6f2 feat(CR1.T2): remove allowlist references and update mutation protocol to target blocklist only`.
+
+### CR1.T3 — Migrate persisted allowlist data to the effective blocklist
+- New pure module `lib/blocking/legacy-blocklist.ts`: `LegacyBlocklistState` documents the version-1 shape, `EffectiveBlocklist` is the version-2 shape `{ blocklist, customTags }`, `migrateBlocklistState(legacy)` subtracts the legacy allowlist from the blocklist, and `sanitizeBlocklistState(value)` normalizes an untrusted payload to the new shape while ignoring any `allowlist` field. Both are total: missing/malformed fields become empty arrays, invalid entries are dropped, a missing `tagIds` becomes `[]`, duplicate domains keep the first occurrence, and already-canonical domains are kept verbatim.
+- `store/index.ts`: `PersistedState.blocklist` is now `EffectiveBlocklist`; `partialize` writes only `{ blocklist, customTags }`; `persist` moves to `version: 2` with a `migrate` that runs `migrateBlocklistState` for version-1 payloads (zustand calls it only on a version mismatch) and a `merge` that sanitizes the persisted blocklist, so a legacy `allowlist` can never be reintroduced into memory.
+- Files created/modified: `lib/blocking/legacy-blocklist.ts` (new), `store/index.ts`, `tests/unit/lib/blocking/legacy-blocklist.test.ts` (new), `tests/integration/store/store.test.ts`, `tests/integration/store/sync-storage.test.ts` (fixture version bumped to 2 so the no-echo assertion still measures the sync bridge, not zustand's migration write-back).
+- Dependencies added: none.
+- Tests: `tests/unit/lib/blocking/legacy-blocklist.test.ts` (10 tests, unit) — both-list subtraction, allowlist-only drop, canonical preservation, dedup, missing `tagIds`, malformed/absent fields, malformed custom tags, and the sanitizer ignoring a legacy allowlist. `tests/integration/store/store.test.ts` (15 tests, integration with `fakeBrowser`) — version-1 payload with a domain on both lists hydrates it only in the effective blocklist (unblocked), allowlist-only domain dropped, version-2 payload unchanged, malformed legacy payload falls back to defaults, and a new write carries `version: 2` with no `allowlist` key. Run: `bun run test` → **703 passing tests across 74 files**; `bun run compile` and `bun run lint` clean; both MV3 builds succeed.
+- Relevant notes/decisions: migration semantics preserve current behavior (`old blocklist − old allowlist`); an allowlist-only domain is dropped because it was already allowed by default. zustand writes the migrated state back once when it reads a version-1 payload (`if (migrated) setItem()`), which is intended: the stored payload upgrades to version 2 on first hydration. **Intermediate state:** the content-script `parseStoreSnapshot` still requires the legacy `allowlist` array, so until CR1.T4 it rejects a version-2 payload and the overlay stays inert (DNR blocking is unaffected, since the rules are built from the effective blocklist). CR1.T4 reworks the parser to delegate to this helper.
+- Acceptance criteria: verified — the helper is total and returns the single-list shape; version-1 payloads migrate and version-2 payloads pass through; `merge` sanitizes and never reintroduces `allowlist`; newly persisted payloads contain only `{ blocklist, customTags }`; full suite, type-check, lint and both builds are green.
 - Commit: — (to be committed).
 
 ---
