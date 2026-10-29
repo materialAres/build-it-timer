@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createDistractionPredicate } from '@/entrypoints/background';
-import { addSiteToList, createAppStore, type AppStore } from '@/store';
+import { addBlocklistSite, createAppStore, type AppStore } from '@/store';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 
@@ -9,8 +9,8 @@ const T0 = 1_700_000_000_000;
 
 /**
  * A running session whose blocklist was populated through the *entry* path
- * (`addSiteToList`, M2.T4), so the navigation check can be exercised against a
- * state that was built the same way production builds it.
+ * (`addBlocklistSite`, M2.T4), so the navigation check can be exercised against
+ * a state that was built the same way production builds it.
  */
 function createRunningStore(blockedSites: ReadonlyArray<string> = []): AppStore {
   const store = createAppStore({
@@ -18,7 +18,7 @@ function createRunningStore(blockedSites: ReadonlyArray<string> = []): AppStore 
   });
 
   let lists = store.getState().blocklist;
-  for (const site of blockedSites) lists = addSiteToList(lists, 'blocklist', site);
+  for (const site of blockedSites) lists = addBlocklistSite(lists, site);
 
   store.setState({
     blocklist: lists,
@@ -100,20 +100,5 @@ describe('navigation-check normalization (M2.T21)', () => {
     store.setState({ timer: { ...store.getState().timer, status: 'paused' } });
 
     expect(createDistractionPredicate(store)('https://m.facebook.com')).toBe(false);
-  });
-
-  it('no longer lets a residual allowlist field override the blocklist (CR1.T4)', () => {
-    const store = createRunningStore(['facebook.com']);
-    // The store may still carry the obsolete field until CR1.T5; enforcement
-    // must ignore it instead of restoring the old "allowlist wins" rule.
-    store.setState({
-      blocklist: {
-        allowlist: [{ domain: { value: 'facebook.com' }, tagIds: [] }],
-        blocklist: [{ domain: { value: 'facebook.com' }, tagIds: [] }],
-        customTags: [],
-      },
-    });
-
-    expect(createDistractionPredicate(store)('https://m.facebook.com')).toBe(true);
   });
 });

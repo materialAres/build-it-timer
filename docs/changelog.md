@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T5b** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol, persisted-data migration, blocking enforcement and the production state model are allowlist-free, and the store/component tests are migrated (CR1.T5b); the integration/remaining-unit test migration (CR1.T5c) is pending; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR1.T5c** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol, persisted-data migration, blocking enforcement, the production state model and the whole test suite are allowlist-free (CR1.T1–CR1.T5c); only the final cleanup/verification task (CR1.T6) remains; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,11 +16,11 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T4, CR1.T5a and CR1.T5b done; CR1.T5c and CR1.T6 remaining.
+- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T4, CR1.T5a, CR1.T5b and CR1.T5c done; CR1.T6 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **684 passing / 14 failing** across 74 files. The failures are confined to the three integration test files owned by CR1.T5c (`store`, `mutation-bus`, `navigation-normalization`); no production module relies on them.
-- Type-check: `bun run compile` (`tsc --noEmit`) → **9 errors, all in four CR1.T5c test files**.
-- Lint: `bun run lint` → **2 errors, both in `tests/integration/background/navigation-normalization.test.ts`** (CR1.T5c).
+- Tests: `bun run test` → **696 passing tests** across 74 files (green).
+- Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
+- Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
 
 ## Completed tasks summary
@@ -98,7 +98,8 @@ description: Rules for updating the changelog
 | CR1.T3 | Migrate persisted allowlist data to the effective blocklist | completed | `eeb9fc7` |
 | CR1.T4 | Remove the allowlist from blocking enforcement | completed | `a15d29e` |
 | CR1.T5a | Collapse the store model and runtime call sites to a single blocklist | completed | `9738e4f` |
-| CR1.T5b | Migrate the store and component tests to the single blocklist | completed | — (to be committed) |
+| CR1.T5b | Migrate the store and component tests to the single blocklist | completed | `a3592ce` |
+| CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | — (to be committed) |
 
 ---
 
@@ -1040,6 +1041,21 @@ description: Rules for updating the changelog
 - Tests: the six files run 69 tests (unit + component), all passing — add/remove, duplicate no-op, normalization, preset expansion/dedup/tagging, tag assignment/removal, `removeTag` detachment, single-list assertions, and the component flows. Full run: `bun run test` → **684 passing / 14 failing** across 74 files; the failures are the three integration files owned by CR1.T5c (`store.test.ts` 4, `mutation-bus.test.ts` 3, `navigation-normalization.test.ts` 7). `bun run compile` → 9 errors in four CR1.T5c files; `bun run lint` → 2 errors in `navigation-normalization.test.ts`; both builds succeed.
 - Relevant notes/decisions: this task only touches tests. The raw version-1 JSON fixtures that intentionally exercise legacy payloads (`legacy-blocklist`, `store-snapshot`, `blocked-overlay`, `store`, `dnr-rules`) are untouched. The remaining stale files are exactly the six owned by CR1.T5c.
 - Acceptance criteria: verified — the six files use the two-field state and the new signatures, no test passes a list name, the cross-list/precedence cases are replaced (not deleted) by single-list assertions, the six files pass, both builds are green, and the only remaining compile/lint/test failures are inside CR1.T5c's files.
+- Commit: `a3592ce feat(CR1.T5b): remove allowlist references and update related functionality to consolidate blocklist usage across the application`.
+
+### CR1.T5c — Migrate the remaining unit and integration tests and restore the green gate
+- `tests/unit/components/blocklist/PresetPicker.test.tsx`: the `beforeEach` fixture seeds `{ blocklist, customTags }`.
+- `tests/unit/lib/blocking/is-domain-blocked.test.ts`: the "ignores a residual allowlist field from a pre-migration state" case is removed — the state type can no longer carry that field, and the legacy shape is still covered by `legacy-blocklist.test.ts` and the `store-snapshot` legacy cases.
+- `tests/unit/lib/timer/tab-distraction-tracker.test.ts`: the comment on the predicate-owned decision no longer mentions allowlist precedence.
+- `tests/integration/store/store.test.ts`: the default-state assertion is now a whole-slice `{ blocklist: [], customTags: [] }` comparison; the migration cases assert `'allowlist' in state.blocklist === false` instead of reading a field that no longer exists; the version-2 persistence case seeds only the two-field shape and additionally asserts the persisted keys are exactly `['blocklist', 'customTags']`. The raw version-1 JSON fixtures of the migration cases are kept verbatim.
+- `tests/integration/messaging/mutation-bus.test.ts`: the invalid-payload cases compare the whole single-list slice; the legacy-`list` case now proves a forged `list: 'allowlist'` field cannot target a second collection (the four site/tag mutations land on the blocklist and the state has no `allowlist` key, with the tag created by the test still present).
+- `tests/integration/background/navigation-normalization.test.ts`: builds the running store through `addBlocklistSite` instead of `addSiteToList`, and the residual-allowlist test (which injected a field the store can no longer hold) is removed; the remaining cases cover normalization, invalid URLs, bare public suffixes, `undefined`, and the non-running session.
+- `tests/unit/store/blocklist-tags.test.ts`: removes the unused `empty` fixture left over from CR1.T5b (the only compile/lint error the previous task left behind).
+- Files created/modified: the seven files listed above.
+- Dependencies added: none.
+- Tests: the six CR1.T5c files run 54 tests (unit + integration), all passing. Full gate: `bun run test` → **696 passing tests across 74 files**; `bun run compile` → clean; `bun run lint` → clean; `bun run build` and `bun run build:firefox` → both succeed.
+- Relevant notes/decisions: after this task the only remaining `allowlist` mentions in the repository are the intentional ones — the runtime legacy reader `lib/blocking/legacy-blocklist.ts`, the version-1 raw JSON fixtures in `legacy-blocklist.test.ts`, `store-snapshot.test.ts`, `blocked-overlay.test.ts`, `store.test.ts` and `dnr-rules.test.ts`, and assertions that the field is absent. No typed fixture constructs a three-field `BlocklistState`.
+- Acceptance criteria: verified — every fixture uses the single-list shape, the mutation-bus test proves the legacy `list` field cannot select a second collection, the navigation test no longer injects a residual `allowlist`, the residual case and the stale comment are gone, the raw legacy fixtures are preserved, and the full gate (compile, lint, test, both builds) is green.
 - Commit: — (to be committed).
 
 ---

@@ -12,8 +12,6 @@ import {
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { Tag } from '@/store/store.types';
 
-const empty: BlocklistState = { blocklist: [], customTags: [] };
-
 const focus: Tag = { id: 'focus', label: 'Focus' };
 
 const tagged: BlocklistState = {

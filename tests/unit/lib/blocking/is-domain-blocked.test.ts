@@ -23,17 +23,6 @@ describe('isDomainBlocked (M2.T8, CR1.T4)', () => {
     expect(isDomainBlocked(input, 'instagram.com')).toBe(true);
   });
 
-  it('ignores a residual allowlist field from a pre-migration state', () => {
-    // The store may still carry the obsolete field until CR1.T5, but it must
-    // never influence the decision anymore (CR1.T4).
-    const legacy = {
-      allowlist: [entry('facebook.com')],
-      blocklist: [entry('facebook.com')],
-    };
-
-    expect(isDomainBlocked(legacy, 'facebook.com')).toBe(true);
-  });
-
   it('matches the canonical form only (subdomains are normalized upstream, M1.T2)', () => {
     expect(isDomainBlocked({ blocklist: [entry('facebook.com')] }, 'm.facebook.com')).toBe(false);
   });

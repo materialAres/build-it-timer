@@ -127,7 +127,6 @@ describe('cross-context mutation path (M1.T10)', () => {
     await sendMessage(forged);
 
     expect(store.getState().blocklist).toEqual({
-      allowlist: [],
       blocklist: [],
       customTags: [],
     });
@@ -169,7 +168,6 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     await expect(sendMessage(forged)).resolves.toEqual({ ok: true, value: undefined });
     expect(store.getState().blocklist).toEqual({
-      allowlist: [],
       blocklist: [],
       customTags: [],
     });
@@ -284,10 +282,10 @@ describe('cross-context mutation path (M1.T10)', () => {
     handle.dispose();
   });
 
-  // CR1.T2: the protocol has no `list` discriminator anymore. A legacy sender
-  // that still includes the field must not be able to select a collection: the
-  // four site/tag mutations always land on the blocklist, and the (still present
-  // until CR1.T5) allowlist is never touched.
+  // CR1.T2/CR1.T5a: the protocol has no `list` discriminator anymore and the
+  // store has no second collection. A legacy sender that still includes the
+  // field must not be able to select one: the four site/tag mutations always
+  // land on the single blocklist.
   it('ignores a legacy `list` field and always mutates the blocklist (CR1.T2)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
@@ -314,7 +312,11 @@ describe('cross-context mutation path (M1.T10)', () => {
     await sendMessage(legacy('BLOCKLIST_REMOVE_SITE', { site: 'facebook.com' }));
     expect(store.getState().blocklist.blocklist).toEqual([]);
 
-    expect(store.getState().blocklist.allowlist).toEqual([]);
+    expect(store.getState().blocklist).toEqual({
+      blocklist: [],
+      customTags: [{ id: 'focus', label: 'Focus' }],
+    });
+    expect('allowlist' in store.getState().blocklist).toBe(false);
 
     handle.dispose();
   });

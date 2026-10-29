@@ -26,8 +26,7 @@ describe('useAppStore', () => {
 
     expect(state.timer.status).toBe('idle');
     expect(state.timer.sessionId).toBeNull();
-    expect(state.blocklist.blocklist).toEqual([]);
-    expect(state.blocklist.allowlist).toEqual([]);
+    expect(state.blocklist).toEqual({ blocklist: [], customTags: [] });
     expect(state.score.level).toBe('excellent');
     expect(state.city.layers.background.width).toBeGreaterThan(0);
     expect(state.sessionHistory.sessions).toEqual([]);
@@ -248,7 +247,7 @@ describe('useAppStore', () => {
       'x.com',
     ]);
     // The legacy list itself is not resurrected in memory.
-    expect(store.getState().blocklist.allowlist).toEqual([]);
+    expect('allowlist' in store.getState().blocklist).toBe(false);
     expect(store.getState().blocklist.customTags).toEqual([testTag]);
   });
 
@@ -272,7 +271,7 @@ describe('useAppStore', () => {
     expect(store.getState().blocklist.blocklist.map((item) => item.domain.value)).toEqual([
       'x.com',
     ]);
-    expect(store.getState().blocklist.allowlist).toEqual([]);
+    expect('allowlist' in store.getState().blocklist).toBe(false);
   });
 
   it('passes a version-2 payload through unchanged (CR1.T3)', async () => {
@@ -292,7 +291,7 @@ describe('useAppStore', () => {
 
     expect(store.getState().blocklist.blocklist).toEqual(persistedBlocklist.blocklist);
     expect(store.getState().blocklist.customTags).toEqual(persistedBlocklist.customTags);
-    expect(store.getState().blocklist.allowlist).toEqual([]);
+    expect('allowlist' in store.getState().blocklist).toBe(false);
   });
 
   it('falls back to defaults for a malformed legacy blocklist (CR1.T3)', async () => {
@@ -315,7 +314,6 @@ describe('useAppStore', () => {
     await store.persist.rehydrate();
     await store.setState({
       blocklist: {
-        allowlist: [{ domain: { value: 'keep.com' }, tagIds: [] }],
         blocklist: [{ domain: { value: 'x.com' }, tagIds: [] }],
         customTags: [testTag],
       },
@@ -336,5 +334,6 @@ describe('useAppStore', () => {
       blocklist: [{ domain: { value: 'x.com' }, tagIds: [] }],
       customTags: [testTag],
     });
+    expect(Object.keys(parsed.state.blocklist).sort()).toEqual(['blocklist', 'customTags']);
   });
 });

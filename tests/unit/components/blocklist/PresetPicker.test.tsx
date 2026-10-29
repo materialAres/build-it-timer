@@ -11,7 +11,7 @@ const domainValues = (): readonly string[] =>
 describe('PresetPicker (M3.T1)', () => {
   beforeEach(() => {
     useAppStore.setState({
-      blocklist: { allowlist: [], blocklist: [], customTags: [] },
+      blocklist: { blocklist: [], customTags: [] },
     });
   });
 
