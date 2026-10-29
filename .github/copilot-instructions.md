@@ -1,6 +1,6 @@
 # Project Overview — Focus Timer (BuildIt)
 
-> Productivity browser extension: focus timer with ASCII city-builder city, allowlist/blocklist with malus, scoring system.
+> Productivity browser extension: focus timer with ASCII city-builder city, blocklist with malus, scoring system.
 > Stack: React, WXT, Zustand (`persist`), `declarativeNetRequest`, `browser.alarms`, `framer-motion`, Content Scripts + Shadow DOM, `tldts`, `@wxt-dev/i18n` (EN/IT internationalization based on `browser.i18n`).
 > Default package manager: **bun** (all installation, script execution, and dependency management commands use bun, not npm/pnpm/yarn).
 
@@ -23,7 +23,7 @@ This section defines the binding rules for all code written in the project, rega
 | **I — Interface Segregation** | No "big" interfaces: the Zustand store is split into slices (`timerSlice`, `citySlice`, `blocklistSlice`, `scoreSlice`), each with its own typed interface, so a component that only reads the timer doesn't depend (type-wise) on the city slice. |
 | **D — Dependency Inversion** | "Core" modules (score calculation, malus calculation, city growth engine) never directly import browser APIs (`browser.alarms`, `browser.storage`, `declarativeNetRequest`). They depend on abstract interfaces injected from the outside (background script / popup), to remain testable in Node/happy-dom without heavy browser mocks. |
 | **Separation of Concerns** | Three separate "worlds" communicating only via the persisted store and typed messages: (1) **background** — timer, alarms, DNR rules, score/malus calculation; (2) **content script** — only the alert overlay on a blocked site, no business logic; (3) **popup/UI** — presentation only (ASCII city, timer controls, preset management), reads state but doesn't compute it. |
-| **DRY** | Domain normalization logic (via `tldts`) is centralized in a single function (`getRegistrableDomain(url)`), used by the allowlist/blocklist matcher, the DNR rule generator, and the palette hash alike — never duplicated. |
+| **DRY** | Domain normalization logic (via `tldts`) is centralized in a single function (`getRegistrableDomain(url)`), used by the blocklist matcher, the DNR rule generator, and the palette hash alike — never duplicated. |
 | **KISS** | The city growth engine composes buildings from a finite number of predefined ASCII modules (bases, floors, tops — see `tile-library.ts`) selected procedurally, not algorithmically generated character-by-character from scratch: variety comes from combining modules, not from a complex procedural engine. Optimization with TexturePacker/sprite sheets remains deferred (see Milestone 4) and must not complicate the ASCII MVP. |
 | **YAGNI** | No plugin system for third-party presets is built from the start, nor multi-device sync: none of this is in the source document. Only what is explicitly requested is implemented; any future extension should be proposed as a new task, not anticipated in the current code. **Exception**: multi-language support (i18n) is explicitly required from the start (EN default, IT), and must be implemented with the official WXT module `@wxt-dev/i18n`, choosing the language **automatically from the browser's language** (IT only if the browser is set to Italian, otherwise EN) — no manual selector — and in a way that makes adding new languages trivial (see M3.T9). |
 
@@ -122,7 +122,7 @@ Conventions:
 
 * **Persisted store** (`persist` middleware, `browser.storage.local` backend via a custom adapter): everything that must survive a browser restart and represents "historical" data or user configuration —
   * the city state **of the current, in-progress session** (grid/layers, buildings, palettes assigned to domains, active theme) — needed to survive a service worker restart during a still-active session; it is instead reset and regenerated from scratch when a new focus session starts (one city per session, see Section 2);
-  * allowlist/blocklist configuration, custom presets and their tags;
+  * blocklist configuration, custom presets and their tags;
   * history of the last 5 completed sessions (score and, if applicable, city screenshot/reference — see M2.T19);
   * user preferences (e.g. Good/Bad thresholds if made configurable).
 * **Volatile store** (not persisted, reset on every service worker/popup startup): everything that is derived or transient —
@@ -288,9 +288,9 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M2.T1 (`timerSlice`) | Unit | vitest | `pauseTimer()` when already `idle` (safe no-op, not an inconsistent state); `startTimer()` when already `running` (idempotence or explicit error, to be defined). |
 | M2.T2 (restore timer) | Integration | vitest + `wxt/testing` (fake alarms) | Alarm firing exactly during the simulated "restart" (race condition); corrupted/partial persisted state. |
 | M2.T3 (Timer UI) | Component | Testing Library | Rendering with `remainingSeconds` at 0; rendering with values > 3600s (formatting beyond 60 minutes, behavior to be clarified). |
-| M2.T4 (`blocklistSlice`) | Unit | vitest | Adding a domain already present in the allowlist while adding it to the blocklist (or vice versa); removing a nonexistent domain. |
+| M2.T4 (`blocklistSlice`) | Unit | vitest | Adding a domain that is already present (duplicate no-op); adding a subdomain variant of an existing entry collapses onto the same canonical entry; removing a nonexistent domain. |
 | M2.T5 (presets data) | Unit | vitest | Data structure validation (every preset has at least one domain, non-empty tag). |
-| M2.T6 (DNR rules) | Unit | vitest | Empty blocklist → no rules; the same domain duplicated in the blocklist → a single rule; allow/block conflict on the same domain → allowlist wins (acceptance criterion). |
+| M2.T6 (DNR rules) | Unit | vitest | Empty blocklist → no rules; the same domain duplicated in the blocklist → a single rule; a non-canonical entry is canonicalized or rejected before it reaches a rule. |
 | M2.T21 (input normalization) | Unit + Integration | vitest (+ `wxt/testing`) | "Bare" public suffix (`co.uk`, `com`) rejected with "Enter a valid URL"; same input → same canonical form from entry and from navigation check; malformed URL during check does not crash and does not incorrectly block. |
 | M2.T7 (apply DNR rules) | Integration | vitest + `wxt/testing` | Blocklist changes while `status !== 'running'` → no call to `updateDynamicRules` (or agreed-upon behavior, see §4). |
 | M2.T8 (overlay content script) | Component (for `BlockedOverlay.tsx`) + Integration (for the content script) | Testing Library, vitest + `wxt/testing` | Overlay mounted twice on the same page (idempotence); message sent to the background when the background doesn't respond (timeout). |
@@ -309,7 +309,7 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M2.T17 (ScoreBadge) | Component | Testing Library | State transition from `excellent` to `bad` between two consecutive renders. |
 | M2.T18 (population) | Unit + Component | vitest, Testing Library | Formula agrees with the M2.T11c unlock schedule for the same focused time and is independent of the random module variant; decorative `top` elements add no inhabitants; `NaN`/negative/`-Infinity` → `0`, `+Infinity` → maximum; `PopulationCounter` reads via the selector and computes nothing. |
 | M2.T19 (session history slice) | Unit | vitest | Newest-first insertion; dedup by `sessionId` (a re-emitted `SESSION_ENDED` replaces, not grows); cap at 5 dropping the oldest; a no-op returns the same reference; the history survives a simulated "restart" while `ui` does not. |
-| M2.T20 (allow/block mutual exclusion) | Unit + Component | vitest, Testing Library | Adding a domain already in the opposite list never creates a double entry; the allowlist wins on a residual conflict (import/preset/pre-existing state); the UI shows the move/duplicate feedback. |
+| M2.T20 (allow/block mutual exclusion) | — | — | **Obsolete** (superseded by CR1): there is a single blocklist and no second list to conflict with. |
 | M3.T1 (PresetPicker) | Component | Testing Library | Applying two presets with overlapping domains (no resulting duplicate, reuses the M2.T4 logic). |
 | M3.T2 (TagEditor) | Component | Testing Library | Tag with a duplicate name (case-insensitive?); removing a tag still assigned to sites. |
 | M3.T3 (SiteList) | Component | Testing Library | Empty/whitespace input; input that `tldts` cannot parse or a "bare" public suffix (`co.uk`) → "Enter a valid URL" message (visible error feedback). |
@@ -329,7 +329,7 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M4.T5 (e2e) | E2E | Playwright | The three scenarios listed in the task's acceptance criterion, plus a fourth regression scenario: Firefox build with the same timer scenario (if Playwright + Firefox is available, otherwise Chromium only per the document's constraint). |
 | M5.T1 (message bus hardening) | Integration | vitest + `wxt/testing` | Malformed/forged message (unknown type, missing fields, wrong types) → no crash and no mutation; `tabId` in the payload ignored and derived from `sender.tab.id`; sender with `id !== browser.runtime.id` rejected. |
 | M5.T2 (domain hardening) | Unit + Integration | vitest | Non-http schemes (`ftp://`, `file://`, `javascript:`, `data:`) → `{ ok: false }`; trailing dot and uppercase canonicalized; userinfo trick (`https://facebook.com@evil.com`) → real host; IDN/homograph → punycode; hostile corpus with no exceptions. |
-| M5.T3 (DNR urlFilter) | Unit | vitest | Entry with `*` does not become a wildcard (no over-blocking); `||` prefix does not alter the anchoring; non-canonical entry rejected/neutralized; allow/block conflict → allowlist wins. |
+| M5.T3 (DNR urlFilter) | Unit | vitest | Entry with `*` does not become a wildcard (no over-blocking); `||` prefix does not alter the anchoring; non-canonical entry rejected/neutralized. |
 
 ### 3.4 Priority on critical logic
 
@@ -337,7 +337,7 @@ In absolute priority order (to be tested most thoroughly, with the most edge cas
 
 1. **Timer persistence via `browser.alarms`** (M1.T5, M2.T1, M2.T2) — this is the logic with the largest surface for "silent" bugs (a timer that resets to zero, duplicates, or doesn't resume after a service worker restart). Highest priority because a bug here breaks the user's trust in the entire "focus session" concept.
 2. **URL parsing with `tldts`** (M1.T2) — this is the security/correctness foundation of the entire blocking system: a bug here can let through sites that should be blocked (or, conversely, block legitimate sites). It must be tested against a broad, heterogeneous set of real URLs, not just the "happy" cases.
-3. **Site blocking logic** (M2.T6, M2.T7, M2.T21) — directly dependent on the previous point; the allowlist/blocklist conflict must be tested explicitly as a first-class case, not as a marginal edge case, with a fixed resolution rule: **the allowlist always wins** (M2.T6, M2.T20). Defensive input normalization (entry + navigation check, M2.T21) must also be treated as critical logic.
+3. **Site blocking logic** (M2.T6, M2.T7, M2.T21) — directly dependent on the previous point; blocking is decided against the single blocklist only (there is no second list and no precedence rule — never reintroduce one; CR1.T4). Defensive input normalization (entry + navigation check, M2.T21) must be treated as critical logic.
 4. **Score and malus calculation** (M2.T9, M2.T10, M4.T1) — this is the heart of the "gamification" and of the user's sense of fairness: the boundaries between Excellent/Good/Bad must be exact and covered by parametric tests on all threshold values.
 5. **Determinism of the building palette** (M2.T13) — lower priority than the previous ones (a "wrong" color doesn't break functionality), but determinism must still be guaranteed with repetition tests, because it's an explicit requirement of the source document ("the same building always has the same color").
 

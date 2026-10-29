@@ -227,8 +227,8 @@ function buildStore(
       // (breaking `selectCity`-style identity checks) and could clobber state
       // written between store creation and the async hydration completing.
       // Version 2 (CR1.T3): the persisted blocklist is the single-list shape
-      // `{ blocklist, customTags }`. Version-1 payloads carry the legacy
-      // `{ allowlist, blocklist, customTags }` and are migrated on read.
+      // `{ blocklist, customTags }`. Older payloads use the legacy two-list
+      // shape and are migrated on read (`lib/blocking/legacy-blocklist.ts`).
       version: 2,
       migrate: (persistedState: unknown, version: number): PersistedState => {
         const saved =

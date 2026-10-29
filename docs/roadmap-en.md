@@ -263,6 +263,7 @@ Each task is a standalone card, with this fixed format:
   - Test with Testing Library: render, click, assert on the action call (via a spy on the store).
 
 #### M2.T4 — `blocklistSlice` — allowlist/blocklist state
+> **Superseded by CR1** (see §2.4): the two-list state and its CRUD are replaced by the single `{ blocklist, customTags }` state (CR1.T5a).
 * **Objective**: slice with `{ allowlist: BlocklistEntry[], blocklist: BlocklistEntry[], customTags: Tag[] }` and CRUD actions.
 * **Files**: `store/blocklist.slice.ts`
 * **Dependencies**: M1.T4, M1.T2
@@ -281,6 +282,7 @@ Each task is a standalone card, with this fixed format:
   - Data structure conforms to the `Preset` type (Section M1.T1) — no application logic here, data only (Open/Closed principle, Section 1.1).
 
 #### M2.T6 — `declarativeNetRequest` rule generator
+> **Superseded by CR1** (see §2.4): the allowlist parameter and the "allowlist wins" precedence are gone; the generator takes the blocklist only (CR1.T4).
 * **Objective**: pure function `buildDnrRules(blocklist: BlocklistEntry[], allowlist: BlocklistEntry[]): DeclarativeNetRequestRule[]` that translates the state into valid DNR rules.
 * **Files**: `lib/blocking/rules.ts`
 * **Dependencies**: M1.T2, M2.T4
@@ -299,6 +301,7 @@ Each task is a standalone card, with this fixed format:
   - Test with `fakeBrowser`: changing the blocklist during `running` triggers a call to `updateDynamicRules` with the expected rules; a transition to `paused` triggers a rule-removal call.
 
 #### M2.T8 — Overlay alert content script (Shadow DOM)
+> **Superseded by CR1** (see §2.4): the overlay decision uses `isDomainBlocked({ blocklist }, domain)` only — there is no allowlist precedence anymore (CR1.T4).
 * **Objective**: content script that, when the user lands on a domain in the blocklist while the timer is `running`, mounts a Shadow DOM overlay covering the page — "You put this site on your blocklist. Are you sure you want to access it?" — with two choices: **Yes** (access the site, malus then accrues while the user stays there, M2.T10) and **No** (go back, no malus; when the tab has no history to go back to, the overlay stays up showing "Great! Keep focusing!").
 * **Files**: `entrypoints/blocked-overlay.content.ts`, `components/common/BlockedOverlay.tsx`, `wxt.config.ts` (`host_permissions` + `matches: ['<all_urls>']`)
 * **Dependencies**: M1.T6, M2.T4
@@ -452,6 +455,7 @@ Each task is a standalone card, with this fixed format:
   - Runtime population of the slice is owned by the task that implements session completion (the `SESSION_ENDED` event), not by this task.
 
 #### M2.T20 — Allowlist/blocklist mutual-exclusion validation
+> **Superseded by CR1** (see §2.4): the task is obsolete — with a single blocklist there is no second list to conflict with (CR1.T5a).
 * **Objective**: prevent the same canonical domain from ending up in both allowlist and blocklist simultaneously, and explicitly establish the resolution rule for when the conflict exists anyway (import, preset, pre-existing state).
 * **Files**: `store/blocklist.slice.ts`, `components/blocklist/SiteList.tsx` (UI feedback).
 * **Dependencies**: M2.T4
@@ -460,6 +464,7 @@ Each task is a standalone card, with this fixed format:
   - **Precedence order (design decision)**: in case of a residual conflict, the **allowlist always wins** over the blocklist — no domain present in the allowlist is ever blocked (consistent with M2.T6).
 
 #### M2.T21 — Defensive normalization of blocklist input (entry + navigation check)
+> **Superseded by CR1** (see §2.4): the normalization still applies, but the navigation check matches the blocklist only — no allowlist precedence (CR1.T4).
 * **Objective**: ensure domains are always in canonical registrable form at **two distinct points**, reusing the single `getRegistrableDomain` function (DRY, Section 1.1): (1) **at entry time** (user/preset input, untrusted) and (2) **at navigation-check time** (the tab's URL, untrusted). An already-saved entry and a URL received from content/browser are never trusted.
 * **Files**: `lib/blocking/normalize-entry.ts` (pure entry normalization/validation function), `store/blocklist.slice.ts` (entry), `entrypoints/background.ts` (navigation check), `lib/blocking/rules.ts` (consumption of the canonical form).
 * **Dependencies**: M1.T2, M2.T4, M2.T6
@@ -486,6 +491,7 @@ Each task is a standalone card, with this fixed format:
   - Creating a tag and assigning it to ≥2 sites; filtering the site list by that tag shows only those.
 
 #### M3.T3 — `SiteList` — site CRUD in allow/blocklist
+> **Superseded by CR1** (see §2.4): the component is blocklist-only — no generic list prop and no cross-list move feedback (CR1.T1).
 * **Objective**: manual management UI (add/remove a single domain), with real-time normalization via `tldts` in the input.
 * **Files**: `components/blocklist/SiteList.tsx`
 * **Dependencies**: M2.T4, M1.T2, M2.T20, M2.T21
@@ -720,6 +726,7 @@ Each task is a standalone card, with this fixed format:
   - Test (integration, `fakeBrowser`): malformed/forged message → no crash, no mutation; `tabId` injected in the payload is ignored; a sender with an id different from `browser.runtime.id` is rejected; an unrecognized `type` is ignored.
 
 #### M5.T2 — Hardening of `lib/url/domain.ts`: scheme restriction, canonicalization, and IDN
+> **Superseded by CR1** (see §2.4): the scheme/IDN hardening stays; only the allowlist-precedence part of the criterion is dropped (CR1.T4).
 * **Objective**: make domain normalization (M1.T2, "security core of the blocking system", §3.4) robust against bypass and impersonation — accept only `http`/`https` URLs, canonicalize the host, and handle IDN/homograph, with a single canonical form shared by both entry and navigation checks.
 * **Files**: `lib/url/domain.ts`, `lib/blocking/normalize-entry.ts` (M2.T21), `entrypoints/background.ts` (navigation check).
 * **Dependencies**: M1.T2
@@ -732,6 +739,7 @@ Each task is a standalone card, with this fixed format:
   - The canonical form is the same at entry (M2.T4/M2.T21) and at the navigation check (M2.T6): no divergence between the two entry points.
 
 #### M5.T3 — Escaping/validation of `urlFilter` in DNR rule generation
+> **Superseded by CR1** (see §2.4): the escaping/validation hardening stays; the "allow/block conflict" case no longer exists (CR1.T4).
 * **Objective**: ensure that `declarativeNetRequest` rule generation (M2.T6) uses only canonical domains and never interpolates raw input into `urlFilter`, where `*`, `|`, `^`, and `||` have special semantics.
 * **Files**: `lib/blocking/rules.ts`, `lib/blocking/normalize-entry.ts`.
 * **Dependencies**: M2.T6
@@ -878,7 +886,7 @@ This section tracks change requests that modify already-planned or already-imple
 
 #### CR1.T6 — Cleanup, documentation, regression coverage, and final verification
 * **Objective**: remove the remaining non-historical references, document the change, and prove the full suite is green.
-* **Files to create/modify**: remaining test fixtures; `README.md`; `.github/copilot-instructions.md`; `.serena/memories/core.md`; `docs/store-analysis.md` (if it still describes allowlist/blocklist precedence); `docs/changelog.md`; `docs/change-requests/remove-allowlist.md` (mark the analysis as implemented by CR1.T1–T6, including the CR1.T5a/CR1.T5b/CR1.T5c split).
+* **Files to create/modify**: remaining test fixtures; `README.md`; `.github/copilot-instructions.md`; `.serena/memories/core.md`; `docs/store-analysis.md` (if it still describes allowlist/blocklist precedence); `docs/changelog.md`; `docs/features-analysis/allowlist.md` (mark the analysis as implemented by CR1.T1–T6, including the CR1.T5a/CR1.T5b/CR1.T5c split).
 * **Dependencies**: CR1.T5a, CR1.T5b, CR1.T5c
 * **Acceptance criteria**:
   - A repository search for `allowlist`, `Allowlist`, `allowList`, `allowedSites`, and `movedFromList` returns only: the legacy migration module, the tests that intentionally exercise legacy payloads (migration, snapshot parser, and the raw version-1 fixtures in store/overlay/background tests), the historical roadmap/changelog text, and the change-request analysis. No runtime code, UI, protocol, locale, README, or project-instruction reference remains.

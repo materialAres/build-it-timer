@@ -1,7 +1,10 @@
 # Allowlist logic — code analysis
 
 > Change request: remove the allowlist logic.
-> Status: analysis only — no code has been modified.
+> Status: **implemented** by CR1.T1–CR1.T6 (the test migration was split into
+> CR1.T5a for the production code, CR1.T5b and CR1.T5c for the tests).
+> This document is kept as the historical analysis: every file/line reference
+> below describes the code *before* CR1 and no longer matches the current tree.
 
 ## 1. Core idea
 

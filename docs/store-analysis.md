@@ -52,7 +52,7 @@ nearest scheduled work is *adjacent*, not resolving:
   `SITE_BLOCKED_ATTEMPT`) — it does **not** by itself keep two Zustand instances consistent.
 - **M1.T7 (background orchestrator)** wires the store + bus + listeners, but nothing states the
   background becomes the *single writer*.
-- **M2.T7** requires the background to reapply DNR "every time the blocklist/allowlist changes", yet
+- **M2.T7** requires the background to reapply DNR "every time the blocklist changes", yet
   never says how the background *learns* of a change made from the popup — it could be a message or
   an `onChanged`→rehydrate; the roadmap leaves this open.
 

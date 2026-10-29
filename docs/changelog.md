@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T5c** (Milestone 3 completed, Milestone 4 in progress; change request CR1 in progress — allowlist UI, protocol, persisted-data migration, blocking enforcement, the production state model and the whole test suite are allowlist-free (CR1.T1–CR1.T5c); only the final cleanup/verification task (CR1.T6) remains; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR1.T6** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed** — the blocklist is the only site list in the UI, protocol, persisted data, enforcement, tests and docs (CR1.T1–CR1.T6); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -16,12 +16,13 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Change request CR1 (remove allowlist) — **in progress**: CR1.T1 … CR1.T4, CR1.T5a, CR1.T5b and CR1.T5c done; CR1.T6 remaining.
+- Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
 - Tests: `bun run test` → **696 passing tests** across 74 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
+- E2E: `bun run e2e` (Playwright, Chromium) → **1 passing test** (`tests/e2e/popup.spec.ts`).
 
 ## Completed tasks summary
 
@@ -99,7 +100,8 @@ description: Rules for updating the changelog
 | CR1.T4 | Remove the allowlist from blocking enforcement | completed | `a15d29e` |
 | CR1.T5a | Collapse the store model and runtime call sites to a single blocklist | completed | `9738e4f` |
 | CR1.T5b | Migrate the store and component tests to the single blocklist | completed | `a3592ce` |
-| CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | — (to be committed) |
+| CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | `87c0a68` |
+| CR1.T6 | Cleanup, documentation, regression coverage, and final verification | completed | — (to be committed) |
 
 ---
 
@@ -1056,6 +1058,22 @@ description: Rules for updating the changelog
 - Tests: the six CR1.T5c files run 54 tests (unit + integration), all passing. Full gate: `bun run test` → **696 passing tests across 74 files**; `bun run compile` → clean; `bun run lint` → clean; `bun run build` and `bun run build:firefox` → both succeed.
 - Relevant notes/decisions: after this task the only remaining `allowlist` mentions in the repository are the intentional ones — the runtime legacy reader `lib/blocking/legacy-blocklist.ts`, the version-1 raw JSON fixtures in `legacy-blocklist.test.ts`, `store-snapshot.test.ts`, `blocked-overlay.test.ts`, `store.test.ts` and `dnr-rules.test.ts`, and assertions that the field is absent. No typed fixture constructs a three-field `BlocklistState`.
 - Acceptance criteria: verified — every fixture uses the single-list shape, the mutation-bus test proves the legacy `list` field cannot select a second collection, the navigation test no longer injects a residual `allowlist`, the residual case and the stale comment are gone, the raw legacy fixtures are preserved, and the full gate (compile, lint, test, both builds) is green.
+- Commit: `87c0a68 feat(CR1.T5c): complete removal of allowlist references and update tests to ensure blocklist-only functionality`.
+
+### CR1.T6 — Cleanup, documentation, regression coverage, and final verification
+- `README.md`: the feature bullet is blocklist-only ("everything else stays allowed") and the status section now reflects the real project state (M0–M3 completed, M4 in progress with M4.T2 skipped, CR1 completed).
+- `.github/copilot-instructions.md`: the project overview, the DRY row (blocklist matcher), the persisted-store bullet, the test-mapping rows for M2.T4/M2.T6/M2.T20/M5.T3 and the critical-logic item 3 no longer describe a two-list model or a precedence rule; M2.T20 is marked obsolete and the other rows assert single-list behavior.
+- `docs/store-analysis.md`: the M2.T7 quotation no longer mentions an allowlist change.
+- `store/index.ts`: the version-2 migration comment describes the legacy shape as "the legacy two-list shape" instead of naming its field, so no runtime module carries a stale reference.
+- `docs/features-analysis/allowlist.md`: the analysis header now states it was implemented by CR1.T1–CR1.T6 (with the T5a/T5b/T5c split) and that its file/line references describe the pre-CR1 tree.
+- `docs/roadmap-en.md`: the eight main-task cards that mention the two-list model (M2.T4, M2.T6, M2.T8, M2.T20, M2.T21, M3.T3, M5.T2, M5.T3) now carry an explicit "Superseded by CR1 (see §2.4)" note; the CR1.T6 card points at the real analysis file (`docs/features-analysis/allowlist.md`, the previous `docs/change-requests/…` path did not exist).
+- `.serena/memories/core.md`: the CR1 entry is rewritten as a completed invariant — one blocklist, no second list or precedence rule, legacy reader confined to `lib/blocking/legacy-blocklist.ts`.
+- Files created/modified: `README.md`, `.github/copilot-instructions.md`, `docs/store-analysis.md`, `store/index.ts` (comment only), `docs/features-analysis/allowlist.md`, `docs/roadmap-en.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+- Dependencies added: none.
+- Repository search for `allowlist`/`Allowlist`/`allowList`/`allowedSites`/`movedFromList` now returns only: `lib/blocking/legacy-blocklist.ts`, the tests that exercise legacy payloads (`legacy-blocklist`, `store-snapshot`, `blocked-overlay`, `store`, `dnr-rules`) plus the absence assertions in `blocklist-mutations`, `SiteList` and `mutation-bus`, and the historical `docs/roadmap-en.md`, `docs/changelog.md`, `docs/features-analysis/allowlist.md`.
+- Tests: no test changed in this task (regression coverage is provided by the suite migrated in CR1.T5b/T5c). Full gate: `bun run test` → **696 passing tests across 74 files**; `bun run compile` clean; `bun run lint` clean; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → 1 passing test.
+- Relevant notes/decisions: the change request is closed here. The remaining mentions are intentional: version-1 data must still be readable, so `migrateBlocklistState` keeps reading the legacy field and the raw fixtures keep covering it. The roadmap's §2.4 table is the single source of truth for the superseded acceptance criteria; the per-card notes link to it.
+- Acceptance criteria: verified — the search returns only the allowed categories, the README and the project instructions describe a blocklist only, the changelog records every CR1 task with real counts, the full gate including e2e is green, and the historical cards are marked superseded.
 - Commit: — (to be committed).
 
 ---

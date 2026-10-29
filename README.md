@@ -7,7 +7,7 @@ A browser extension which (hopefully) helps you stay focused on your work: the m
 Start a focus session and every 2 seconds of undistracted work grows your city by one ASCII character, spread across three parallax layers (background, middleground, foreground). Give in to a distraction and the malus runs the growth engine in reverse, removing characters one at a time.
 
 * **Timer** — start / pause / reset a countdown session. Remaining time is persisted and reconciled with the browser alarm clock, so it survives a service-worker restart.
-* **Blocklist & allowlist** — block distracting sites during a session only. The allowlist always wins, and there is no blocking outside a focus session.
+* **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session.
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
 * **Score** — `excellent` (0% distraction), `good` (≤ 30%) or `bad` (> 30%), recalculated from distraction time relative to elapsed focus time.
 * **ASCII city** — deterministic, seeded growth composed from a library of ASCII building modules, with a per-domain colour palette.
@@ -93,7 +93,10 @@ The project is developed task-by-task from `docs/roadmap-en.md`. As of the last 
 
 * **Milestone 0 — setup:** completed.
 * **Milestone 1 — core infrastructure:** completed (shared types, domain normalization, storage adapter, store + cross-context sync, single-writer ownership, message bus, background orchestrator, popup → background mutation path).
-* **Milestone 2 — core features:** in progress — timer slice and persistence, timer UI, blocklist slice, presets, DNR rule generation and in-session application are done; city/score/overlay work remains.
+* **Milestone 2 — core features:** completed (timer slice and persistence, timer UI, blocklist slice, presets, DNR rule generation and in-session application, overlay, score and malus, city growth, session history).
+* **Milestone 3 — secondary features:** completed (popup shell and tabs, animations, session history UI, city export, i18n EN/IT).
+* **Milestone 4 — polish:** in progress (proportional malus and logging done; TexturePacker skipped; accessibility and end-to-end tests remaining).
+* **Change request CR1 — single blocklist:** completed (the blocklist is the only site list across the UI, protocol, persisted data, enforcement and tests; version-1 payloads are migrated on read).
 
 Run `bun run test`, `bun run compile`, `bun run lint` and **both** builds (`bun run build` and `bun run build:firefox`) before considering a task complete. See `docs/changelog.md` for the detailed, per-task status.
 
