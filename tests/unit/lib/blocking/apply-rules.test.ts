@@ -12,9 +12,8 @@ const entry = (value: string): BlocklistEntry => ({ domain: { value }, tagIds: [
 function state(
   status: BlockingRulesSource['timer']['status'],
   blocklist: ReadonlyArray<BlocklistEntry> = [],
-  allowlist: ReadonlyArray<BlocklistEntry> = [],
 ): BlockingRulesSource {
-  return { timer: { status }, blocklist: { allowlist, blocklist } };
+  return { timer: { status }, blocklist: { blocklist } };
 }
 
 describe('selectActiveRules (M2.T7)', () => {
@@ -38,12 +37,15 @@ describe('selectActiveRules (M2.T7)', () => {
     ]);
   });
 
-  it('lets the allowlist win while running (M2.T6 precedence)', () => {
+  it('emits a rule for every blocklisted domain while running', () => {
     const rules = selectActiveRules(
-      state('running', [entry('facebook.com'), entry('instagram.com')], [entry('facebook.com')]),
+      state('running', [entry('facebook.com'), entry('instagram.com')]),
     );
 
-    expect(rules.map((rule) => rule.condition.urlFilter)).toEqual(['||instagram.com^']);
+    expect(rules.map((rule) => rule.condition.urlFilter)).toEqual([
+      '||facebook.com^',
+      '||instagram.com^',
+    ]);
   });
 });
 

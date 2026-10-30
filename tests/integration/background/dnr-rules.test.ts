@@ -7,6 +7,8 @@ import { createBrowserRuleApplier } from '@/lib/blocking/apply-rules';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 import { STORE_NAME } from '@/store';
+import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
+import { parseStoreSnapshot } from '@/lib/blocking/store-snapshot';
 import { timerAlarmName } from '@/lib/timer/session';
 import { createLogger, type LogRecord } from '@/utils/logger';
 
@@ -43,7 +45,7 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
 
@@ -71,7 +73,7 @@ describe('background DNR rule application (M2.T7)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
 
@@ -91,7 +93,7 @@ describe('background DNR rule application (M2.T7)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await handle.store.getState().startTimer();
     await handle.store.getState().pauseTimer();
@@ -117,12 +119,12 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'instagram.com' },
+      payload: { site: 'instagram.com' },
     });
     await flush();
 
@@ -170,12 +172,11 @@ describe('background DNR rule application (M2.T7)', () => {
             sessionId,
           },
           blocklist: {
-            allowlist: [],
             blocklist: [{ domain: { value: BLOCKED_DOMAIN }, tagIds: [] }],
             customTags: [],
           },
         },
-        version: 1,
+        version: 2,
       }),
     });
     const alarmProvider = new FakeAlarmProvider(0);
@@ -275,7 +276,7 @@ describe('background DNR rule application (M2.T7)', () => {
     // The blocklist is carried while idle, but the resulting rules stay empty.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: BLOCKED_DOMAIN },
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
     expect(dnr.updates).toHaveLength(callsAfterStartup);
@@ -290,6 +291,58 @@ describe('background DNR rule application (M2.T7)', () => {
     handle.store.setState({ ui: { ...handle.store.getState().ui, activeTab: 'score' } });
     await flush();
     expect(dnr.updates).toHaveLength(callsAfterStart);
+
+    handle.dispose();
+  });
+
+  it('keeps the DNR rules and the overlay snapshot in agreement (CR1.T4)', async () => {
+    const dnr = installDynamicRulesFake();
+    const sessionId = 'session-1';
+    // A legacy payload whose domain was on both lists: it must stay unblocked
+    // after the migration, while `instagram.com` stays blocked.
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          timer: {
+            status: 'running',
+            remainingSeconds: 1500,
+            sessionStartedAt: 0,
+            sessionId,
+          },
+          blocklist: {
+            allowlist: [{ domain: { value: BLOCKED_DOMAIN }, tagIds: [] }],
+            blocklist: [
+              { domain: { value: BLOCKED_DOMAIN }, tagIds: [] },
+              { domain: { value: 'instagram.com' }, tagIds: [] },
+            ],
+            customTags: [],
+          },
+        },
+        version: 1,
+      }),
+    });
+    const alarmProvider = new FakeAlarmProvider(0);
+    await alarmProvider.schedule(timerAlarmName(sessionId), 1500 * 1000);
+
+    const handle = startBackground({ alarmProvider, now: () => 0 });
+    await handle.ready;
+    // The migration write-back is fire-and-forget in zustand's hydrate.
+    await flush();
+
+    const byRules = dnr
+      .liveRules()
+      .map((rule) => rule.condition.urlFilter?.replace(/^\|\|/, '').replace(/\^$/, '') ?? '');
+    expect(byRules).toEqual(['instagram.com']);
+
+    const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+    const snapshot = parseStoreSnapshot(raw[STORE_NAME]);
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) return;
+
+    for (const domain of [BLOCKED_DOMAIN, 'instagram.com', 'example.com']) {
+      // Both layers answer the same question identically.
+      expect(isDomainBlocked(snapshot.value, domain)).toBe(byRules.includes(domain));
+    }
 
     handle.dispose();
   });

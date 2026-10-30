@@ -14,7 +14,7 @@ const resetBlocklist = (
   blocklist: ReadonlyArray<BlocklistEntry> = [],
   customTags: ReadonlyArray<Tag> = [],
 ): void => {
-  useAppStore.setState({ blocklist: { allowlist: [], blocklist, customTags } });
+  useAppStore.setState({ blocklist: { blocklist, customTags } });
 };
 
 const currentBlocklist = () => useAppStore.getState().blocklist;

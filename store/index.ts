@@ -15,11 +15,16 @@ import {
 } from './city.slice';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
+import {
+  migrateBlocklistState,
+  sanitizeBlocklistState,
+} from '@/lib/blocking/legacy-blocklist';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
   type BlocklistDependencies,
   type BlocklistSlice,
+  type BlocklistState,
 } from './blocklist.slice';
 import { createScoreSlice, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
@@ -63,7 +68,12 @@ export type AppState =
 export interface PersistedState {
   readonly timer: TimerState;
   readonly city: CitySlice['city'];
-  readonly blocklist: BlocklistSlice['blocklist'];
+  /**
+   * The single-list blocklist shape (CR1.T3, collapsed in CR1.T5a): the
+   * persisted payload is exactly the in-memory slice state, so no field can be
+   * lost or drift between the store and storage.
+   */
+  readonly blocklist: BlocklistState;
   readonly score: ScoreSlice['score'];
   readonly sessionHistory: SessionHistorySlice['sessionHistory'];
 }
@@ -128,7 +138,10 @@ const createAppState =
 export const partialize = (state: AppState): PersistedState => ({
   timer: state.timer,
   city: state.city,
-  blocklist: state.blocklist,
+  blocklist: {
+    blocklist: state.blocklist.blocklist,
+    customTags: state.blocklist.customTags,
+  },
   score: state.score,
   sessionHistory: state.sessionHistory,
 });
@@ -213,7 +226,23 @@ function buildStore(
       // it every hydration would churn references the app already observes
       // (breaking `selectCity`-style identity checks) and could clobber state
       // written between store creation and the async hydration completing.
-      version: 1,
+      // Version 2 (CR1.T3): the persisted blocklist is the single-list shape
+      // `{ blocklist, customTags }`. Older payloads use the legacy two-list
+      // shape and are migrated on read (`lib/blocking/legacy-blocklist.ts`).
+      version: 2,
+      migrate: (persistedState: unknown, version: number): PersistedState => {
+        const saved =
+          typeof persistedState === 'object' && persistedState !== null
+            ? (persistedState as Partial<PersistedState> & { blocklist?: unknown })
+            : {};
+        // zustand calls `migrate` only on a version mismatch, so a version-2
+        // payload is already in the current shape. `merge` sanitizes it anyway.
+        if (version >= 2) return saved as PersistedState;
+        return {
+          ...saved,
+          blocklist: migrateBlocklistState(saved.blocklist),
+        } as PersistedState;
+      },
       // CI-3 (M4.T3c): zustand consumes rehydration failures and keeps the
       // defaults, which is the right behaviour but used to leave no trace. Log
       // the key and the error; never the raw persisted string or the parsed
@@ -232,7 +261,7 @@ function buildStore(
           timer: saved.timer ? { ...current.timer, ...saved.timer } : current.timer,
           city: saved.city ? { ...current.city, ...saved.city } : current.city,
           blocklist: saved.blocklist
-            ? { ...current.blocklist, ...saved.blocklist }
+            ? { ...current.blocklist, ...sanitizeBlocklistState(saved.blocklist) }
             : current.blocklist,
           score: saved.score ? { ...current.score, ...saved.score } : current.score,
           sessionHistory: saved.sessionHistory
@@ -286,24 +315,21 @@ export type {
 } from './city.slice';
 export {
   createBlocklistSlice,
-  addSiteToList,
-  addPresetToList,
+  addBlocklistSite,
+  addPresetToBlocklist,
   assignTagToSite,
   unassignTagFromSite,
   filterEntriesByTag,
   generateTagId,
   hasTagLabel,
-  removeSiteFromList,
-  resolveListConflicts,
+  removeBlocklistSite,
   upsertTag,
   removeTag,
-  selectAllowlist,
   selectBlocklist,
   selectCustomTags,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,
-  BlocklistListName,
   BlocklistState,
 } from './blocklist.slice';
 export {

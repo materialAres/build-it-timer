@@ -2,22 +2,17 @@ import type { AppStore } from '@/store';
 import { getPresetById } from '@/lib/blocking/presets';
 import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
 import {
-  addSiteToList,
-  addPresetToList,
+  addBlocklistSite,
+  addPresetToBlocklist,
   assignTagToSite,
   unassignTagFromSite,
-  removeSiteFromList,
+  removeBlocklistSite,
   upsertTag,
   removeTag,
-  type BlocklistListName,
   type BlocklistState,
 } from '@/store';
 import type { MutationMessage } from './messages.types';
 import type { Tag } from '@/store/store.types';
-
-function isListName(value: unknown): value is BlocklistListName {
-  return value === 'allowlist' || value === 'blocklist';
-}
 
 function isTag(value: unknown): value is Tag {
   if (typeof value !== 'object' || value === null) return false;
@@ -31,9 +26,12 @@ function isTag(value: unknown): value is Tag {
  * neither mutates the store nor triggers a persist (forward-compatible with
  * M5.T1 hardening).
  *
+ * The handler addresses the single blocklist (CR1.T2/CR1.T5a); an extra `list`
+ * field in a received payload has no effect.
+ *
  * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
- * dedup and allowlist precedence (M2.T20), preset expansion (M2.T5) and the DNR
- * side-effect (M2.T7) are owned by those tasks.
+ * dedup, preset expansion (M2.T5) and the DNR side-effect (M2.T7) are owned by
+ * those tasks.
  */
 function applyBlocklistMutation(
   state: BlocklistState,
@@ -41,14 +39,14 @@ function applyBlocklistMutation(
 ): BlocklistState {
   switch (message.type) {
     case 'BLOCKLIST_ADD_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return addSiteToList(state, list, site);
+      const { site } = message.payload;
+      if (typeof site !== 'string' || site.length === 0) return state;
+      return addBlocklistSite(state, site);
     }
     case 'BLOCKLIST_REMOVE_SITE': {
-      const { list, site } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || site.length === 0) return state;
-      return removeSiteFromList(state, list, site);
+      const { site } = message.payload;
+      if (typeof site !== 'string' || site.length === 0) return state;
+      return removeBlocklistSite(state, site);
     }
     case 'BLOCKLIST_APPLY_PRESET': {
       const { presetId } = message.payload;
@@ -57,7 +55,7 @@ function applyBlocklistMutation(
       if (preset === undefined) return state;
       // The whole preset is expanded in a single state update (M3.T1), so the
       // mutation persists once no matter how many domains it contains.
-      return addPresetToList(state, 'blocklist', preset);
+      return addPresetToBlocklist(state, preset);
     }
     case 'TAG_UPSERT': {
       if (!isTag(message.payload)) return state;
@@ -69,18 +67,18 @@ function applyBlocklistMutation(
       return removeTag(state, tagId);
     }
     case 'TAG_ASSIGN': {
-      const { list, site, tagId } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
+      const { site, tagId } = message.payload;
+      if (typeof site !== 'string' || typeof tagId !== 'string') {
         return state;
       }
-      return assignTagToSite(state, list, site, tagId);
+      return assignTagToSite(state, site, tagId);
     }
     case 'TAG_UNASSIGN': {
-      const { list, site, tagId } = message.payload;
-      if (!isListName(list) || typeof site !== 'string' || typeof tagId !== 'string') {
+      const { site, tagId } = message.payload;
+      if (typeof site !== 'string' || typeof tagId !== 'string') {
         return state;
       }
-      return unassignTagFromSite(state, list, site, tagId);
+      return unassignTagFromSite(state, site, tagId);
     }
     default:
       return state;

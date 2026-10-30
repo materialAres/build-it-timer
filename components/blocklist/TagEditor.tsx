@@ -99,8 +99,8 @@ function TagSiteRow({ domain, tagIds, tags }: TagSiteRowProps) {
               aria-label={i18n.t('blocklist.assignTag', [tag.label, domain])}
               onChange={() => {
                 const action = useAppStore.getState();
-                if (assigned) action.unassignTag('blocklist', domain, tag.id);
-                else action.assignTag('blocklist', domain, tag.id);
+                if (assigned) action.unassignTag(domain, tag.id);
+                else action.assignTag(domain, tag.id);
               }}
             />
             {tag.label}

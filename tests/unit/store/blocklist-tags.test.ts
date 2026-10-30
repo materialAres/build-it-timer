@@ -12,12 +12,9 @@ import {
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { Tag } from '@/store/store.types';
 
-const empty: BlocklistState = { allowlist: [], blocklist: [], customTags: [] };
-
 const focus: Tag = { id: 'focus', label: 'Focus' };
 
 const tagged: BlocklistState = {
-  allowlist: [],
   blocklist: [
     { domain: { value: 'instagram.com' }, tagIds: ['focus'] },
     { domain: { value: 'facebook.com' }, tagIds: [] },
@@ -52,57 +49,52 @@ describe('tag helpers (M3.T2)', () => {
   });
 
   describe('assignTagToSite', () => {
-    it('attaches the tag to the addressed site', () => {
-      const next = assignTagToSite(tagged, 'blocklist', 'facebook.com', 'focus');
+    it('attaches the tag to the site', () => {
+      const next = assignTagToSite(tagged, 'facebook.com', 'focus');
 
       expect(next.blocklist[1]?.tagIds).toEqual(['focus']);
     });
 
     it('normalizes a full URL to the canonical entry before assigning', () => {
-      const next = assignTagToSite(tagged, 'blocklist', 'https://m.facebook.com/x', 'focus');
+      const next = assignTagToSite(tagged, 'https://m.facebook.com/x', 'focus');
 
       expect(next.blocklist[1]?.tagIds).toEqual(['focus']);
     });
 
     it('is a no-op returning the same reference when already tagged, absent or invalid', () => {
-      expect(assignTagToSite(tagged, 'blocklist', 'instagram.com', 'focus')).toBe(tagged);
-      expect(assignTagToSite(tagged, 'blocklist', 'nope.com', 'focus')).toBe(tagged);
-      expect(assignTagToSite(tagged, 'blocklist', 'co.uk', 'focus')).toBe(tagged);
-      expect(assignTagToSite(tagged, 'blocklist', 'facebook.com', '')).toBe(tagged);
+      expect(assignTagToSite(tagged, 'instagram.com', 'focus')).toBe(tagged);
+      expect(assignTagToSite(tagged, 'nope.com', 'focus')).toBe(tagged);
+      expect(assignTagToSite(tagged, 'co.uk', 'focus')).toBe(tagged);
+      expect(assignTagToSite(tagged, 'facebook.com', '')).toBe(tagged);
     });
 
-    it('targets the addressed list only', () => {
-      const allowed: BlocklistState = {
-        ...empty,
-        allowlist: [{ domain: { value: 'facebook.com' }, tagIds: [] }],
-      };
+    it('only ever writes the single blocklist (CR1.T5a)', () => {
+      const next = assignTagToSite(tagged, 'facebook.com', 'focus');
 
-      const next = assignTagToSite(allowed, 'allowlist', 'facebook.com', 'focus');
-
-      expect(next.allowlist[0]?.tagIds).toEqual(['focus']);
-      expect(next.blocklist).toEqual([]);
+      expect(next.blocklist[1]?.tagIds).toEqual(['focus']);
+      expect(Object.keys(next).sort()).toEqual(['blocklist', 'customTags']);
     });
 
     it('does not mutate the input state (pure)', () => {
       const before = structuredClone(tagged);
 
-      assignTagToSite(tagged, 'blocklist', 'facebook.com', 'focus');
+      assignTagToSite(tagged, 'facebook.com', 'focus');
 
       expect(tagged).toEqual(before);
     });
   });
 
   describe('unassignTagFromSite', () => {
-    it('detaches the tag from the addressed site', () => {
-      const next = unassignTagFromSite(tagged, 'blocklist', 'x.com', 'focus');
+    it('detaches the tag from the site', () => {
+      const next = unassignTagFromSite(tagged, 'x.com', 'focus');
 
       expect(next.blocklist[2]?.tagIds).toEqual(['other']);
     });
 
     it('is a no-op returning the same reference when not tagged or invalid', () => {
-      expect(unassignTagFromSite(tagged, 'blocklist', 'facebook.com', 'focus')).toBe(tagged);
-      expect(unassignTagFromSite(tagged, 'blocklist', 'nope.com', 'focus')).toBe(tagged);
-      expect(unassignTagFromSite(tagged, 'blocklist', 'co.uk', 'focus')).toBe(tagged);
+      expect(unassignTagFromSite(tagged, 'facebook.com', 'focus')).toBe(tagged);
+      expect(unassignTagFromSite(tagged, 'nope.com', 'focus')).toBe(tagged);
+      expect(unassignTagFromSite(tagged, 'co.uk', 'focus')).toBe(tagged);
     });
   });
 
@@ -189,12 +181,12 @@ describe('tag store actions (M3.T2)', () => {
     const store = createStore(sendMutation);
     store.setState({ blocklist: tagged });
 
-    store.getState().assignTag('blocklist', 'facebook.com', 'focus');
+    store.getState().assignTag('facebook.com', 'focus');
 
     expect(store.getState().blocklist.blocklist[1]?.tagIds).toEqual(['focus']);
     expect(sendMutation).toHaveBeenCalledWith({
       type: 'TAG_ASSIGN',
-      payload: { list: 'blocklist', site: 'facebook.com', tagId: 'focus' },
+      payload: { site: 'facebook.com', tagId: 'focus' },
     });
   });
 
@@ -203,7 +195,7 @@ describe('tag store actions (M3.T2)', () => {
     const store = createStore(sendMutation);
     store.setState({ blocklist: tagged });
 
-    store.getState().assignTag('blocklist', 'instagram.com', 'focus');
+    store.getState().assignTag('instagram.com', 'focus');
 
     expect(sendMutation).not.toHaveBeenCalled();
   });
@@ -213,12 +205,12 @@ describe('tag store actions (M3.T2)', () => {
     const store = createStore(sendMutation);
     store.setState({ blocklist: tagged });
 
-    store.getState().unassignTag('blocklist', 'x.com', 'focus');
+    store.getState().unassignTag('x.com', 'focus');
 
     expect(store.getState().blocklist.blocklist[2]?.tagIds).toEqual(['other']);
     expect(sendMutation).toHaveBeenCalledWith({
       type: 'TAG_UNASSIGN',
-      payload: { list: 'blocklist', site: 'x.com', tagId: 'focus' },
+      payload: { site: 'x.com', tagId: 'focus' },
     });
   });
 });

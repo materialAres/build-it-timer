@@ -136,7 +136,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
     // malus removes one character net.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     });
     tabEventSource.emitUpdated({ id: 1, url: 'https://facebook.com/' });
     now = T0 + TICK_MS;
@@ -158,7 +158,7 @@ describe('malus linked to building destruction (M2.T16)', () => {
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { list: 'blocklist', site: 'facebook.com' },
+      payload: { site: 'facebook.com' },
     });
     await store.getState().startTimer();
     store.getState().growCityByTicks(4);

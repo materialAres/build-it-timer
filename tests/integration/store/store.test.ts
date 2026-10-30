@@ -26,8 +26,7 @@ describe('useAppStore', () => {
 
     expect(state.timer.status).toBe('idle');
     expect(state.timer.sessionId).toBeNull();
-    expect(state.blocklist.blocklist).toEqual([]);
-    expect(state.blocklist.allowlist).toEqual([]);
+    expect(state.blocklist).toEqual({ blocklist: [], customTags: [] });
     expect(state.score.level).toBe('excellent');
     expect(state.city.layers.background.width).toBeGreaterThan(0);
     expect(state.sessionHistory.sessions).toEqual([]);
@@ -101,13 +100,21 @@ describe('useAppStore', () => {
       blocklist: { ...store.getState().blocklist, customTags: [testTag] },
     });
 
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      expect(raw[STORE_NAME]).toBeTypeOf('string');
+    });
     const raw = await fakeBrowser.storage.local.get(STORE_NAME);
     const parsed = JSON.parse(raw[STORE_NAME] as string) as {
       state: Record<string, unknown>;
+      version: number;
     };
 
     expect(parsed.state).toHaveProperty('blocklist');
     expect(parsed.state).not.toHaveProperty('ui');
+    // CR1.T3: the persisted payload carries the single-list shape at version 2.
+    expect(parsed.version).toBe(2);
+    expect(parsed.state.blocklist).toEqual({ blocklist: [], customTags: [testTag] });
   });
 
   it('exposes granular per-slice selectors', () => {
@@ -172,7 +179,7 @@ describe('useAppStore', () => {
           ...persisted,
           blocklist: { ...persisted.blocklist, customTags: [testTag] },
         },
-        version: 1,
+        version: 2,
       }),
     });
     await store.persist.rehydrate();
@@ -213,5 +220,120 @@ describe('useAppStore', () => {
     // …while every persisted value is still restored.
     expect(store.getState().timer.remainingSeconds).toBe(420);
     expect(store.getState().blocklist.customTags).toEqual([testTag]);
+  });
+
+  it('migrates a version-1 payload to the single-list shape (CR1.T3)', async () => {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          blocklist: {
+            allowlist: [{ domain: { value: 'facebook.com' }, tagIds: [] }],
+            blocklist: [
+              { domain: { value: 'facebook.com' }, tagIds: ['focus'] },
+              { domain: { value: 'x.com' }, tagIds: [] },
+            ],
+            customTags: [testTag],
+          },
+        },
+        version: 1,
+      }),
+    });
+
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    // The domain was on both lists: it stays unblocked (old allowlist-wins).
+    expect(store.getState().blocklist.blocklist.map((item) => item.domain.value)).toEqual([
+      'x.com',
+    ]);
+    // The legacy list itself is not resurrected in memory.
+    expect('allowlist' in store.getState().blocklist).toBe(false);
+    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+  });
+
+  it('drops an allowlist-only domain during migration (CR1.T3)', async () => {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          blocklist: {
+            allowlist: [{ domain: { value: 'keep.com' }, tagIds: [] }],
+            blocklist: [{ domain: { value: 'x.com' }, tagIds: [] }],
+            customTags: [],
+          },
+        },
+        version: 1,
+      }),
+    });
+
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    expect(store.getState().blocklist.blocklist.map((item) => item.domain.value)).toEqual([
+      'x.com',
+    ]);
+    expect('allowlist' in store.getState().blocklist).toBe(false);
+  });
+
+  it('passes a version-2 payload through unchanged (CR1.T3)', async () => {
+    const persistedBlocklist = {
+      blocklist: [{ domain: { value: 'facebook.com' }, tagIds: ['focus'] }],
+      customTags: [testTag],
+    };
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: { blocklist: persistedBlocklist },
+        version: 2,
+      }),
+    });
+
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    expect(store.getState().blocklist.blocklist).toEqual(persistedBlocklist.blocklist);
+    expect(store.getState().blocklist.customTags).toEqual(persistedBlocklist.customTags);
+    expect('allowlist' in store.getState().blocklist).toBe(false);
+  });
+
+  it('falls back to defaults for a malformed legacy blocklist (CR1.T3)', async () => {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: { blocklist: { allowlist: 'nope', blocklist: 'nope' } },
+        version: 1,
+      }),
+    });
+
+    const store = createAppStore();
+    await expect(store.persist.rehydrate()).resolves.toBeUndefined();
+
+    expect(store.getState().blocklist.blocklist).toEqual([]);
+    expect(store.getState().blocklist.customTags).toEqual([]);
+  });
+
+  it('persists only the single-list shape at version 2 (CR1.T3)', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    await store.setState({
+      blocklist: {
+        blocklist: [{ domain: { value: 'x.com' }, tagIds: [] }],
+        customTags: [testTag],
+      },
+    });
+
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      expect(raw[STORE_NAME]).toBeTypeOf('string');
+    });
+    const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+    const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+      state: { blocklist: Record<string, unknown> };
+      version: number;
+    };
+
+    expect(parsed.version).toBe(2);
+    expect(parsed.state.blocklist).toEqual({
+      blocklist: [{ domain: { value: 'x.com' }, tagIds: [] }],
+      customTags: [testTag],
+    });
+    expect(Object.keys(parsed.state.blocklist).sort()).toEqual(['blocklist', 'customTags']);
   });
 });

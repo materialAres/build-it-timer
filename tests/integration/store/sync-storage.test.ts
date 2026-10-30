@@ -9,7 +9,10 @@ const testTag: Tag = { id: 'focus', label: 'Focus' };
 function serialize(state: {
   blocklist: { customTags: ReadonlyArray<Tag> };
 }): string {
-  return JSON.stringify({ state, version: 1 });
+  // Version 2 (CR1.T3): a matching version keeps hydration read-only. A legacy
+  // version would make zustand write the migrated state back once (by design),
+  // which would add a second `set` to the no-echo assertions below.
+  return JSON.stringify({ state, version: 2 });
 }
 
 describe('attachStoreSync (M1.T8)', () => {

@@ -1,12 +1,7 @@
 import { i18n } from '#i18n';
 import { useState, type SyntheticEvent } from 'react';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
-import {
-  selectAllowlist,
-  selectBlocklist,
-  useAppStore,
-  type BlocklistListName,
-} from '@/store';
+import { selectBlocklist, useAppStore } from '@/store';
 
 /**
  * The list's own stylesheet, consistent with the CRT/monospace look used by the
@@ -75,55 +70,30 @@ const SITE_LIST_STYLES = `
   }
 `;
 
-const LIST_KEYS = {
-  blocklist: {
-    title: 'blocklist.blockedSites',
-    name: 'blocklist.blocklistName',
-    otherName: 'blocklist.allowlistName',
-  },
-  allowlist: {
-    title: 'blocklist.allowedSites',
-    name: 'blocklist.allowlistName',
-    otherName: 'blocklist.blocklistName',
-  },
-} as const satisfies Record<
-  BlocklistListName,
-  { readonly title: string; readonly name: string; readonly otherName: string }
->;
-
 interface Feedback {
   readonly kind: 'error' | 'info';
   readonly text: string;
 }
 
-export interface SiteListProps {
-  readonly list: BlocklistListName;
-}
-
 /**
- * Site CRUD UI for one list (M3.T3, `blocklist` or `allowlist`).
+ * Site CRUD UI for the blocklist (M3.T3, revised by CR1.T1).
  *
- * Presentational and generic over the list: it reads the entries through the
- * granular selectors and never computes list state itself. The input is
- * canonicalized live with `normalizeEntry` (M1.T2/M2.T21) both to preview the
- * registrable domain and to validate: an unparseable input or a "bare" public
- * suffix is rejected with the localized `blocklist.invalidUrl` message ("Enter a
- * valid URL" in the EN default) and is never dispatched. Duplicates and appends
- * to the opposite list are detected here only to produce the visible feedback;
- * the authoritative dedup and allowlist/blocklist mutual exclusion stay in the
- * store's pure helpers (M2.T4/M2.T20), so the UI cannot create a double entry
- * even if it tried.
+ * Presentational: it reads the entries through the granular selector and never
+ * computes list state itself. The input is canonicalized live with
+ * `normalizeEntry` (M1.T2/M2.T21) both to preview the registrable domain and to
+ * validate: an unparseable input or a "bare" public suffix is rejected with the
+ * localized `blocklist.invalidUrl` message ("Enter a valid URL" in the EN
+ * default) and is never dispatched. Duplicates are detected here only to produce
+ * the visible feedback; the authoritative dedup stays in the store's pure
+ * helpers (M2.T4).
  */
-export function SiteList({ list }: SiteListProps) {
-  const entries = useAppStore(list === 'allowlist' ? selectAllowlist : selectBlocklist);
-  const otherEntries = useAppStore(list === 'allowlist' ? selectBlocklist : selectAllowlist);
+export function SiteList() {
+  const entries = useAppStore(selectBlocklist);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-  const keys = LIST_KEYS[list];
-  const title = i18n.t(keys.title);
-  const listName = i18n.t(keys.name);
-  const otherListName = i18n.t(keys.otherName);
+  const title = i18n.t('blocklist.blockedSites');
+  const listName = i18n.t('blocklist.blocklistName');
   const preview = normalizeEntry(value.trim());
   const previewDomain = preview.ok ? preview.value : null;
 
@@ -142,14 +112,8 @@ export function SiteList({ list }: SiteListProps) {
       });
       return;
     }
-    const moved = otherEntries.some((entry) => entry.domain.value === domain);
-    useAppStore.getState().addSite(list, domain);
-    setFeedback({
-      kind: 'info',
-      text: moved
-        ? i18n.t('blocklist.movedFromList', [domain, otherListName])
-        : i18n.t('blocklist.added', [domain]),
-    });
+    useAppStore.getState().addSite(domain);
+    setFeedback({ kind: 'info', text: i18n.t('blocklist.added', [domain]) });
     setValue('');
   };
 
@@ -199,7 +163,7 @@ export function SiteList({ list }: SiteListProps) {
               type="button"
               aria-label={i18n.t('common.remove', [entry.domain.value])}
               onClick={() => {
-                useAppStore.getState().removeSite(list, entry.domain.value);
+                useAppStore.getState().removeSite(entry.domain.value);
               }}
             >
               ×

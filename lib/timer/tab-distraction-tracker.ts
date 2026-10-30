@@ -21,7 +21,7 @@ export interface TabEventSource {
 
 export interface DistractionTrackerDependencies {
   readonly eventSource: TabEventSource;
-  /** Whether a URL is a blocked site that must accrue malus (allowlist wins). */
+  /** Whether a URL is a blocked site that must accrue malus. */
   readonly isDistractedUrl: (url: string | undefined) => boolean;
   /** Clock (injectable for deterministic tests). */
   readonly now: () => number;

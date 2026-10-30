@@ -9,7 +9,6 @@ import { buildDnrRules, type DnrRule } from './rules';
 export interface BlockingRulesSource {
   readonly timer: { readonly status: TimerStatus };
   readonly blocklist: {
-    readonly allowlist: ReadonlyArray<BlocklistEntry>;
     readonly blocklist: ReadonlyArray<BlocklistEntry>;
   };
 }
@@ -56,7 +55,7 @@ export function createBrowserRuleApplier(): RuleApplier {
  */
 export function selectActiveRules(state: BlockingRulesSource): DnrRule[] {
   if (state.timer.status !== 'running') return [];
-  return buildDnrRules(state.blocklist.blocklist, state.blocklist.allowlist);
+  return buildDnrRules(state.blocklist.blocklist);
 }
 
 /**

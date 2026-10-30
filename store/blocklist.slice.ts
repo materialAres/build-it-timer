@@ -6,8 +6,6 @@ import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
 import type { BlocklistEntry, Preset, Tag } from './store.types';
 import type { AppState } from '.';
 
-export type BlocklistListName = 'allowlist' | 'blocklist';
-
 export interface BlocklistSlice {
   readonly blocklist: BlocklistState;
   /**
@@ -19,30 +17,34 @@ export interface BlocklistSlice {
    */
   readonly applyPreset: (presetId: string) => void;
   /**
-   * Add a single site to one list (M3.T3). Normalization (M2.T4/M2.T21), dedup
-   * and allow/block mutual exclusion (M2.T20) live in the pure helper; the
-   * action only applies it and forwards one mutation. A duplicate add or an
-   * invalid site is a silent no-op (same reference), so nothing is persisted.
+   * Add a single site to the blocklist (M3.T3). Normalization (M2.T4/M2.T21)
+   * and dedup live in the pure helper; the action only applies it and forwards
+   * one mutation. A duplicate add or an invalid site is a silent no-op (same
+   * reference), so nothing is persisted.
    */
-  readonly addSite: (list: BlocklistListName, site: string) => void;
-  /** Remove a single site from one list (M3.T3). */
-  readonly removeSite: (list: BlocklistListName, site: string) => void;
+  readonly addSite: (site: string) => void;
+  /** Remove a single site from the blocklist (M3.T3). */
+  readonly removeSite: (site: string) => void;
   /**
    * Create a custom tag (M3.T2) after a case-insensitive duplicate-label check.
    * The id is minted from the injected clock/entropy (never in the component),
    * so the UI stays presentational. Locally optimistic update + one mutation.
    */
   readonly createTag: (label: string) => void;
-  /** Delete a tag and detach it from every site (M3.T2). */
+  /** Delete a tag and detach it from every blocklisted site (M3.T2). */
   readonly deleteTag: (tagId: string) => void;
   /** Assign an existing tag to a single site (M3.T2). */
-  readonly assignTag: (list: BlocklistListName, site: string, tagId: string) => void;
+  readonly assignTag: (site: string, tagId: string) => void;
   /** Remove a tag from a single site (M3.T2). */
-  readonly unassignTag: (list: BlocklistListName, site: string, tagId: string) => void;
+  readonly unassignTag: (site: string, tagId: string) => void;
 }
 
+/**
+ * The blocklist state (CR1.T5a): exactly one list of blocked sites plus the
+ * user's custom tags. It is also the persisted shape from version 2 onward, so
+ * the in-memory state and the stored payload cannot drift apart.
+ */
 export interface BlocklistState {
-  readonly allowlist: ReadonlyArray<BlocklistEntry>;
   readonly blocklist: ReadonlyArray<BlocklistEntry>;
   readonly customTags: ReadonlyArray<Tag>;
 }
@@ -64,14 +66,14 @@ export const createBlocklistSlice =
     dependencies: BlocklistDependencies = {},
   ): StateCreator<AppState, [], [], BlocklistSlice> =>
   (set, get) => ({
-    blocklist: { allowlist: [], blocklist: [], customTags: [] },
+    blocklist: { blocklist: [], customTags: [] },
     applyPreset(presetId) {
       const preset = getPresetById(presetId);
       if (preset === undefined) return;
 
       // One transformation, one `set`: the whole preset is expanded at once.
       const current = get().blocklist;
-      const next = addPresetToList(current, 'blocklist', preset);
+      const next = addPresetToBlocklist(current, preset);
       if (next !== current) set({ blocklist: next });
 
       // One message, not one per domain: the background applies the identical
@@ -81,22 +83,22 @@ export const createBlocklistSlice =
         payload: { presetId },
       });
     },
-    addSite(list, site) {
+    addSite(site) {
       applyBlocklistMutation(
         set,
         get,
         dependencies,
-        { type: 'BLOCKLIST_ADD_SITE', payload: { list, site } },
-        (current) => addSiteToList(current, list, site),
+        { type: 'BLOCKLIST_ADD_SITE', payload: { site } },
+        (current) => addBlocklistSite(current, site),
       );
     },
-    removeSite(list, site) {
+    removeSite(site) {
       applyBlocklistMutation(
         set,
         get,
         dependencies,
-        { type: 'BLOCKLIST_REMOVE_SITE', payload: { list, site } },
-        (current) => removeSiteFromList(current, list, site),
+        { type: 'BLOCKLIST_REMOVE_SITE', payload: { site } },
+        (current) => removeBlocklistSite(current, site),
       );
     },
     createTag(label) {
@@ -104,7 +106,8 @@ export const createBlocklistSlice =
       const current = get().blocklist;
       // Reject blank and case-insensitive duplicate labels with no write and no
       // mutation: the label is the tag's user-facing identity (M3.T2).
-      if (trimmed.length === 0 || hasTagLabel(current.customTags, trimmed)) return;
+      if (trimmed.length === 0 || hasTagLabel(current.customTags, trimmed))
+        return;
 
       const now = dependencies.now ?? Date.now;
       const random = dependencies.random ?? Math.random;
@@ -118,22 +121,34 @@ export const createBlocklistSlice =
       set({ blocklist: removeTag(current, tagId) });
       dependencies.sendMutation?.({ type: 'TAG_REMOVE', payload: { tagId } });
     },
-    assignTag(list, site, tagId) {
-      applyBlocklistMutation(set, get, dependencies, {
-        type: 'TAG_ASSIGN',
-        payload: { list, site, tagId },
-      }, (current) => assignTagToSite(current, list, site, tagId));
+    assignTag(site, tagId) {
+      applyBlocklistMutation(
+        set,
+        get,
+        dependencies,
+        {
+          type: 'TAG_ASSIGN',
+          payload: { site, tagId },
+        },
+        (current) => assignTagToSite(current, site, tagId),
+      );
     },
-    unassignTag(list, site, tagId) {
-      applyBlocklistMutation(set, get, dependencies, {
-        type: 'TAG_UNASSIGN',
-        payload: { list, site, tagId },
-      }, (current) => unassignTagFromSite(current, list, site, tagId));
+    unassignTag(site, tagId) {
+      applyBlocklistMutation(
+        set,
+        get,
+        dependencies,
+        {
+          type: 'TAG_UNASSIGN',
+          payload: { site, tagId },
+        },
+        (current) => unassignTagFromSite(current, site, tagId),
+      );
     },
   });
 
 /**
- * Shared optimistic-update plumbing for the tag assignment actions (M3.T2):
+ * Shared optimistic-update plumbing for the blocklist mutations (M3.T2):
  * apply the pure transformation, `set` only when something actually changed
  * (identity check, the same no-op discipline as M1.T10/M3.T1) and forward the
  * mutation to the background only in that case.
@@ -167,116 +182,76 @@ function applyBlocklistMutation(
 //
 // The DNR side-effect is owned by M2.T7.
 
-const toEntry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
+const toEntry = (domain: string): BlocklistEntry => ({
+  domain: { value: domain },
+  tagIds: [],
+});
 
-const hasSite = (entries: ReadonlyArray<BlocklistEntry>, domain: string): boolean =>
-  entries.some((entry) => entry.domain.value === domain);
-
-const oppositeList = (list: BlocklistListName): BlocklistListName =>
-  list === 'allowlist' ? 'blocklist' : 'allowlist';
-
-/**
- * Enforce the allowlist/blocklist precedence on a state that may already hold
- * the same canonical domain in both lists (a preset expansion, an import, or a
- * pre-existing persisted state — none of which go through `addSiteToList`).
- *
- * **The allowlist always wins** (M2.T6/M2.T8): a domain present in the allowlist
- * is dropped from the blocklist; the allowlist is never touched. Returns the
- * *same* reference when there is no residual conflict, so the caller can skip a
- * write (same identity pattern as M1.T10/M2.T10).
- */
-export function resolveListConflicts(state: BlocklistState): BlocklistState {
-  const allowed = new Set(state.allowlist.map((entry) => entry.domain.value));
-  const blocklist = state.blocklist.filter((entry) => !allowed.has(entry.domain.value));
-  if (blocklist.length === state.blocklist.length) return state;
-  return { ...state, blocklist };
-}
+const hasSite = (
+  entries: ReadonlyArray<BlocklistEntry>,
+  domain: string,
+): boolean => entries.some((entry) => entry.domain.value === domain);
 
 /**
- * Add a site to one list, enforcing **mutual exclusion** (M2.T20): a canonical
- * domain can never live in both lists at once, so adding it to one list *moves*
- * it out of the other (the "move" resolution the UI offers). The comparison is
- * on the already-normalized domain (M1.T2/M2.T4), so `https://m.` and `www.`
- * variants of the same registrable domain collapse onto one another.
- *
- * A duplicate add to the list that already holds the domain, with no residual
- * conflict, is a no-op returning the same reference (M1.T10/M2.T4). Because a
- * moved entry keeps its `tagIds`, an allow/block switch does not silently lose
- * the tags a user attached to the site. A residual conflict present elsewhere in
- * the state is healed in passing (`resolveListConflicts`): every add returns a
- * conflict-free state.
+ * Add a site to the blocklist (M2.T4), comparing on the already-normalized
+ * domain so `https://m.` and `www.` variants of the same registrable domain
+ * collapse onto one entry. A duplicate, like an invalid site, is a no-op that
+ * returns the same reference (M1.T10).
  */
-export function addSiteToList(
+export function addBlocklistSite(
   state: BlocklistState,
-  list: BlocklistListName,
   site: string,
 ): BlocklistState {
   const normalized = normalizeEntry(site);
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  const other = oppositeList(list);
-  const alreadyInTarget = hasSite(state[list], domain);
-  const inOther = state[other].find((entry) => entry.domain.value === domain);
-
-  if (alreadyInTarget && inOther === undefined) return state;
-
-  const target = alreadyInTarget
-    ? state[list]
-    : [...state[list], inOther ?? toEntry(domain)];
-
-  return resolveListConflicts({
-    ...state,
-    [other]:
-      inOther === undefined
-        ? state[other]
-        : state[other].filter((entry) => entry.domain.value !== domain),
-    [list]: target,
-  });
+  if (hasSite(state.blocklist, domain)) return state;
+  return { ...state, blocklist: [...state.blocklist, toEntry(domain)] };
 }
 
 /**
- * Expand a whole preset (M2.T5) into the target list in one pass (M3.T1).
+ * Expand a whole preset (M2.T5) into the blocklist in one pass (M3.T1).
  *
- * Each domain goes through `addSiteToList`, so normalization (M2.T4), dedup and
- * mutual exclusion with the other list (M2.T20) are reused rather than
- * reimplemented — applying two presets with an overlapping domain yields a
- * single entry, never a duplicate. The preset's `tag` is attached to every
- * domain it contributes (the purpose M2.T5 gave that field), so a preset's sites
- * can later be filtered like any other tagged entry (M3.T2).
+ * Each domain goes through `addBlocklistSite`, so normalization (M2.T4) and
+ * dedup are reused rather than reimplemented — applying two presets with an
+ * overlapping domain yields a single entry, never a duplicate. The preset's
+ * `tag` is attached to every domain it contributes (the purpose M2.T5 gave that
+ * field), so a preset's sites can later be filtered like any other tagged entry
+ * (M3.T2).
  *
  * Returns the *same* reference when nothing changes (an unknown/empty preset or
  * an already-applied one), so callers can skip a write/re-render.
  */
-export function addPresetToList(
+export function addPresetToBlocklist(
   state: BlocklistState,
-  list: BlocklistListName,
   preset: Preset,
 ): BlocklistState {
   let next = state;
   for (const domain of preset.domains) {
-    next = addSiteToList(next, list, domain.value);
+    next = addBlocklistSite(next, domain.value);
   }
-  return attachPresetTag(next, list, preset);
+  return attachPresetTag(next, preset);
 }
 
 function attachPresetTag(
   state: BlocklistState,
-  list: BlocklistListName,
   preset: Preset,
 ): BlocklistState {
   const values = new Set(preset.domains.map((domain) => domain.value));
-  const entries = state[list].map((entry) => {
-    if (!values.has(entry.domain.value) || entry.tagIds.includes(preset.tag.id)) return entry;
+  const entries = state.blocklist.map((entry) => {
+    if (!values.has(entry.domain.value) || entry.tagIds.includes(preset.tag.id))
+      return entry;
     return { ...entry, tagIds: [...entry.tagIds, preset.tag.id] };
   });
-  const changed = entries.some((entry, index) => entry !== state[list][index]);
-  return changed ? { ...state, [list]: entries } : state;
+  const changed = entries.some(
+    (entry, index) => entry !== state.blocklist[index],
+  );
+  return changed ? { ...state, blocklist: entries } : state;
 }
 
-export function removeSiteFromList(
+export function removeBlocklistSite(
   state: BlocklistState,
-  list: BlocklistListName,
   site: string,
 ): BlocklistState {
   // Normalize on removal too, so a full URL (`https://m.facebook.com/x`) removes
@@ -285,27 +260,35 @@ export function removeSiteFromList(
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  const next = state[list].filter((entry) => entry.domain.value !== domain);
+  const next = state.blocklist.filter((entry) => entry.domain.value !== domain);
   // Same reference when nothing matched, so a removal of an absent site skips
   // the write/mutation (identity pattern of M1.T10/M2.T20) instead of persisting
   // a new-but-equal state.
-  return next.length === state[list].length ? state : { ...state, [list]: next };
+  return next.length === state.blocklist.length
+    ? state
+    : { ...state, blocklist: next };
 }
 
 export function upsertTag(state: BlocklistState, tag: Tag): BlocklistState {
-  const existing = state.customTags.some((candidate) => candidate.id === tag.id);
+  const existing = state.customTags.some(
+    (candidate) => candidate.id === tag.id,
+  );
   const customTags = existing
-    ? state.customTags.map((candidate) => (candidate.id === tag.id ? tag : candidate))
+    ? state.customTags.map((candidate) =>
+        candidate.id === tag.id ? tag : candidate,
+      )
     : [...state.customTags, tag];
   return { ...state, customTags };
 }
 
-export function removeTag(state: BlocklistState, tagId: string): BlocklistState {
+export function removeTag(
+  state: BlocklistState,
+  tagId: string,
+): BlocklistState {
   return {
     ...state,
     customTags: state.customTags.filter((tag) => tag.id !== tagId),
     // Detach the tag from every site so no entry keeps a dangling reference.
-    allowlist: state.allowlist.map((entry) => withoutTag(entry, tagId)),
     blocklist: state.blocklist.map((entry) => withoutTag(entry, tagId)),
   };
 }
@@ -344,7 +327,6 @@ export function hasTagLabel(tags: ReadonlyArray<Tag>, label: string): boolean {
  */
 export function assignTagToSite(
   state: BlocklistState,
-  list: BlocklistListName,
   site: string,
   tagId: string,
 ): BlocklistState {
@@ -353,13 +335,15 @@ export function assignTagToSite(
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  const entries = state[list].map((entry) =>
+  const entries = state.blocklist.map((entry) =>
     entry.domain.value === domain && !entry.tagIds.includes(tagId)
       ? { ...entry, tagIds: [...entry.tagIds, tagId] }
       : entry,
   );
-  const changed = entries.some((entry, index) => entry !== state[list][index]);
-  return changed ? { ...state, [list]: entries } : state;
+  const changed = entries.some(
+    (entry, index) => entry !== state.blocklist[index],
+  );
+  return changed ? { ...state, blocklist: entries } : state;
 }
 
 /**
@@ -368,7 +352,6 @@ export function assignTagToSite(
  */
 export function unassignTagFromSite(
   state: BlocklistState,
-  list: BlocklistListName,
   site: string,
   tagId: string,
 ): BlocklistState {
@@ -376,13 +359,15 @@ export function unassignTagFromSite(
   if (!normalized.ok) return state;
 
   const domain = normalized.value;
-  const entries = state[list].map((entry) =>
+  const entries = state.blocklist.map((entry) =>
     entry.domain.value === domain && entry.tagIds.includes(tagId)
       ? withoutTag(entry, tagId)
       : entry,
   );
-  const changed = entries.some((entry, index) => entry !== state[list][index]);
-  return changed ? { ...state, [list]: entries } : state;
+  const changed = entries.some(
+    (entry, index) => entry !== state.blocklist[index],
+  );
+  return changed ? { ...state, blocklist: entries } : state;
 }
 
 /**
@@ -395,10 +380,6 @@ export function filterEntriesByTag(
 ): ReadonlyArray<BlocklistEntry> {
   return entries.filter((entry) => entry.tagIds.includes(tagId));
 }
-
-export const selectAllowlist = (
-  state: BlocklistSlice,
-): ReadonlyArray<BlocklistEntry> => state.blocklist.allowlist;
 
 export const selectBlocklist = (
   state: BlocklistSlice,

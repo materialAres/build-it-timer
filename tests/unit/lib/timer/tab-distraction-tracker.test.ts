@@ -104,8 +104,8 @@ describe('tab distraction tracker (M2.T10)', () => {
     const { eventSource, tracker, advanceBy } = createHarness(['facebook.com']);
     await tracker.ready;
 
-    // The predicate owns the M2.T6/M2.T8 precedence (allowlist wins); the
-    // tracker must not second-guess it.
+    // The predicate owns the blocked/not-blocked decision; the tracker must
+    // not second-guess it.
     eventSource.emitUpdated({ id: 1, url: 'https://example.com/' });
     advanceBy(5_000);
 
