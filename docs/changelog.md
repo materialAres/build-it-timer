@@ -101,7 +101,7 @@ description: Rules for updating the changelog
 | CR1.T5a | Collapse the store model and runtime call sites to a single blocklist | completed | `9738e4f` |
 | CR1.T5b | Migrate the store and component tests to the single blocklist | completed | `a3592ce` |
 | CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | `87c0a68` |
-| CR1.T6 | Cleanup, documentation, regression coverage, and final verification | completed | — (to be committed) |
+| CR1.T6 | Cleanup, documentation, regression coverage, and final verification | completed | `1012992` |
 
 ---
 
@@ -1074,7 +1074,7 @@ description: Rules for updating the changelog
 - Tests: no test changed in this task (regression coverage is provided by the suite migrated in CR1.T5b/T5c). Full gate: `bun run test` → **696 passing tests across 74 files**; `bun run compile` clean; `bun run lint` clean; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → 1 passing test.
 - Relevant notes/decisions: the change request is closed here. The remaining mentions are intentional: version-1 data must still be readable, so `migrateBlocklistState` keeps reading the legacy field and the raw fixtures keep covering it. The roadmap's §2.4 table is the single source of truth for the superseded acceptance criteria; the per-card notes link to it.
 - Acceptance criteria: verified — the search returns only the allowed categories, the README and the project instructions describe a blocklist only, the changelog records every CR1 task with real counts, the full gate including e2e is green, and the historical cards are marked superseded.
-- Commit: — (to be committed).
+- Commit: `1012992 feat(CR1.T6): complete removal of allowlist references and update documentation for blocklist-only functionality`.
 
 ---
 
