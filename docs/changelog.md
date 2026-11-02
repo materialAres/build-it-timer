@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T6** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed** — the blocklist is the only site list in the UI, protocol, persisted data, enforcement, tests and docs (CR1.T1–CR1.T6); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR2.T1** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` at the store layer (CR2.T1), with the background, UI and documentation tasks remaining; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -17,8 +17,9 @@ description: Rules for updating the changelog
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
+- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1 done; CR2.T2, CR2.T3a–c and CR2.T4 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **696 passing tests** across 74 files (green).
+- Tests: `bun run test` → **726 passing tests** across 75 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -102,6 +103,7 @@ description: Rules for updating the changelog
 | CR1.T5b | Migrate the store and component tests to the single blocklist | completed | `a3592ce` |
 | CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | `87c0a68` |
 | CR1.T6 | Cleanup, documentation, regression coverage, and final verification | completed | `1012992` |
+| CR2.T1 | Lock the blocklist at the store layer | completed | — (to be committed) |
 
 ---
 
@@ -1075,6 +1077,17 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the change request is closed here. The remaining mentions are intentional: version-1 data must still be readable, so `migrateBlocklistState` keeps reading the legacy field and the raw fixtures keep covering it. The roadmap's §2.4 table is the single source of truth for the superseded acceptance criteria; the per-card notes link to it.
 - Acceptance criteria: verified — the search returns only the allowed categories, the README and the project instructions describe a blocklist only, the changelog records every CR1 task with real counts, the full gate including e2e is green, and the historical cards are marked superseded.
 - Commit: `1012992 feat(CR1.T6): complete removal of allowlist references and update documentation for blocklist-only functionality`.
+
+### CR2.T1 — Lock the blocklist at the store layer
+- `store/blocklist.slice.ts`: adds the pure predicate `isBlocklistEditable(status)` (true only for `idle`) and the `selectBlocklistEditable` selector (structural `BlocklistLockSource`), then applies the guard in `applyBlocklistMutation` — which covers `addSite`, `removeSite`, `assignTag`, `unassignTag` — and explicitly in `applyPreset`, `createTag` and `deleteTag`. A locked action returns before any `set(...)` and before `sendMutation(...)`: the state reference is unchanged, no subscriber is notified and no message is sent.
+- The pure mutation helpers (`addBlocklistSite`, `addPresetToBlocklist`, `removeBlocklistSite`, `upsertTag`, `removeTag`, `assignTagToSite`, `unassignTagFromSite`) are untouched and stay status-agnostic: the lock is a policy of the action, not of normalization.
+- `store/index.ts` re-exports `isBlocklistEditable`, `selectBlocklistEditable` and the `BlocklistLockSource` type.
+- Files created/modified: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/store/blocklist-lock.test.ts` (30 tests, unit) — predicate truth table for the four statuses, selector read, per-action locked cases for `running`/`paused`/`completed` (same state reference, no notification, no mutation) and per-action `idle` cases. Full run: `bun run test` → **726 passing tests across 75 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: the status check runs before validation, so a locked mutation is a silent no-op regardless of the payload. The existing store and component tests are unchanged and stay green because they run in `idle` (the component tests never set a timer status).
+- Acceptance criteria: verified — the predicate and selector are exported, all seven mutating actions are guarded, the pure helpers are untouched, the new file passes, and the full gate is green.
+- Commit: — (to be committed).
 
 ---
 

@@ -3,7 +3,7 @@ import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { getPresetById } from '@/lib/blocking/presets';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
-import type { BlocklistEntry, Preset, Tag } from './store.types';
+import type { BlocklistEntry, Preset, Tag, TimerStatus } from './store.types';
 import type { AppState } from '.';
 
 export interface BlocklistSlice {
@@ -50,6 +50,29 @@ export interface BlocklistState {
 }
 
 /**
+ * Whether the blocklist may be mutated (CR2.T1). Editing is configuration for
+ * the *next* session: once the timer leaves `idle` — running, paused or even
+ * completed — changing the list would let the user escape the block they asked
+ * for. The rule is a single predicate so the store, the background and the UI
+ * cannot drift apart.
+ */
+export function isBlocklistEditable(status: TimerStatus): boolean {
+  return status === 'idle';
+}
+
+/**
+ * The part of the app state the lock decision reads, declared structurally so
+ * the selector does not depend on the concrete store shape.
+ */
+export interface BlocklistLockSource {
+  readonly timer: { readonly status: TimerStatus };
+}
+
+export const selectBlocklistEditable = (
+  state: BlocklistLockSource,
+): boolean => isBlocklistEditable(state.timer.status);
+
+/**
  * Collaborators required to change the blocklist from a non-owner context
  * (M1.T10). Injectable (principle D) so the slice stays unit-testable without
  * the message bus; the store barrel supplies the real `sendMessage`.
@@ -68,6 +91,7 @@ export const createBlocklistSlice =
   (set, get) => ({
     blocklist: { blocklist: [], customTags: [] },
     applyPreset(presetId) {
+      if (!isBlocklistEditable(get().timer.status)) return;
       const preset = getPresetById(presetId);
       if (preset === undefined) return;
 
@@ -102,6 +126,7 @@ export const createBlocklistSlice =
       );
     },
     createTag(label) {
+      if (!isBlocklistEditable(get().timer.status)) return;
       const trimmed = label.trim();
       const current = get().blocklist;
       // Reject blank and case-insensitive duplicate labels with no write and no
@@ -116,6 +141,7 @@ export const createBlocklistSlice =
       dependencies.sendMutation?.({ type: 'TAG_UPSERT', payload: tag });
     },
     deleteTag(tagId) {
+      if (!isBlocklistEditable(get().timer.status)) return;
       const current = get().blocklist;
       if (!current.customTags.some((tag) => tag.id === tagId)) return;
       set({ blocklist: removeTag(current, tagId) });
@@ -160,6 +186,9 @@ function applyBlocklistMutation(
   message: MutationMessage,
   transform: (state: BlocklistState) => BlocklistState,
 ): void {
+  // CR2.T1: the lock is checked before anything else, so a locked mutation is a
+  // no-op even for an input that would otherwise be valid.
+  if (!isBlocklistEditable(get().timer.status)) return;
   const current = get().blocklist;
   const next = transform(current);
   if (next === current) return;
