@@ -224,6 +224,7 @@ Each task is a standalone card, with this fixed format:
 * **Nice to have**: no.
 
 #### M1.T10 — Cross-context mutation path: popup mutations routed to the background
+> **Amended by CR2** (see §2.5.3): blocklist/tag mutations are accepted only while the timer is `idle`; outside it they are dropped without persisting (CR2.T2).
 * **Objective**: let a read-only context (the popup) change persisted state by sending typed mutation messages that the background applies to its single writable store, with the change propagating back to the popup through M1.T8 — completing the CI-1 fix so the single-writer rule does not break the popup's ability to edit configuration.
 * **Files**: `lib/messaging/messages.types.ts` (add mutation variants to `RuntimeMessage`, e.g. `BLOCKLIST_ADD_SITE` / `BLOCKLIST_REMOVE_SITE` / `BLOCKLIST_APPLY_PRESET` / `TAG_UPSERT` / `TAG_REMOVE`), `lib/messaging/bus.ts` (M1.T6; typed send helper), `entrypoints/background.ts` (a mutation handler that applies the change to the writable store and persists it), `store/blocklist.slice.ts` (pure mutation helpers shared by both sides), `tests/integration/messaging/mutation-bus.test.ts`.
 * **Dependencies**: M1.T6, M1.T9.
@@ -477,6 +478,7 @@ Each task is a standalone card, with this fixed format:
 ### 1.6 Milestone 3 — Secondary features
 
 #### M3.T1 — `PresetPicker` (preset selection UI)
+> **Amended by CR2** (see §2.5.3): the preset buttons are disabled outside `idle` (CR2.T3a).
 * **Objective**: component that lists the presets (M2.T5) and allows applying them to the blocklist all at once.
 * **Files**: `components/blocklist/PresetPicker.tsx`
 * **Dependencies**: M2.T5, M2.T4
@@ -484,6 +486,7 @@ Each task is a standalone card, with this fixed format:
   - Selecting "Social" adds all the preset's domains to the blocklist in a single store action (not N separate actions causing N re-renders/persists).
 
 #### M3.T2 — `TagEditor` — custom categories via tags
+> **Amended by CR2** (see §2.5.3): tag creation, deletion and assignment are disabled outside `idle`; the tag filter stays usable (CR2.T3b).
 * **Objective**: UI to create/assign custom tags to a group of sites, to build custom presets.
 * **Files**: `components/blocklist/TagEditor.tsx`
 * **Dependencies**: M2.T4
@@ -492,6 +495,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M3.T3 — `SiteList` — site CRUD in allow/blocklist
 > **Superseded by CR1** (see §2.4): the component is blocklist-only — no generic list prop and no cross-list move feedback (CR1.T1).
+> **Amended by CR2** (see §2.5.3): the add form and the remove buttons are disabled outside `idle` (CR2.T3a).
 * **Objective**: manual management UI (add/remove a single domain), with real-time normalization via `tldts` in the input.
 * **Files**: `components/blocklist/SiteList.tsx`
 * **Dependencies**: M2.T4, M1.T2, M2.T20, M2.T21
@@ -525,6 +529,7 @@ Each task is a standalone card, with this fixed format:
 * **Notes/decisions**: the exact `distractionRatio` formula remains the roadmap §4 open point; this task consumes whatever ratio the existing score slice holds rather than defining the formula.
 
 #### M3.T4 — Popup `App.tsx` — full UI composition
+> **Amended by CR2** (see §2.5.3): the blocklist section also renders the single lock notice (CR2.T3c).
 * **Objective**: compose all components (timer, city, score, blocklist) in the main popup behind a **tab bar** (one section visible at a time), replacing the WXT starter UI.
 * **Files**: `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css` + `entrypoints/popup/style.css` (replace the WXT starter styles), `locales/en.yml` + `locales/it.yml` (new composition strings), `store/index.ts` (a `setActiveTab` action for the existing `ui.activeTab` field)
 * **Dependencies**: M2.T3, M2.T14, M2.T17, M2.T18, M2.T19, M3.T1, M3.T2, M3.T3, M3.T3b, M3.T3c, M3.T7, M3.T8
@@ -768,7 +773,7 @@ This section tracks change requests that modify already-planned or already-imple
 
 **Sequencing note.** The tasks are ordered so that the UI and protocol stop exposing the allowlist first, then persisted data is migrated, then enforcement stops reading it, then the state model is collapsed — split into the implementation (`CR1.T5a`) and two test-migration tasks of six test files each (`CR1.T5b`, `CR1.T5c`) so each diff stays reviewable. The final task is the verification gate for the whole change request. From CR1.T3 onward the migration must be in place before CR1.T4 changes blocking behavior.
 
-### 2.2 Task summary
+### 2.2 CR1 — Task summary
 
 | ID | Title | Dependencies |
 |---|---|---|
@@ -781,7 +786,7 @@ This section tracks change requests that modify already-planned or already-imple
 | CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | CR1.T5b |
 | CR1.T6 | Cleanup, documentation, regression coverage, and final verification | CR1.T5a, CR1.T5b, CR1.T5c |
 
-### 2.3 Task cards
+### 2.3 CR1 — Task cards
 
 #### CR1.T1 — Remove the allowlist from the popup UI and locales
 * **Objective**: remove every user-facing way to view or edit the allowlist, leaving one blocklist UI.
@@ -896,7 +901,7 @@ This section tracks change requests that modify already-planned or already-imple
   - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, and `bun run build:firefox` are green; run `bun run e2e` if the existing Playwright suite is available in the environment.
   - The change request is not considered complete until the full verification gate passes and the historical main-task cards that mention the allowlist are explicitly marked as superseded by this section.
 
-### 2.4 Superseded acceptance criteria in Section 1
+### 2.4 CR1 — Superseded acceptance criteria in Section 1
 
 The following main-task criteria are intentionally replaced by CR1. They remain in the document as history, but they must not be used to reintroduce the allowlist:
 
@@ -909,5 +914,117 @@ The following main-task criteria are intentionally replaced by CR1. They remain 
 | M2.T21 | Allowlist precedence during navigation normalization | Navigation matches the blocklist only (CR1.T4) |
 | M3.T3 | `SiteList` generic over allowlist/blocklist and move feedback | Single blocklist `SiteList` (CR1.T1) |
 | M5.T2 / M5.T3 | References to allowlist precedence in hardening criteria | Keep scheme/IDN/`urlFilter` hardening; drop allowlist precedence (CR1.T4) |
+
+### 2.5 Change request CR2 — Disable blocklist editing when the timer is not idle
+
+**Analysis.** The pre-change map of every write path (UI, store actions, background handler, persistence, i18n, tests) is `docs/features-analysis/blocklist-lock.md`; the decisions below follow its recommendations.
+
+**Goal.** The blocklist is configuration for the *next* session: once a session is in progress, changing it is a way to escape the very block the user asked for. The blocklist (and the tags/presets that shape it) becomes editable **only while the timer is `idle`** — before the first Start and after an explicit Reset.
+
+**Behavioral rule after the change.**
+- `BlocklistState` mutations (`addSite`, `removeSite`, `applyPreset`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`) are accepted **only** when `timer.status === 'idle'`. In `running`, `paused` and `completed` they are silent no-ops: no local write, no message, no persist.
+- A completed session stays locked until `resetTimer` returns the timer to `idle`; Reset is already enabled in `completed` and does not start a new session.
+- Read-only affordances are unaffected: the entries remain visible, the tag filter keeps working, and enforcement (`selectActiveRules`, `isDomainBlocked`) is untouched.
+- The lock is enforced in three places — the store actions (so the popup's optimistic copy stays honest), the background mutation handler (so a stale or forged message cannot bypass the UI), and the UI (so the user sees why). A background-only guard would leave the popup displaying an edit that is never persisted.
+- No persisted field, no `version` bump, no migration: the lock is derived from the already-persisted `timer.status`.
+
+**Sequencing note.** The store guard lands first (`CR2.T1`), then the authoritative background rejection with the race/startup coverage (`CR2.T2`). The UI is split into three reviewable pieces: the site/preset editors (`CR2.T3a`), the tag editor (`CR2.T3b`) and finally the notice plus locale keys (`CR2.T3c`) — the notice lands last so it never claims a lock the UI does not yet enforce. The documentation/verification gate closes the change request (`CR2.T4`). `CR2.T1` and `CR2.T2` are the security-relevant pair: the UI tasks are a reflection of their decision, never the enforcement itself.
+
+#### 2.5.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR2.T1 | Lock the blocklist at the store layer | — |
+| CR2.T2 | Reject blocklist mutations in the background and cover the race/startup windows | CR2.T1 |
+| CR2.T3a | Disable the site and preset editors | CR2.T1 |
+| CR2.T3b | Disable the tag editor while keeping its filter | CR2.T1 |
+| CR2.T3c | Add the lock notice and the locale keys | CR2.T3a, CR2.T3b |
+| CR2.T4 | Documentation, changelog, and final verification | CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c |
+
+#### 2.5.2 Task cards
+
+##### CR2.T1 — Lock the blocklist at the store layer
+* **Objective**: make every action that writes `BlocklistState` a no-op unless the timer is `idle`, and expose the pure predicate/selector the UI and the background reuse.
+* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - `isBlocklistEditable(status: TimerStatus): boolean` is pure and returns `true` only for `idle`; `selectBlocklistEditable` reads it from the store and both are exported from `store/index.ts`.
+  - All seven mutating actions (`applyPreset`, `addSite`, `removeSite`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`) return before any `set(...)` and before `sendMutation(...)` when the status is `running`, `paused` or `completed`: the state reference is unchanged, no subscriber is notified and no message is sent.
+  - The shared `applyBlocklistMutation` helper enforces the guard once for the four actions that use it; `applyPreset`, `createTag` and `deleteTag` check it explicitly before their own `set`.
+  - In `idle` every action behaves exactly as before, so the existing store unit tests (`blocklist-sites`, `blocklist-preset`, `blocklist-tags`, `blocklist-mutations`) stay green without modification.
+  - The pure mutation helpers (`addBlocklistSite`, `addPresetToBlocklist`, `removeBlocklistSite`, `upsertTag`, `removeTag`, `assignTagToSite`, `unassignTagFromSite`) stay status-agnostic: the lock is a policy of the action, not of normalization.
+  - Tests: the predicate truth table for the four statuses; for each action a locked case (running, paused, completed → no state change, no mutation) and an `idle` case (applied exactly once).
+* **Notes/decisions**: the status check runs before validation, so a locked invalid input and a locked valid input are both silent no-ops (the lock, not the input, is the reason). The popup's actions run against its read-only store, but they still update its in-memory copy optimistically — this guard is what keeps that copy consistent with what the background will accept (CR2.T2).
+
+##### CR2.T2 — Reject blocklist mutations in the background and cover the race/startup windows
+* **Objective**: make the background — the single writer — refuse every blocklist/tag mutation unless the timer is `idle`, so a stale or forged message cannot bypass the UI/store guard.
+* **Files to create/modify**: `lib/messaging/apply-mutation.ts`, `entrypoints/background.ts` (pass a scoped logger to the handler), `tests/integration/background/blocklist-lock.test.ts` (new), `tests/integration/messaging/mutation-bus.test.ts` (locked cases).
+* **Dependencies**: CR2.T1
+* **Acceptance criteria**:
+  - In `createMutationHandler`, the blocklist/tag branch drops the message when `store.getState().timer.status !== 'idle'`: no `setState`, no `storage.local.set`, and a `debug` log carrying `{ type }` only (never the domain or the payload).
+  - Timer commands (`TIMER_STARTED`, `TIMER_PAUSED`, `TIMER_RESET`, `TIMER_SET_DURATION`) are unaffected: the guard applies to the blocklist/tag branch, not in front of the whole handler.
+  - Every one of the seven mutation types is covered: while `running`, `paused` and `completed` it is dropped; in `idle` it applies and persists exactly once.
+  - Startup window: a background restarted on a persisted `running` session rejects a blocklist mutation received while it reconciles, and accepts it again after a `TIMER_RESET`.
+  - Race regression (decision E in `docs/features-analysis/blocklist-lock.md`): a popup whose status is still `idle` adds a site just as the session starts; the background rejects it, and once the `running` transition arrives through `attachStoreSync` the popup's blocklist matches the persisted one. No extra production code beyond CR2.T1/T2 is expected — the transition is itself a storage write that rehydrates the popup — so this is a regression test proving the invariant, not a new mechanism.
+  - `bun run test` is green; the pre-existing mutation-bus cases (which run in `idle`) are unchanged.
+* **Notes/decisions**: the rejection is silent by design (consistent with invalid payloads) but logged at `debug` so a support report can distinguish "the lock worked" from "the message was lost". Sender provenance is M5.T1's concern; this task only adds the status policy.
+
+##### CR2.T3a — Disable the site and preset editors
+* **Objective**: make the two direct blocklist editors reflect the lock — `SiteList` and `PresetPicker` cannot request a mutation outside `idle`, while their content stays readable.
+* **Files to create/modify**: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `tests/unit/components/blocklist/SiteList.test.tsx`, `tests/unit/components/blocklist/PresetPicker.test.tsx`.
+* **Dependencies**: CR2.T1
+* **Acceptance criteria**:
+  - Both components read `selectBlocklistEditable` (granular selector; no computation inside the component) and disable their mutating controls with `disabled`: `SiteList` input + Add button + every per-entry remove button, `PresetPicker` every preset button.
+  - While locked, `SiteList` does not render the normalization preview or the add feedback (no stale message for an action that cannot happen); the entries themselves stay rendered, so the list is still readable.
+  - In `idle` both components behave exactly as today; the existing add/remove/preset flows and their tests pass unchanged.
+  - Tests: with `running`, `paused` and `completed` the controls are disabled and interacting with them changes nothing (no store change, no mutation sent); with `idle` the flows still apply; `beforeEach` resets the timer status to `idle`, since the component tests share the module-level store.
+* **Notes/decisions**: no notice and no locale key here — the visible explanation is CR2.T3c, which lands after this task so the UI never claims a lock it does not yet enforce. `disabled` (not `aria-disabled`) keeps the controls unfocusable and unclickable.
+
+##### CR2.T3b — Disable the tag editor while keeping its filter
+* **Objective**: tag creation, deletion and assignment are blocked outside `idle`, while filtering the list by tag (a view-only operation) keeps working.
+* **Files to create/modify**: `components/blocklist/TagEditor.tsx`, `tests/unit/components/blocklist/TagEditor.test.tsx`.
+* **Dependencies**: CR2.T1
+* **Acceptance criteria**:
+  - `TagEditor` reads `selectBlocklistEditable` and disables the create form (input + Create tag), every tag delete button and every assignment checkbox; the private `TagSiteRow` receives the same decision through a prop or reads the same selector — one source of truth, no duplicated logic.
+  - The tag filter chips remain enabled and still narrow `visibleSites` while locked; the filtered list keeps rendering with the checkboxes disabled.
+  - In `idle` the existing create/assign/filter/delete flows and their tests pass unchanged.
+  - Tests: with `running`, `paused` and `completed` the mutating controls are disabled and clicking them changes nothing (no store change, no mutation); the filter still works in every locked status; `beforeEach` resets the timer status to `idle`.
+* **Notes/decisions**: the filter is local view state (`filterTagId`), not a mutation, so it must stay enabled — disabling it would make the locked list harder to inspect. Deleting a tag rewrites `tagIds` on every entry, which is why it is covered by the lock at all.
+
+##### CR2.T3c — Add the lock notice and the locale keys
+* **Objective**: explain the lock to the user — one localized notice in the blocklist section, present only outside `idle`, naming Reset as the way out.
+* **Files to create/modify**: `entrypoints/popup/App.tsx` (`BlocklistSection`), `locales/en.yml`, `locales/it.yml`, `tests/unit/i18n/i18n.test.tsx`, `tests/integration/popup/app-composition.test.tsx`.
+* **Dependencies**: CR2.T3a, CR2.T3b
+* **Acceptance criteria**:
+  - `BlocklistSection` reads `selectBlocklistEditable` and renders exactly one localized notice when the list is locked (`role="status"`, `aria-live="polite"`); the notice is absent in `idle` and appears/disappears on a status change without a remount.
+  - The copy states that the list is locked during a session and that **Reset** unlocks it (not "when the session ends", because `completed` is still locked — decision A).
+  - The new key (e.g. `blocklist.locked`) exists in **both** `locales/en.yml` and `locales/it.yml`; the drift test stays green and no string is hardcoded.
+  - `tests/unit/i18n/i18n.test.tsx` renders the new key in EN and IT.
+  - `tests/integration/popup/app-composition.test.tsx`: start a session from the UI → the Blocklist tab shows the notice and disabled controls; reset → the notice disappears and editing works again; a `completed` session still shows the notice.
+* **Notes/decisions**: the notice lives in the section, not in each editor, so there is a single explanation regardless of which component the user is looking at. This task lands last among the UI tasks precisely because its message must never be shown while the controls still work.
+
+##### CR2.T4 — Documentation, changelog, and final verification
+* **Objective**: document the lock and its decisions, and prove the full gate is green.
+* **Files to create/modify**: `docs/features-analysis/blocklist-lock.md` (mark implemented and record the decisions), `README.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+* **Dependencies**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c
+* **Acceptance criteria**:
+  - The analysis document is marked implemented by CR2.T1–T4 (with the T3a/T3b/T3c UI split) and records the adopted decisions: `idle`-only window (A), all `BlocklistState` mutations including tags (B), three-layer enforcement (C), disabled controls + one notice (D), race covered by the regression test (E), startup window covered by the integration test (F), debug-level rejection log (G).
+  - `README.md` states that the blocklist can only be edited before a session starts or after a Reset.
+  - `.serena/memories/core.md` records the invariant: the blocklist is editable only in `idle`, enforced in the store and in the background, never by the UI alone.
+  - `docs/changelog.md` gets one detail entry per CR2 task (files, tests, decisions), the summary rows, the updated current status and the real test counts; `Commit: —` until the developer commits.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build` and `bun run build:firefox` are green; run `bun run e2e` if the Playwright suite is available.
+* **Notes/decisions**: no persistence change, so the changelog has no migration entry. The change request is complete only when the gate is green and the amended criteria in §2.5.3 are reflected in the docs.
+
+#### 2.5.3 Amended acceptance criteria in Section 1
+
+The following main-task criteria are intentionally amended by CR2. They remain in the document as history, but the lock rule above wins:
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M1.T10 | the mutation handler applies blocklist/tag mutations at any time | accepted only while `idle`; otherwise dropped without persisting (CR2.T2) |
+| M3.T1 | `PresetPicker` applies a preset whenever a button is clicked | buttons disabled outside `idle` (CR2.T3a) |
+| M3.T2 | `TagEditor` creates, assigns and deletes tags at any time | mutating controls disabled outside `idle`; the tag filter stays usable (CR2.T3b) |
+| M3.T3 | `SiteList` adds and removes sites at any time | add form and remove buttons disabled outside `idle` (CR2.T3a) |
+| M3.T4 | the blocklist section is a pure composition of the three editors | it also renders the single lock notice (CR2.T3c) |
 
 ---
