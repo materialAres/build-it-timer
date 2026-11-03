@@ -3,7 +3,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
-import type { RuntimeMessage } from '@/lib/messaging/messages.types';
+import type { RuntimeMessage, MutationMessage } from '@/lib/messaging/messages.types';
 import type { Tag } from '@/store/store.types';
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
@@ -317,6 +317,79 @@ describe('cross-context mutation path (M1.T10)', () => {
       customTags: [{ id: 'focus', label: 'Focus' }],
     });
     expect('allowlist' in store.getState().blocklist).toBe(false);
+
+    handle.dispose();
+  });
+});
+
+/**
+ * CR2.T2 — the background is the single writer, so the blocklist lock must be
+ * enforced here too: a message that bypasses the UI/store guard (stale tab,
+ * forged sender) must not change or persist anything.
+ */
+describe('blocklist lock in the mutation handler (CR2.T2)', () => {
+  const MUTATIONS: ReadonlyArray<MutationMessage> = [
+    { type: 'BLOCKLIST_ADD_SITE', payload: { site: 'facebook.com' } },
+    { type: 'BLOCKLIST_REMOVE_SITE', payload: { site: 'x.com' } },
+    { type: 'BLOCKLIST_APPLY_PRESET', payload: { presetId: 'social' } },
+    { type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } },
+    { type: 'TAG_REMOVE', payload: { tagId: 'focus' } },
+    { type: 'TAG_ASSIGN', payload: { site: 'x.com', tagId: 'focus' } },
+    { type: 'TAG_UNASSIGN', payload: { site: 'x.com', tagId: 'focus' } },
+  ];
+
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it.each(['running', 'paused', 'completed'] as const)(
+    'drops every blocklist/tag mutation while %s',
+    async (status) => {
+      const store = createAppStore();
+      await store.persist.rehydrate();
+      const handle = startBackground({ store });
+      await handle.ready;
+
+      store.setState({ timer: { ...store.getState().timer, status } });
+      const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+      const before = store.getState().blocklist;
+
+      for (const mutation of MUTATIONS) {
+        await sendMessage(mutation);
+      }
+
+      expect(store.getState().blocklist).toBe(before);
+      expect(setSpy).not.toHaveBeenCalled();
+
+      setSpy.mockRestore();
+      handle.dispose();
+    },
+  );
+
+  it('accepts the same mutations again after a reset', async () => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+    await handle.ready;
+
+    store.setState({ timer: { ...store.getState().timer, status: 'running' } });
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'facebook.com' },
+    });
+    expect(store.getState().blocklist.blocklist).toEqual([]);
+
+    await sendMessage({ type: 'TIMER_RESET', payload: {} });
+    await flushAsync();
+    expect(store.getState().timer.status).toBe('idle');
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'facebook.com' },
+    });
+    expect(store.getState().blocklist.blocklist).toEqual([
+      { domain: { value: 'facebook.com' }, tagIds: [] },
+    ]);
 
     handle.dispose();
   });

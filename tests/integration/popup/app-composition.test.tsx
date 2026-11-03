@@ -86,6 +86,51 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 
+  it('locks the blocklist while a session is in progress and unlocks it on reset', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(
+      screen.queryByText(/locked while a session is in progress/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await flushAsync();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /locked while a session is in progress/i,
+    );
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await flushAsync();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(
+      screen.queryByText(/locked while a session is in progress/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+  });
+
+  it('keeps the blocklist locked when the session completes', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await flushAsync();
+    await fireSessionAlarm();
+    expect(useAppStore.getState().timer.status).toBe('completed');
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /locked while a session is in progress/i,
+    );
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+  });
+
   it('counts the displayed timer down while the session runs (I001)', async () => {
     render(<App />);
 

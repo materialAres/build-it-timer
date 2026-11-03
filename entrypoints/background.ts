@@ -608,7 +608,7 @@ export function startBackground(
   // The timer commands (M3.T3b) travel the same path and are applied to the
   // background's own timer slice, so the alarm lives on the background's
   // provider.
-  const handleMutation = createMutationHandler(store);
+  const handleMutation = createMutationHandler(store, log.child('mutation'));
   for (const type of MUTATION_TYPES) {
     disposers.push(
       onMessage(

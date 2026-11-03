@@ -9,10 +9,12 @@ import {
   removeBlocklistSite,
   upsertTag,
   removeTag,
+  isBlocklistEditable,
   type BlocklistState,
 } from '@/store';
 import type { MutationMessage } from './messages.types';
 import type { Tag } from '@/store/store.types';
+import { createLogger, type Logger } from '@/utils/logger';
 
 function isTag(value: unknown): value is Tag {
   if (typeof value !== 'object' || value === null) return false;
@@ -110,7 +112,10 @@ function hasEmptyPayload(payload: unknown): boolean {
  * session alarm on the background's provider — the popup's copy is read-only
  * (M1.T9) and its provider is not the one the alarm must live on.
  */
-export function createMutationHandler(store: AppStore) {
+export function createMutationHandler(
+  store: AppStore,
+  logger: Logger = createLogger('mutation'),
+) {
   return (message: MutationMessage): void => {
     switch (message.type) {
       case 'TIMER_STARTED':
@@ -139,6 +144,16 @@ export function createMutationHandler(store: AppStore) {
         return;
       }
       default: {
+        // CR2.T2: the background is the single writer, so the lock must hold
+        // here too — a stale or forged message would otherwise bypass the
+        // store/UI guard. Only the message type is logged, never the payload.
+        if (!isBlocklistEditable(store.getState().timer.status)) {
+          logger.debug(
+            'blocklist mutation ignored while the timer is not idle',
+            { type: message.type },
+          );
+          return;
+        }
         const current = store.getState().blocklist;
         const next = applyBlocklistMutation(current, message);
         // Identity check: an invalid or no-op payload must not persist (one

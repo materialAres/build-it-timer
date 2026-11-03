@@ -61,6 +61,7 @@ blocklist:
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
   added: 'Aggiunto $1.'
+  locked: La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.
 
 overlay:
   title: Resta concentrato

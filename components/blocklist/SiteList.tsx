@@ -1,7 +1,7 @@
 import { i18n } from '#i18n';
 import { useState, type SyntheticEvent } from 'react';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
-import { selectBlocklist, useAppStore } from '@/store';
+import { selectBlocklist, selectBlocklistEditable, useAppStore } from '@/store';
 
 /**
  * The list's own stylesheet, consistent with the CRT/monospace look used by the
@@ -89,6 +89,7 @@ interface Feedback {
  */
 export function SiteList() {
   const entries = useAppStore(selectBlocklist);
+  const editable = useAppStore(selectBlocklistEditable);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
@@ -127,6 +128,7 @@ export function SiteList() {
           className="site-list__input"
           type="text"
           value={value}
+          disabled={!editable}
           aria-label={i18n.t('blocklist.addTo', [title])}
           placeholder={i18n.t('blocklist.exampleDomain')}
           onChange={(event) => {
@@ -134,16 +136,18 @@ export function SiteList() {
             setFeedback(null);
           }}
         />
-        <button type="submit">{i18n.t('common.add')}</button>
+        <button type="submit" disabled={!editable}>
+          {i18n.t('common.add')}
+        </button>
       </form>
 
-      {previewDomain !== null && previewDomain !== value.trim() ? (
+      {editable && previewDomain !== null && previewDomain !== value.trim() ? (
         <p className="site-list__preview" aria-live="polite">
           → {previewDomain}
         </p>
       ) : null}
 
-      {feedback !== null ? (
+      {editable && feedback !== null ? (
         <p
           className={`site-list__feedback site-list__feedback--${feedback.kind}`}
           role={feedback.kind === 'error' ? 'alert' : 'status'}
@@ -161,6 +165,7 @@ export function SiteList() {
             <span className="site-list__domain">{entry.domain.value}</span>
             <button
               type="button"
+              disabled={!editable}
               aria-label={i18n.t('common.remove', [entry.domain.value])}
               onClick={() => {
                 useAppStore.getState().removeSite(entry.domain.value);

@@ -322,14 +322,17 @@ export {
   filterEntriesByTag,
   generateTagId,
   hasTagLabel,
+  isBlocklistEditable,
   removeBlocklistSite,
   upsertTag,
   removeTag,
   selectBlocklist,
+  selectBlocklistEditable,
   selectCustomTags,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,
+  BlocklistLockSource,
   BlocklistState,
 } from './blocklist.slice';
 export {

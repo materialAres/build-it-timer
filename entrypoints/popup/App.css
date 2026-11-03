@@ -45,3 +45,11 @@
 .popup-section--timer {
   align-items: center;
 }
+
+.popup-section__lock {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 212, 59, 0.6);
+  color: #ffd43b;
+  font-size: 0.75rem;
+}

@@ -4,6 +4,7 @@ import {
   filterEntriesByTag,
   hasTagLabel,
   selectBlocklist,
+  selectBlocklistEditable,
   selectCustomTags,
   useAppStore,
 } from '@/store';
@@ -78,6 +79,7 @@ interface TagSiteRowProps {
   readonly domain: string;
   readonly tagIds: ReadonlyArray<string>;
   readonly tags: ReadonlyArray<Tag>;
+  readonly disabled: boolean;
 }
 
 /**
@@ -85,7 +87,7 @@ interface TagSiteRowProps {
  * (one level of nesting, §1.2): it only reads the entry's `tagIds` and invokes
  * the assignment actions, never computes tag state itself.
  */
-function TagSiteRow({ domain, tagIds, tags }: TagSiteRowProps) {
+function TagSiteRow({ domain, tagIds, tags, disabled }: TagSiteRowProps) {
   return (
     <li className="tag-editor__site">
       <span className="tag-editor__domain">{domain}</span>
@@ -96,6 +98,7 @@ function TagSiteRow({ domain, tagIds, tags }: TagSiteRowProps) {
             <input
               type="checkbox"
               checked={assigned}
+              disabled={disabled}
               aria-label={i18n.t('blocklist.assignTag', [tag.label, domain])}
               onChange={() => {
                 const action = useAppStore.getState();
@@ -124,6 +127,7 @@ function TagSiteRow({ domain, tagIds, tags }: TagSiteRowProps) {
 export function TagEditor() {
   const tags = useAppStore(selectCustomTags);
   const blocklist = useAppStore(selectBlocklist);
+  const editable = useAppStore(selectBlocklistEditable);
   const [label, setLabel] = useState('');
   const [filterTagId, setFilterTagId] = useState<string | null>(null);
 
@@ -147,13 +151,14 @@ export function TagEditor() {
           className="tag-editor__input"
           type="text"
           value={label}
+          disabled={!editable}
           aria-label={i18n.t('blocklist.newTagName')}
           placeholder={i18n.t('blocklist.newTag')}
           onChange={(event) => {
             setLabel(event.target.value);
           }}
         />
-        <button type="submit" disabled={!canCreate}>
+        <button type="submit" disabled={!canCreate || !editable}>
           {i18n.t('blocklist.createTag')}
         </button>
       </form>
@@ -177,6 +182,7 @@ export function TagEditor() {
             </button>
             <button
               type="button"
+              disabled={!editable}
               aria-label={i18n.t('blocklist.deleteTag', [tag.label])}
               onClick={() => {
                 useAppStore.getState().deleteTag(tag.id);
@@ -196,6 +202,7 @@ export function TagEditor() {
             domain={entry.domain.value}
             tagIds={entry.tagIds}
             tags={tags}
+            disabled={!editable}
           />
         ))}
       </ul>

@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR1.T6** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed** — the blocklist is the only site list in the UI, protocol, persisted data, enforcement, tests and docs (CR1.T1–CR1.T6); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR2.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -17,8 +17,9 @@ description: Rules for updating the changelog
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
+- Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **696 passing tests** across 74 files (green).
+- Tests: `bun run test` → **767 passing tests** across 76 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -102,6 +103,12 @@ description: Rules for updating the changelog
 | CR1.T5b | Migrate the store and component tests to the single blocklist | completed | `a3592ce` |
 | CR1.T5c | Migrate the remaining unit and integration tests and restore the green gate | completed | `87c0a68` |
 | CR1.T6 | Cleanup, documentation, regression coverage, and final verification | completed | `1012992` |
+| CR2.T1 | Lock the blocklist at the store layer | completed | `e4dd414` |
+| CR2.T2 | Reject blocklist mutations in the background and cover the race/startup windows | completed | `8289fc1` |
+| CR2.T3a | Disable the site and preset editors | completed | `8289fc1` |
+| CR2.T3b | Disable the tag editor while keeping its filter | completed | `f335d3b` |
+| CR2.T3c | Add the lock notice and the locale keys | completed | `3784330` |
+| CR2.T4 | Documentation, changelog, and final verification | completed | `3520784` |
 
 ---
 
@@ -1075,6 +1082,73 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the change request is closed here. The remaining mentions are intentional: version-1 data must still be readable, so `migrateBlocklistState` keeps reading the legacy field and the raw fixtures keep covering it. The roadmap's §2.4 table is the single source of truth for the superseded acceptance criteria; the per-card notes link to it.
 - Acceptance criteria: verified — the search returns only the allowed categories, the README and the project instructions describe a blocklist only, the changelog records every CR1 task with real counts, the full gate including e2e is green, and the historical cards are marked superseded.
 - Commit: `1012992 feat(CR1.T6): complete removal of allowlist references and update documentation for blocklist-only functionality`.
+
+### CR2.T1 — Lock the blocklist at the store layer
+- `store/blocklist.slice.ts`: adds the pure predicate `isBlocklistEditable(status)` (true only for `idle`) and the `selectBlocklistEditable` selector (structural `BlocklistLockSource`), then applies the guard in `applyBlocklistMutation` — which covers `addSite`, `removeSite`, `assignTag`, `unassignTag` — and explicitly in `applyPreset`, `createTag` and `deleteTag`. A locked action returns before any `set(...)` and before `sendMutation(...)`: the state reference is unchanged, no subscriber is notified and no message is sent.
+- The pure mutation helpers (`addBlocklistSite`, `addPresetToBlocklist`, `removeBlocklistSite`, `upsertTag`, `removeTag`, `assignTagToSite`, `unassignTagFromSite`) are untouched and stay status-agnostic: the lock is a policy of the action, not of normalization.
+- `store/index.ts` re-exports `isBlocklistEditable`, `selectBlocklistEditable` and the `BlocklistLockSource` type.
+- Files created/modified: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts` (new).
+- Dependencies added: none.
+- Tests: `tests/unit/store/blocklist-lock.test.ts` (30 tests, unit) — predicate truth table for the four statuses, selector read, per-action locked cases for `running`/`paused`/`completed` (same state reference, no notification, no mutation) and per-action `idle` cases. Full run: `bun run test` → **726 passing tests across 75 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: the status check runs before validation, so a locked mutation is a silent no-op regardless of the payload. The existing store and component tests are unchanged and stay green because they run in `idle` (the component tests never set a timer status).
+- Acceptance criteria: verified — the predicate and selector are exported, all seven mutating actions are guarded, the pure helpers are untouched, the new file passes, and the full gate is green.
+- Commit: `e4dd414 feat(CR2.T1): implement blocklist lock to restrict editing during active timer states`.
+
+### CR2.T2 — Reject blocklist mutations in the background and cover the race/startup windows
+- `lib/messaging/apply-mutation.ts`: `createMutationHandler(store, logger = createLogger('mutation'))` now refuses the blocklist/tag branch when `store.getState().timer.status !== 'idle'`. The message is dropped before `setState`, so nothing is persisted; a `debug` record carries only `{ type }` (never the payload or a domain). Timer commands (`TIMER_STARTED`, `TIMER_PAUSED`, `TIMER_RESET`, `TIMER_SET_DURATION`) are unaffected because the guard sits inside the default branch.
+- `entrypoints/background.ts`: the handler receives the scoped `log.child('mutation')`, so the record reads `[buildit:background:mutation]`.
+- Files created/modified: `lib/messaging/apply-mutation.ts`, `entrypoints/background.ts`, `tests/integration/background/blocklist-lock.test.ts` (new), `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/malus.test.ts`.
+- Dependencies added: none.
+- Tests: `tests/integration/background/blocklist-lock.test.ts` (2 tests, integration) — a mutation received while a restored `running` session is being reconciled is rejected, not persisted, and logged with scope `lock-test:mutation` and `details: [{ type }]` (the record contains no domain); a popup that acts on a stale `idle` status converges to the persisted blocklist once the `running` transition arrives through `attachStoreSync`. `tests/integration/messaging/mutation-bus.test.ts` (+4 tests) — every one of the seven blocklist/tag mutations is dropped for `running`, `paused` and `completed` with no write, and the same mutations are accepted again after `TIMER_RESET`.
+- Updated existing integration tests whose premise was "edit the blocklist while running": `dnr-rules.test.ts` now seeds the list before `startTimer` (rules are installed by the running transition) and its "reacts to a blocklist change made while running" case became "keeps the rules stable when a blocklist change is attempted while running"; `malus.test.ts` seeds the blocked domain before starting the session.
+- Full run: `bun run test` → **732 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: rejection is silent for the user (the UI prevents the action anyway) but visible at `debug` level, which distinguishes "the lock worked" from "the message was lost" without logging user data. Sender provenance remains M5.T1's concern; this task only adds the status policy. The race needs no extra mechanism: the `running` transition is itself a storage write, so the M1.T8 sync bridge replaces the popup's optimistic entry with the persisted state.
+- Acceptance criteria: verified — the background refuses all seven mutations outside `idle`, timer commands still work, the startup and race windows are covered by integration tests, the debug record is scoped and payload-free, the adjusted DNR/malus tests are green, and the full gate passes.
+- Commit: `8289fc1 feat(CR2): implement blocklist lock to prevent mutations during active timer states`.
+
+### CR2.T3a — Disable the site and preset editors
+- `components/blocklist/SiteList.tsx`: reads `selectBlocklistEditable` and disables the input, the Add button and every per-entry remove button outside `idle`. While locked, the normalization preview and the add feedback are not rendered (they would describe an action that cannot happen); the entries stay visible. In `idle` the behavior is unchanged.
+- `components/blocklist/PresetPicker.tsx`: reads `selectBlocklistEditable` and disables every preset button outside `idle`.
+- Files created/modified: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `tests/unit/components/blocklist/SiteList.test.tsx`, `tests/unit/components/blocklist/PresetPicker.test.tsx`.
+- Dependencies added: none.
+- Tests: `SiteList.test.tsx` (+12 tests) and `PresetPicker.test.tsx` (+9 tests) — for `running`, `paused` and `completed`: the controls are disabled, the entries stay readable, the preview and the "Added …" feedback never render, a disabled click/submit does not change the blocklist, and the controls re-enable when the status returns to `idle`. Each component's `beforeEach` now resets the timer status to `idle`.
+- Full run: `bun run test` → **753 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: `disabled` (not `aria-disabled`) keeps the controls unfocusable and unclickable. No notice and no locale key in this task — the visible explanation is CR2.T3c, which lands after the editors so the UI never claims a lock it does not yet enforce. `TagEditor` is still editable until CR2.T3b.
+- Acceptance criteria: verified — both editors read the shared selector, every mutating control is disabled outside `idle`, the list stays readable, no stale preview/feedback is rendered, the idle flows are unchanged and the full gate is green.
+- Commit: `8289fc1` (shared with CR2.T2; the editor changes for this task are in that commit).
+
+### CR2.T3b — Disable the tag editor while keeping its filter
+- `components/blocklist/TagEditor.tsx`: reads `selectBlocklistEditable` and disables the tag-name input, the Create tag button, every tag delete button and every assignment checkbox outside `idle`. The private `TagSiteRow` receives the decision through a new `disabled` prop (one source of truth, no duplicated logic). The tag filter chips stay enabled: filtering is view state, not a mutation.
+- Files created/modified: `components/blocklist/TagEditor.tsx`, `tests/unit/components/blocklist/TagEditor.test.tsx`.
+- Dependencies added: none.
+- Tests: `TagEditor.test.tsx` (+12 tests) — for `running`, `paused` and `completed`: creation/deletion/assignment controls are disabled; the filter stays enabled and still narrows the visible sites; clicking the disabled delete/assign controls leaves `customTags` and `tagIds` unchanged; the mutating controls re-enable when the status returns to `idle` (Create stays disabled only because the input is empty). `beforeEach` now resets the timer status to `idle`.
+- Full run: `bun run test` → **765 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: deleting a tag rewrites `tagIds` on every entry, which is why it is covered by the lock at all; the filter is deliberately left interactive so a locked list remains inspectable. The notice explaining the lock is CR2.T3c.
+- Acceptance criteria: verified — all mutating tag controls are disabled outside `idle`, the filter still works in every locked status, the store is untouched by disabled interactions, the idle flows are unchanged and the full gate is green.
+- Commit: `f335d3b feat(CR2.T3b): disable tag editor mutating controls outside idle state while keeping filter functional`.
+
+### CR2.T3c — Add the lock notice and the locale keys
+- `entrypoints/popup/App.tsx`: `BlocklistSection` reads `selectBlocklistEditable` and renders exactly one localized notice when the list is locked (`role="status"`, `aria-live="polite"`, `blocklist.locked`); the notice is absent in `idle` and appears/disappears on a status change without a remount.
+- `entrypoints/popup/App.css`: `.popup-section__lock` gives the notice the amber CRT treatment (border, small monospace-friendly size).
+- `locales/en.yml` / `locales/it.yml`: new `blocklist.locked` key — "The blocklist is locked while a session is in progress. Reset the timer to edit it." / "La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla." The copy names Reset because a `completed` session is still locked.
+- Files created/modified: `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml`, `tests/unit/i18n/i18n.test.tsx`, `tests/integration/popup/app-composition.test.tsx`.
+- Dependencies added: none.
+- Tests: `i18n.test.tsx` (+2 assertions) — the key resolves in EN and IT; `app-composition.test.tsx` (+2 tests) — starting a session shows the notice and disables Add, Reset hides it and re-enables Add, and a `completed` session keeps the notice visible.
+- Full run: `bun run test` → **767 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: the notice lives in the section, not in each editor, so there is a single explanation regardless of the component in focus. Adding a locale key requires regenerating the `#i18n` types (`wxt prepare`/`wxt build`) before `tsc` accepts the new key — the first `bun run compile` failed on the missing generated key and passed after the build.
+- Acceptance criteria: verified — the notice is single, localized in both locales, present only outside `idle` (including `completed`), the controls reflect the lock end-to-end in the composed popup, and the full gate is green.
+- Commit: `3784330 feat(CR2.T3c): add blocklist lock notice and localization; update styles and tests`.
+
+### CR2.T4 — Documentation, changelog, and final verification
+- `docs/features-analysis/blocklist-lock.md`: status changed to **implemented** by CR2.T1–T4 (with the T3a/T3b/T3c UI split), §10 rewritten from "open decisions" to the adopted decisions (A–G) with where each is enforced, and a new §12 implementation map plus the post-change invariant (`BlocklistState` editable iff `timer.status === 'idle'`).
+- `README.md`: the blocklist bullet now states that the list can only be edited while no session is in progress (before Start or after Reset), and the status section lists CR2 as completed.
+- `.serena/memories/core.md`: the CR2 entry is rewritten as a completed invariant (three enforcement points, never UI-only, helpers stay status-agnostic).
+- Files created/modified: `docs/features-analysis/blocklist-lock.md`, `README.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: no test was added in this task — the regression coverage is the suite built in CR2.T1–T3c. Final gate: `bun run test` → **767 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → **1 passing test** (`tests/e2e/popup.spec.ts`).
+- Relevant notes/decisions: no persistence change, so the changelog has no migration entry. The analysis document keeps its pre-change file/line references as history; §12 is the authoritative map of what changed. The roadmap's amended criteria (§2.5.3) now match the implemented behavior.
+- Acceptance criteria: verified — the analysis is marked implemented with every decision recorded, the README and memory describe the blocklist as editable only in `idle`, the changelog has one entry per CR2 task with real counts, and the full gate including e2e is green.
+- Commit: `3520784 feat(CR2): complete blocklist lock implementation; enforce edit restrictions during active timer states and update documentation`.
 
 ---
 
