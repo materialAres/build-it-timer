@@ -60,6 +60,7 @@ blocklist:
   invalidUrl: Enter a valid URL
   alreadyInList: '$1 is already in the $2.'
   added: 'Added $1.'
+  locked: The blocklist is locked while a session is in progress. Reset the timer to edit it.
 
 overlay:
   title: Stay focused

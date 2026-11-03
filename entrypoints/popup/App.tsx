@@ -1,9 +1,11 @@
 import {
   useAppStore,
   selectActiveTab,
+  selectBlocklistEditable,
   selectTimerStatus,
   type PopupTab,
 } from '@/store';
+import { i18n } from '#i18n';
 import {
   PopupTabs,
   tabButtonId,
@@ -67,8 +69,15 @@ function ScoreSection() {
 }
 
 function BlocklistSection() {
+  const editable = useAppStore(selectBlocklistEditable);
+
   return (
     <div className="popup-section popup-section--blocklist">
+      {!editable ? (
+        <p className="popup-section__lock" role="status" aria-live="polite">
+          {i18n.t('blocklist.locked')}
+        </p>
+      ) : null}
       <PresetPicker />
       <TagEditor />
       <SiteList />

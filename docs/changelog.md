@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR2.T3b** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` in the store (CR2.T1), in the background (CR2.T2), in the site/preset editors (CR2.T3a) and in the tag editor (CR2.T3b), with the notice and documentation remaining; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR2.T3c** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` in the store (CR2.T1), in the background (CR2.T2) and in the whole blocklist tab, which now explains the lock (CR2.T3a–c); only the documentation/verification task (CR2.T4) remains; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -17,9 +17,9 @@ description: Rules for updating the changelog
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
-- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1, CR2.T2, CR2.T3a and CR2.T3b done; CR2.T3c and CR2.T4 remaining.
+- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b and CR2.T3c done; CR2.T4 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **765 passing tests** across 76 files (green).
+- Tests: `bun run test` → **767 passing tests** across 76 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -107,6 +107,7 @@ description: Rules for updating the changelog
 | CR2.T2 | Reject blocklist mutations in the background and cover the race/startup windows | completed | — (to be committed) |
 | CR2.T3a | Disable the site and preset editors | completed | — (to be committed) |
 | CR2.T3b | Disable the tag editor while keeping its filter | completed | — (to be committed) |
+| CR2.T3c | Add the lock notice and the locale keys | completed | — (to be committed) |
 
 ---
 
@@ -1123,6 +1124,18 @@ description: Rules for updating the changelog
 - Full run: `bun run test` → **765 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
 - Relevant notes/decisions: deleting a tag rewrites `tagIds` on every entry, which is why it is covered by the lock at all; the filter is deliberately left interactive so a locked list remains inspectable. The notice explaining the lock is CR2.T3c.
 - Acceptance criteria: verified — all mutating tag controls are disabled outside `idle`, the filter still works in every locked status, the store is untouched by disabled interactions, the idle flows are unchanged and the full gate is green.
+- Commit: — (to be committed).
+
+### CR2.T3c — Add the lock notice and the locale keys
+- `entrypoints/popup/App.tsx`: `BlocklistSection` reads `selectBlocklistEditable` and renders exactly one localized notice when the list is locked (`role="status"`, `aria-live="polite"`, `blocklist.locked`); the notice is absent in `idle` and appears/disappears on a status change without a remount.
+- `entrypoints/popup/App.css`: `.popup-section__lock` gives the notice the amber CRT treatment (border, small monospace-friendly size).
+- `locales/en.yml` / `locales/it.yml`: new `blocklist.locked` key — "The blocklist is locked while a session is in progress. Reset the timer to edit it." / "La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla." The copy names Reset because a `completed` session is still locked.
+- Files created/modified: `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml`, `tests/unit/i18n/i18n.test.tsx`, `tests/integration/popup/app-composition.test.tsx`.
+- Dependencies added: none.
+- Tests: `i18n.test.tsx` (+2 assertions) — the key resolves in EN and IT; `app-composition.test.tsx` (+2 tests) — starting a session shows the notice and disables Add, Reset hides it and re-enables Add, and a `completed` session keeps the notice visible.
+- Full run: `bun run test` → **767 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: the notice lives in the section, not in each editor, so there is a single explanation regardless of the component in focus. Adding a locale key requires regenerating the `#i18n` types (`wxt prepare`/`wxt build`) before `tsc` accepts the new key — the first `bun run compile` failed on the missing generated key and passed after the build.
+- Acceptance criteria: verified — the notice is single, localized in both locales, present only outside `idle` (including `completed`), the controls reflect the lock end-to-end in the composed popup, and the full gate is green.
 - Commit: — (to be committed).
 
 ---

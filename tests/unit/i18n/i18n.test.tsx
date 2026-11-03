@@ -35,6 +35,9 @@ describe('i18n shared instance (M3.T9)', () => {
     expect(i18n.t('blocklist.assignTag', ['Focus', 'a.com'])).toBe(
       'Assign Focus to a.com',
     );
+    expect(i18n.t('blocklist.locked')).toBe(
+      'The blocklist is locked while a session is in progress. Reset the timer to edit it.',
+    );
   });
 
   it('renders a component\u2019s visible strings through i18n.t', () => {
@@ -85,6 +88,9 @@ describe('IT locale rendering (M3.T10)', () => {
     );
     expect(i18n.t('blocklist.assignTag', ['Focus', 'a.com'])).toBe(
       'Assegna Focus a a.com',
+    );
+    expect(i18n.t('blocklist.locked')).toBe(
+      'La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.',
     );
   });
 
