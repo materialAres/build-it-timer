@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SiteList } from '@/components/blocklist/SiteList';
 import { useAppStore } from '@/store';
-import type { BlocklistEntry } from '@/store/store.types';
+import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
 
 const entry = (value: string): BlocklistEntry => ({
   domain: { value },
@@ -16,6 +16,12 @@ const resetBlocklist = (
   useAppStore.setState({ blocklist: { blocklist, customTags: [] } });
 };
 
+const setStatus = (status: TimerStatus): void => {
+  useAppStore.setState({
+    timer: { ...useAppStore.getState().timer, status },
+  });
+};
+
 const currentBlocklist = () => useAppStore.getState().blocklist;
 const values = (list: ReadonlyArray<BlocklistEntry>) =>
   list.map((item) => item.domain.value);
@@ -23,6 +29,7 @@ const values = (list: ReadonlyArray<BlocklistEntry>) =>
 describe('SiteList (M3.T3)', () => {
   beforeEach(() => {
     resetBlocklist();
+    setStatus('idle');
   });
 
   afterEach(() => {
@@ -128,3 +135,64 @@ describe('SiteList (M3.T3)', () => {
     expect(style?.textContent).toContain('.site-list');
   });
 });
+
+describe.each(['running', 'paused', 'completed'] as const)(
+  'SiteList while the timer is %s (CR2.T3a)',
+  (status) => {
+    beforeEach(() => {
+      resetBlocklist([entry('a.com')]);
+      setStatus(status);
+    });
+
+    afterEach(() => {
+      cleanup();
+    });
+
+    it('disables the add form and the remove buttons', () => {
+      render(<SiteList />);
+
+      expect(screen.getByLabelText('Add to Blocked sites')).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Remove a.com' }),
+      ).toBeDisabled();
+    });
+
+    it('keeps the entries readable', () => {
+      render(<SiteList />);
+
+      expect(screen.getByText('a.com')).toBeInTheDocument();
+    });
+
+    it('hides the preview and the add feedback and never mutates the list', () => {
+      const { container } = render(<SiteList />);
+      const input = screen.getByLabelText('Add to Blocked sites');
+
+      fireEvent.change(input, {
+        target: { value: 'https://m.facebook.com/x' },
+      });
+      expect(screen.queryByText('→ facebook.com')).not.toBeInTheDocument();
+
+      fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+
+      expect(
+        screen.queryByText('Added facebook.com.'),
+      ).not.toBeInTheDocument();
+      expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+    });
+
+    it('re-enables the controls when the timer returns to idle', () => {
+      render(<SiteList />);
+
+      act(() => {
+        setStatus('idle');
+      });
+
+      expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+      expect(
+        screen.getByRole('button', { name: 'Remove a.com' }),
+      ).toBeEnabled();
+    });
+  },
+);

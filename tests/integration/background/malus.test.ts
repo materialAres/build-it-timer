@@ -124,6 +124,11 @@ describe('malus linked to building destruction (M2.T16)', () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
+    // CR2.T2: the list is seeded before the session starts.
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'facebook.com' },
+    });
     await store.getState().startTimer();
     store.getState().growCityByTicks(4);
 
@@ -134,10 +139,6 @@ describe('malus linked to building destruction (M2.T16)', () => {
     // The blocked tab is open (facebook.com is on the blocklist); one session
     // tick later the elapsed stretch counts as distraction (M2.T18), so the
     // malus removes one character net.
-    await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
-      payload: { site: 'facebook.com' },
-    });
     tabEventSource.emitUpdated({ id: 1, url: 'https://facebook.com/' });
     now = T0 + TICK_MS;
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_400 } });

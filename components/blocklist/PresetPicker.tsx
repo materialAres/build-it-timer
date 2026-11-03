@@ -1,6 +1,6 @@
 import { i18n } from '#i18n';
 import { PRESETS } from '@/lib/blocking/presets';
-import { useAppStore } from '@/store';
+import { selectBlocklistEditable, useAppStore } from '@/store';
 
 /**
  * The picker's own stylesheet, consistent with the CRT/monospace look used by
@@ -37,6 +37,8 @@ const PRESET_PICKER_STYLES = `
  * background (M1.T10).
  */
 export function PresetPicker() {
+  const editable = useAppStore(selectBlocklistEditable);
+
   return (
     <div
       className="preset-picker"
@@ -50,6 +52,7 @@ export function PresetPicker() {
           type="button"
           className="preset-picker__button"
           data-preset-id={preset.id}
+          disabled={!editable}
           aria-label={i18n.t('blocklist.applyPreset', [preset.name])}
           onClick={() => {
             useAppStore.getState().applyPreset(preset.id);

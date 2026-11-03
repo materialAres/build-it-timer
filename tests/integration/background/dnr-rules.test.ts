@@ -42,11 +42,13 @@ describe('background DNR rule application (M2.T7)', () => {
     const handle = startBackground({ alarmProvider: new FakeAlarmProvider(0) });
     await handle.ready;
 
-    await handle.store.getState().startTimer();
+    // CR2.T2: the list can only change while idle, so it is seeded first and the
+    // running transition is what installs the rules.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { site: BLOCKED_DOMAIN },
     });
+    await handle.store.getState().startTimer();
     await flush();
 
     const applied = dnr.updates.at(-1);
@@ -111,26 +113,31 @@ describe('background DNR rule application (M2.T7)', () => {
     handle.dispose();
   });
 
-  it('reacts to a blocklist change made while running', async () => {
+  it('keeps the rules stable when a blocklist change is attempted while running (CR2.T2)', async () => {
     const dnr = installDynamicRulesFake();
     const handle = startBackground({ alarmProvider: new FakeAlarmProvider(0) });
     await handle.ready;
 
-    await handle.store.getState().startTimer();
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { site: BLOCKED_DOMAIN },
     });
+    await handle.store.getState().startTimer();
     await flush();
+
+    // The session is running: the mutation is rejected, so neither the store
+    // nor the live ruleset changes.
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { site: 'instagram.com' },
     });
     await flush();
 
+    expect(handle.store.getState().blocklist.blocklist.map((entry) => entry.domain.value)).toEqual([
+      BLOCKED_DOMAIN,
+    ]);
     expect(dnr.liveRules().map((rule) => rule.condition.urlFilter)).toEqual([
       `||${BLOCKED_DOMAIN}^`,
-      '||instagram.com^',
     ]);
 
     handle.dispose();
