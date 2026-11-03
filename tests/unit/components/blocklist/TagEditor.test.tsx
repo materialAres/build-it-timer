@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TagEditor } from '@/components/blocklist/TagEditor';
 import { useAppStore } from '@/store';
-import type { BlocklistEntry, Tag } from '@/store/store.types';
+import type { BlocklistEntry, Tag, TimerStatus } from '@/store/store.types';
 
 const entry = (value: string, tagIds: ReadonlyArray<string> = []): BlocklistEntry => ({
   domain: { value },
@@ -17,11 +17,18 @@ const resetBlocklist = (
   useAppStore.setState({ blocklist: { blocklist, customTags } });
 };
 
+const setStatus = (status: TimerStatus): void => {
+  useAppStore.setState({
+    timer: { ...useAppStore.getState().timer, status },
+  });
+};
+
 const currentBlocklist = () => useAppStore.getState().blocklist;
 
 describe('TagEditor (M3.T2)', () => {
   beforeEach(() => {
     resetBlocklist();
+    setStatus('idle');
   });
 
   afterEach(() => {
@@ -96,3 +103,67 @@ describe('TagEditor (M3.T2)', () => {
     expect(style?.textContent).toContain('.tag-editor');
   });
 });
+
+describe.each(['running', 'paused', 'completed'] as const)(
+  'TagEditor while the timer is %s (CR2.T3b)',
+  (status) => {
+    beforeEach(() => {
+      resetBlocklist(
+        [entry('a.com', ['focus']), entry('b.com'), entry('c.com')],
+        [{ id: 'focus', label: 'Focus' }],
+      );
+      setStatus(status);
+    });
+
+    afterEach(() => {
+      cleanup();
+    });
+
+    it('disables tag creation, deletion and assignment', () => {
+      render(<TagEditor />);
+
+      expect(screen.getByLabelText('New tag name')).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Create tag' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Delete Focus' })).toBeDisabled();
+      expect(screen.getByLabelText('Assign Focus to b.com')).toBeDisabled();
+    });
+
+    it('keeps filtering the list by tag', async () => {
+      render(<TagEditor />);
+
+      const filter = screen.getByRole('button', { name: 'Filter by Focus' });
+      expect(filter).toBeEnabled();
+
+      await userEvent.click(filter);
+
+      expect(screen.getByText('a.com')).toBeInTheDocument();
+      expect(screen.queryByText('b.com')).not.toBeInTheDocument();
+      expect(screen.queryByText('c.com')).not.toBeInTheDocument();
+    });
+
+    it('does not mutate anything when the disabled controls are clicked', () => {
+      render(<TagEditor />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Focus' }));
+      fireEvent.click(screen.getByLabelText('Assign Focus to b.com'));
+
+      expect(currentBlocklist().customTags).toEqual([
+        { id: 'focus', label: 'Focus' },
+      ]);
+      expect(currentBlocklist().blocklist[1]?.tagIds).toEqual([]);
+    });
+
+    it('re-enables the mutating controls when the timer returns to idle', () => {
+      render(<TagEditor />);
+
+      act(() => {
+        setStatus('idle');
+      });
+
+      expect(screen.getByLabelText('New tag name')).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Create tag' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Delete Focus' })).toBeEnabled();
+      expect(screen.getByLabelText('Assign Focus to b.com')).toBeEnabled();
+    });
+  },
+);

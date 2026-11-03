@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR2.T3a** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` in the store (CR2.T1), in the background (CR2.T2) and in the site/preset editors (CR2.T3a), with the tag editor, notice and documentation remaining; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR2.T3b** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` in the store (CR2.T1), in the background (CR2.T2), in the site/preset editors (CR2.T3a) and in the tag editor (CR2.T3b), with the notice and documentation remaining; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -17,9 +17,9 @@ description: Rules for updating the changelog
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
-- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1, CR2.T2 and CR2.T3a done; CR2.T3b, CR2.T3c and CR2.T4 remaining.
+- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1, CR2.T2, CR2.T3a and CR2.T3b done; CR2.T3c and CR2.T4 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **753 passing tests** across 76 files (green).
+- Tests: `bun run test` → **765 passing tests** across 76 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -106,6 +106,7 @@ description: Rules for updating the changelog
 | CR2.T1 | Lock the blocklist at the store layer | completed | — (to be committed) |
 | CR2.T2 | Reject blocklist mutations in the background and cover the race/startup windows | completed | — (to be committed) |
 | CR2.T3a | Disable the site and preset editors | completed | — (to be committed) |
+| CR2.T3b | Disable the tag editor while keeping its filter | completed | — (to be committed) |
 
 ---
 
@@ -1112,6 +1113,16 @@ description: Rules for updating the changelog
 - Full run: `bun run test` → **753 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
 - Relevant notes/decisions: `disabled` (not `aria-disabled`) keeps the controls unfocusable and unclickable. No notice and no locale key in this task — the visible explanation is CR2.T3c, which lands after the editors so the UI never claims a lock it does not yet enforce. `TagEditor` is still editable until CR2.T3b.
 - Acceptance criteria: verified — both editors read the shared selector, every mutating control is disabled outside `idle`, the list stays readable, no stale preview/feedback is rendered, the idle flows are unchanged and the full gate is green.
+- Commit: — (to be committed).
+
+### CR2.T3b — Disable the tag editor while keeping its filter
+- `components/blocklist/TagEditor.tsx`: reads `selectBlocklistEditable` and disables the tag-name input, the Create tag button, every tag delete button and every assignment checkbox outside `idle`. The private `TagSiteRow` receives the decision through a new `disabled` prop (one source of truth, no duplicated logic). The tag filter chips stay enabled: filtering is view state, not a mutation.
+- Files created/modified: `components/blocklist/TagEditor.tsx`, `tests/unit/components/blocklist/TagEditor.test.tsx`.
+- Dependencies added: none.
+- Tests: `TagEditor.test.tsx` (+12 tests) — for `running`, `paused` and `completed`: creation/deletion/assignment controls are disabled; the filter stays enabled and still narrows the visible sites; clicking the disabled delete/assign controls leaves `customTags` and `tagIds` unchanged; the mutating controls re-enable when the status returns to `idle` (Create stays disabled only because the input is empty). `beforeEach` now resets the timer status to `idle`.
+- Full run: `bun run test` → **765 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
+- Relevant notes/decisions: deleting a tag rewrites `tagIds` on every entry, which is why it is covered by the lock at all; the filter is deliberately left interactive so a locked list remains inspectable. The notice explaining the lock is CR2.T3c.
+- Acceptance criteria: verified — all mutating tag controls are disabled outside `idle`, the filter still works in every locked status, the store is untouched by disabled interactions, the idle flows are unchanged and the full gate is green.
 - Commit: — (to be committed).
 
 ---
