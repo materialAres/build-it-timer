@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR2.T3c** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **in progress** — the blocklist is locked outside `idle` in the store (CR2.T1), in the background (CR2.T2) and in the whole blocklist tab, which now explains the lock (CR2.T3a–c); only the documentation/verification task (CR2.T4) remains; nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR2.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -17,7 +17,7 @@ description: Rules for updating the changelog
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
-- Change request CR2 (blocklist locked outside `idle`) — **in progress**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b and CR2.T3c done; CR2.T4 remaining.
+- Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
 - Tests: `bun run test` → **767 passing tests** across 76 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
@@ -108,6 +108,7 @@ description: Rules for updating the changelog
 | CR2.T3a | Disable the site and preset editors | completed | — (to be committed) |
 | CR2.T3b | Disable the tag editor while keeping its filter | completed | — (to be committed) |
 | CR2.T3c | Add the lock notice and the locale keys | completed | — (to be committed) |
+| CR2.T4 | Documentation, changelog, and final verification | completed | — (to be committed) |
 
 ---
 
@@ -1136,6 +1137,17 @@ description: Rules for updating the changelog
 - Full run: `bun run test` → **767 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed.
 - Relevant notes/decisions: the notice lives in the section, not in each editor, so there is a single explanation regardless of the component in focus. Adding a locale key requires regenerating the `#i18n` types (`wxt prepare`/`wxt build`) before `tsc` accepts the new key — the first `bun run compile` failed on the missing generated key and passed after the build.
 - Acceptance criteria: verified — the notice is single, localized in both locales, present only outside `idle` (including `completed`), the controls reflect the lock end-to-end in the composed popup, and the full gate is green.
+- Commit: — (to be committed).
+
+### CR2.T4 — Documentation, changelog, and final verification
+- `docs/features-analysis/blocklist-lock.md`: status changed to **implemented** by CR2.T1–T4 (with the T3a/T3b/T3c UI split), §10 rewritten from "open decisions" to the adopted decisions (A–G) with where each is enforced, and a new §12 implementation map plus the post-change invariant (`BlocklistState` editable iff `timer.status === 'idle'`).
+- `README.md`: the blocklist bullet now states that the list can only be edited while no session is in progress (before Start or after Reset), and the status section lists CR2 as completed.
+- `.serena/memories/core.md`: the CR2 entry is rewritten as a completed invariant (three enforcement points, never UI-only, helpers stay status-agnostic).
+- Files created/modified: `docs/features-analysis/blocklist-lock.md`, `README.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: no test was added in this task — the regression coverage is the suite built in CR2.T1–T3c. Final gate: `bun run test` → **767 passing tests across 76 files**; `bun run compile` and `bun run lint` are clean; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → **1 passing test** (`tests/e2e/popup.spec.ts`).
+- Relevant notes/decisions: no persistence change, so the changelog has no migration entry. The analysis document keeps its pre-change file/line references as history; §12 is the authoritative map of what changed. The roadmap's amended criteria (§2.5.3) now match the implemented behavior.
+- Acceptance criteria: verified — the analysis is marked implemented with every decision recorded, the README and memory describe the blocklist as editable only in `idle`, the changelog has one entry per CR2 task with real counts, and the full gate including e2e is green.
 - Commit: — (to be committed).
 
 ---

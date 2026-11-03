@@ -1,9 +1,10 @@
 # Blocklist lock during a session — code analysis
 
 > Change request: **the blocklist cannot be edited once the timer starts.**
-> Status: analysis only — no code has been modified.
-> Scope: where an edit can enter the system today, what has to be guarded, and
-> which decisions the implementation still needs.
+> Status: **implemented** by CR2.T1–CR2.T4 (the UI was split into CR2.T3a for the
+> site/preset editors, CR2.T3b for the tag editor and CR2.T3c for the notice and
+> locales). The file/line references below describe the code *before* CR2 unless
+> stated otherwise; §12 maps each task to the files it changed.
 
 ## 1. Core idea
 
@@ -258,62 +259,61 @@ Production:
 Tests: the files listed in §8 — the four store unit tests, the three component
 tests, the two integration tests, and the two i18n tests.
 
-Docs (when implemented): `README.md` (feature bullet), `docs/changelog.md`, and
-the roadmap task card for this change request.
+Docs (CR2.T4): `README.md` (feature bullet), `.serena/memories/core.md`,
+`docs/changelog.md`, and this document (status + implementation map).
 
 Not touched: `lib/blocking/*` (rule generation, snapshot, overlay),
 `store/store.types.ts` (no new field), the storage adapter, the content script.
 
 ---
 
-## 10. Open decisions
+## 10. Decisions (adopted and implemented)
 
-> Status: these choices are resolved by **change request CR2** (§2.5 of
-> `docs/roadmap-en.md`). A is decided (`idle` only); B–G adopt the
-> recommendations below.
+> Status: all decisions below were adopted by **change request CR2**
+> (§2.5 of `docs/roadmap-en.md`) and implemented by CR2.T1–T4.
 
-**A. Lock window — decided: `idle` only.** The blocklist is editable exclusively
-while `timer.status === 'idle'`, i.e. before the first Start and after an
-explicit Reset. `running`, `paused` and `completed` are all locked. Consequences
-to keep in mind while implementing: the lock predicate is exactly
-`status === 'idle'`; a completed session must be reset (one click, no new
-session) before editing; and the notice copy should mention Reset as the way
-out, not "when the session ends".
+**A. Lock window — `idle` only. Implemented in CR2.T1/T2/T3a–c.** The blocklist
+is editable exclusively while `timer.status === 'idle'`, i.e. before the first
+Start and after an explicit Reset. `running`, `paused` and `completed` are all
+locked. The predicate is exactly `status === 'idle'`; a completed session must be
+reset (one click, no new session) before editing; the notice names Reset as the
+way out.
 
-**B. Scope of the lock.** Recommended: every mutation of `BlocklistState` — sites,
-presets **and** tags — because tags are what presets are built from and deleting a
-tag silently rewrites every entry's `tagIds`. Alternative: sites only, leaving tag
-metadata editable; this is inconsistent (a tag edit still changes the persisted
-blocklist).
+**B. Scope of the lock — every `BlocklistState` mutation. Implemented in
+CR2.T1/T2.** Sites, presets **and** tags are locked, because tags are what
+presets are built from and deleting a tag silently rewrites every entry's
+`tagIds`. The pure helpers stay status-agnostic; the guard belongs to the
+actions and the message handler.
 
-**C. Enforcement depth.** Recommended: all three layers (UI, store actions,
-background). The background is the only one that can stop a forged/stale
-message; the store guard keeps the popup's optimistic copy honest; the UI
-explains why.
+**C. Enforcement depth — all three layers. Implemented in CR2.T1 (store),
+CR2.T2 (background) and CR2.T3a–c (UI).** The background is the only layer that
+can stop a forged/stale message; the store guard keeps the popup's optimistic
+copy honest; the UI explains why.
 
-**D. UX shape.** Options: (1) disable the controls and show an inline notice
-(recommended — the list stays readable and the reason is visible); (2) replace
-the whole editor with a banner while locked (simpler, but hides the list);
-(3) allow the clicks and show an error after the fact (worst: silent drift).
+**D. UX shape — disabled controls plus one inline notice. Implemented in
+CR2.T3a/T3b/T3c.** `disabled` (not `aria-disabled`) keeps the controls
+unfocusable; the list and the tag filter stay readable/usable; the single
+`blocklist.locked` notice lives in `BlocklistSection`, not in each editor.
 
-**E. Race between `TIMER_STARTED` and a mutation.** The popup may add a domain
-just as the session starts. The background rejects it, but the popup already
-applied it locally (optimistic `set`), and no storage write follows — so the two
-copies drift until the next successful write or rehydrate. Options: (1) guard in
-the store action too, which shrinks the window to the message/status latency;
-(2) rehydrate the popup store on the `running` transition (cheap, self-healing);
-(3) add a rejection reply to the bus so the popup can revert (protocol change,
-largest diff). Recommended: (1) + (2), and a test that reproduces the race.
+**E. Race between `TIMER_STARTED` and a mutation — store guard + existing sync
+bridge. Implemented in CR2.T1, verified in CR2.T2.** Option (2) of the original
+analysis (an extra rehydrate on the `running` transition) turned out to be
+unnecessary: the transition is itself a storage write, so the M1.T8 bridge
+already replaces the popup's optimistic entry with the persisted state. The
+integration test reproduces the stale-status race and proves the convergence;
+option (3) (a rejection reply on the bus) was not needed.
 
-**F. Startup window.** A mutation handled before `restoreTimer` completes is
-evaluated against the rehydrated status. Recommended: rely on the persisted
-status (it is already authoritative for a running session) and add an
-integration test for "background restart mid-session + mutation rejected".
+**F. Startup window — persisted status. Implemented and tested in CR2.T2.** A
+mutation handled before `restoreTimer` completes is evaluated against the
+rehydrated status, which is authoritative for a running session. The
+"background restarted mid-session → mutation rejected" case has its own
+integration test.
 
-**G. Feedback for a rejected message.** Silent drop is the current convention for
-invalid payloads (identity check → no persist). Recommended: keep it silent for
-forged messages, but log at debug level with the message type, so a support
-report can distinguish "the lock worked" from "the message was lost".
+**G. Feedback for a rejected message — silent + debug log. Implemented in
+CR2.T2.** The message is dropped without a user-visible error (the UI prevents
+the action anyway) and logged at `debug` level with `{ type }` only, so a support
+report can distinguish "the lock worked" from "the message was lost" without
+logging user data.
 
 ---
 
@@ -340,3 +340,21 @@ the screen the user sees**. A correct implementation treats the request as a
 write guard evaluated against `timer.status` in the store actions *and* in the
 background mutation handler, with the UI only reflecting that decision — never as
 a purely visual disable.
+
+---
+
+## 12. Implementation map (CR2)
+
+| Task | Files | What it changed |
+|---|---|---|
+| CR2.T1 | `store/blocklist.slice.ts`, `store/index.ts` | `isBlocklistEditable` + `selectBlocklistEditable`; guard in all seven actions before any `set`/`sendMutation` |
+| CR2.T2 | `lib/messaging/apply-mutation.ts`, `entrypoints/background.ts` | background rejection with a `debug` log (`{ type }` only); startup and stale-status race integration tests |
+| CR2.T3a | `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx` | controls disabled outside `idle`; no stale preview/feedback |
+| CR2.T3b | `components/blocklist/TagEditor.tsx` | create/delete/assign disabled; tag filter stays usable |
+| CR2.T3c | `entrypoints/popup/App.tsx`, `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml` | single `blocklist.locked` notice with EN/IT copy |
+| CR2.T4 | `README.md`, `.serena/memories/core.md`, `docs/changelog.md`, this document | documentation and final verification |
+
+**Post-change invariant:** `BlocklistState` is editable **iff**
+`timer.status === 'idle'`, enforced in the store actions and in the background
+handler, and reflected by the UI. No persisted field, no schema change, no
+change to blocking enforcement.
