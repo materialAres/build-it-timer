@@ -31,6 +31,7 @@ city:
 
 score:
   excellent: Eccellente
+  great: Ottimo
   good: Buono
   bad: Scarso
   badgeAriaLabel: 'Punteggio di concentrazione: $1'

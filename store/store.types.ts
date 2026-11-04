@@ -1,6 +1,8 @@
+import type { CompletionLevel } from '@/lib/score/completion-bands';
+
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
 
-export type ScoreLevel = 'excellent' | 'good' | 'bad';
+export type ScoreLevel = CompletionLevel;
 
 export interface TimerState {
   readonly status: TimerStatus;

@@ -9,6 +9,7 @@ import type { ScoreLevel } from '@/store/store.types';
  */
 export const SCORE_LEVEL_LABEL_KEYS = {
   excellent: 'score.excellent',
+  great: 'score.great',
   good: 'score.good',
   bad: 'score.bad',
 } as const satisfies Record<ScoreLevel, string>;
@@ -19,7 +20,7 @@ export function scoreLevelLabel(level: ScoreLevel): string {
 }
 
 /**
- * The badge's own stylesheet. Each level gets a distinct color so the three
+ * The badge's own stylesheet. Each level gets a distinct color so the four
  * variants are visually unambiguous; the CRT glow follows the level's color
  * through `text-shadow: … currentColor`, matching the city's look (M2.T14).
  */
@@ -36,6 +37,7 @@ const SCORE_BADGE_STYLES = `
     text-shadow: 0 0 4px currentColor;
   }
   .score-badge--excellent { color: #51cf66; }
+  .score-badge--great { color: #4dabf7; }
   .score-badge--good { color: #fcc419; }
   .score-badge--bad { color: #ff6b6b; }
 `;
