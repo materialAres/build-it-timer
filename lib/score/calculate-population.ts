@@ -1,56 +1,55 @@
-/**
- * Inhabitants added by each completed focus tick. The cadence is the same
- * per-session clock that grows the city (see `lib/timer/focus-presets.ts`), so
- * the population advances visibly while the session runs instead of jumping at a
- * few minute thresholds.
- */
-export const POPULATION_PER_TICK = 5;
+import {
+  bandCutoffCharacters,
+  COMPLETION_BANDS,
+  COMPLETION_BONUS_SHARE,
+} from './completion-bands';
 
-/**
- * Clamp untrusted focused time (§1.4), mirroring the growth engine's
- * `ticksFor`: `NaN` is "no time yet", a negative value clamps to 0 and
- * `+Infinity` stays infinite so the population grows without bound.
- */
-function normalizeFocusedMs(focusedMs: number): number {
-  if (Number.isNaN(focusedMs)) return 0;
-  return Math.max(0, focusedMs);
+/** Whole characters in `[0, total]`; untrusted input degrades to 0 (§1.4). */
+function normalizeCharacters(builtCharacters: number, total: number): number {
+  if (!Number.isFinite(builtCharacters) || builtCharacters <= 0) return 0;
+  return Math.min(total, Math.floor(builtCharacters));
 }
 
 /**
- * Population of the city built for `focusedMs` of undistracted focus and
- * `distractedMs` spent on blocked sites (roadmap M2.T18, extended): every
- * completed focus tick adds {@link POPULATION_PER_TICK} inhabitants and every
- * completed distraction tick removes the same amount, so the counter both grows
- * with progress and shrinks with distraction on the very same cadence.
+ * Population of a full session before the completion bonus: every character
+ * earns the rate of the band it is built in. Band `i` covers the characters
+ * between its cutoff and the next band's cutoff, so the last band (100%) has
+ * no characters of its own.
+ */
+function populationForCharacters(built: number, total: number): number {
+  let population = 0;
+  for (let i = 0; i < COMPLETION_BANDS.length - 1; i++) {
+    const band = COMPLETION_BANDS[i];
+    const start = bandCutoffCharacters(band.fromRatio, total);
+    const end = bandCutoffCharacters(COMPLETION_BANDS[i + 1].fromRatio, total);
+    population +=
+      band.populationPerCharacter * Math.max(0, Math.min(built, end) - start);
+  }
+  return population;
+}
+
+/**
+ * Population for `builtCharacters` out of `total` (CR3, supersedes the flat
+ * rate of M2.T18).
  *
- * `tickMs` is the session cadence, derived from the chosen duration by the
- * timer's preset table. Because every preset is worth the same number of ticks
- * over a full session, the total population is duration-neutral: a 5-minute and
- * a 120-minute session both end on the same count.
+ * The rate is marginal: each character earns the rate of the band it is built
+ * in, chosen by the completion *before* it is built, so crossing a cutoff
+ * never changes earlier characters and the result is monotonic. At 100% a
+ * bonus of {@link COMPLETION_BONUS_SHARE} of the population reached is added.
  *
- * The two times are the *same* running-only quantities the background measures
- * (M2.T15/M2.T16), so the population always agrees with the city that was
- * actually built and excludes paused gaps. Distracted time is deliberately not
- * also counted as focus time by the caller, so a tick on a blocked site yields a
- * net {@link POPULATION_PER_TICK} decrease.
+ * `builtCharacters` is the net count (focus minus distraction, never below 0),
+ * so a distraction takes back the latest character at its band's rate.
  *
- * The result is clamped at zero: population is a count of inhabitants and can
- * never be negative, however long the distraction lasts.
- *
- * Pure, total and defensive: same input → same output, no internal
- * `Date.now()`/`Math.random()` (principles D, §1.4), and a non-finite or
- * non-positive `tickMs` degrades to a population of 0 rather than `NaN`. A
- * partial tick contributes nothing — only whole ticks count.
+ * Pure and total: no hard-coded total, no `Date.now()`/`Math.random()`;
+ * non-finite or negative characters and an invalid `total` give 0.
  */
 export function calculatePopulation(
-  focusedMs: number,
-  distractedMs = 0,
-  tickMs: number,
+  builtCharacters: number,
+  total: number,
 ): number {
-  if (!Number.isFinite(tickMs) || tickMs <= 0) return 0;
-  const focusTicks = Math.floor(normalizeFocusedMs(focusedMs) / tickMs);
-  const distractionTicks = Math.floor(
-    normalizeFocusedMs(distractedMs) / tickMs,
-  );
-  return Math.max(0, focusTicks - distractionTicks) * POPULATION_PER_TICK;
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  const built = normalizeCharacters(builtCharacters, total);
+  const population = populationForCharacters(built, total);
+  if (built < total) return population;
+  return population + Math.round(population * COMPLETION_BONUS_SHARE);
 }
