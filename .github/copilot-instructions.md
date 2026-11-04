@@ -90,8 +90,8 @@ timer-focus/
 │   │   ├── palette.ts           # domain hash → deterministic color (within the active theme)
 │   │   └── export-image.ts      # city canvas/DOM serialization → JPEG/PNG
 │   ├── score/
-│   │   ├── calculate-score.ts   # Excellent/Good/Bad — exact formula: open point, see §4
-│   │   ├── calculate-population.ts # +5 per house, +15 per building floor
+│   │   ├── calculate-score.ts   # Excellent/Great/Good/Bad from the completion bands (CR3)
+│   │   ├── calculate-population.ts # tiered rate per character by completion band + 7% completion bonus (CR3)
 │   │   └── apply-malus.ts       # character-by-character deletion of the affected building
 │   └── timer/
 │       └── alarm-adapter.ts     # interface + implementation for browser.alarms
@@ -295,7 +295,7 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M2.T21 (input normalization) | Unit + Integration | vitest (+ `wxt/testing`) | "Bare" public suffix (`co.uk`, `com`) rejected with "Enter a valid URL"; same input → same canonical form from entry and from navigation check; malformed URL during check does not crash and does not incorrectly block. |
 | M2.T7 (apply DNR rules) | Integration | vitest + `wxt/testing` | Blocklist changes while `status !== 'running'` → no call to `updateDynamicRules` (or agreed-upon behavior, see §4). |
 | M2.T8 (overlay content script) | Component (for `BlockedOverlay.tsx`) + Integration (for the content script) | Testing Library, vitest + `wxt/testing` | Overlay mounted twice on the same page (idempotence); message sent to the background when the background doesn't respond (timeout). |
-| M2.T9 (calculate score) | Unit | vitest | Values exactly on the boundaries (0, 0.2, 0.5, 1.0); values out of range [0,1] (defensive input). |
+| M2.T9 (calculate score) | Unit | vitest | *(Amended by CR3)* Four levels from `builtCharacters / total`: exact band boundaries (`179/180`, `419/420`, `599/600` at total 600, and the same percentages at another total); `NaN`/negative/invalid total → `bad`; above total → `excellent`. |
 | M2.T10 (apply malus) | Unit | vitest | Malus applied when the city is already "empty" (no building to destroy: behavior must be explicit, not a crash). |
 | M2.T11 (`citySlice`) | Unit | vitest | `destroyBuilding` on out-of-grid coordinates. |
 | M2.T11b (tile library) | Unit | vitest | Every module declares its own width; all modules in the same category have mutually compatible widths (no misalignment when stacked); no duplicate module ids. |
@@ -307,8 +307,8 @@ Note: `@testing-library/jest-dom` extends `vitest`/`expect` matchers for readabl
 | M2.T14 (CityCanvas/CityCell) | Component | Testing Library | Empty grid (no buildings); grid with all cells `destroyed`. |
 | M2.T15 (growth ↔ tick) | Integration | vitest + `wxt/testing` | A tick occurring while `status === 'paused'` (must not make the city grow). |
 | M2.T16 (malus ↔ destruction) | Integration | vitest + `wxt/testing` | Two malus events in close succession (no double application unless intentional). |
-| M2.T17 (ScoreBadge) | Component | Testing Library | State transition from `excellent` to `bad` between two consecutive renders. |
-| M2.T18 (population) | Unit + Component | vitest, Testing Library | Formula agrees with the M2.T11c unlock schedule for the same focused time and is independent of the random module variant; decorative `top` elements add no inhabitants; `NaN`/negative/`-Infinity` → `0`, `+Infinity` → maximum; `PopulationCounter` reads via the selector and computes nothing. |
+| M2.T17 (ScoreBadge) | Component | Testing Library | *(Amended by CR3)* Four variants including `great`; state transition from `excellent` to `bad` between two consecutive renders. |
+| M2.T18 (population) | Unit + Component | vitest, Testing Library | *(Amended by CR3)* Tiered marginal rate per completion band (5/10/20) plus a 7% bonus at 100%, no hard-coded total, a perfect session of every preset gives exactly `total` characters; `NaN`/negative/non-finite → `0`; `PopulationCounter` reads via the selector and computes nothing. |
 | M2.T19 (session history slice) | Unit | vitest | Newest-first insertion; dedup by `sessionId` (a re-emitted `SESSION_ENDED` replaces, not grows); cap at 5 dropping the oldest; a no-op returns the same reference; the history survives a simulated "restart" while `ui` does not. |
 | M2.T20 (allow/block mutual exclusion) | — | — | **Obsolete** (superseded by CR1): there is a single blocklist and no second list to conflict with. |
 | M3.T1 (PresetPicker) | Component | Testing Library | Applying two presets with overlapping domains (no resulting duplicate, reuses the M2.T4 logic). |
@@ -339,7 +339,7 @@ In absolute priority order (to be tested most thoroughly, with the most edge cas
 1. **Timer persistence via `browser.alarms`** (M1.T5, M2.T1, M2.T2) — this is the logic with the largest surface for "silent" bugs (a timer that resets to zero, duplicates, or doesn't resume after a service worker restart). Highest priority because a bug here breaks the user's trust in the entire "focus session" concept.
 2. **URL parsing with `tldts`** (M1.T2) — this is the security/correctness foundation of the entire blocking system: a bug here can let through sites that should be blocked (or, conversely, block legitimate sites). It must be tested against a broad, heterogeneous set of real URLs, not just the "happy" cases.
 3. **Site blocking logic** (M2.T6, M2.T7, M2.T21) — directly dependent on the previous point; blocking is decided against the single blocklist only (there is no second list and no precedence rule — never reintroduce one; CR1.T4). Defensive input normalization (entry + navigation check, M2.T21) must be treated as critical logic.
-4. **Score and malus calculation** (M2.T9, M2.T10, M4.T1) — this is the heart of the "gamification" and of the user's sense of fairness: the boundaries between Excellent/Good/Bad must be exact and covered by parametric tests on all threshold values.
+4. **Score and malus calculation** (M2.T9, M2.T10, M4.T1) — this is the heart of the "gamification" and of the user's sense of fairness: the boundaries between Excellent/Great/Good/Bad (completion bands, CR3) must be exact and covered by parametric tests on all threshold values.
 5. **Determinism of the building palette** (M2.T13) — lower priority than the previous ones (a "wrong" color doesn't break functionality), but determinism must still be guaranteed with repetition tests, because it's an explicit requirement of the source document ("the same building always has the same color").
 
 These five points must also be re-verified (regression) every time a module they depend on is touched, even if the task being completed is nominally a different one (e.g. modifying `growth-engine.ts` for M4.T1 requires re-running the M2.T12 tests as well).

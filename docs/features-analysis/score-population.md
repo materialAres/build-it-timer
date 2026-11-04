@@ -4,8 +4,9 @@
 > from the percentage of city characters built**, the score gains a fourth level
 > (`great`), and the population grows faster in later bands with a completion
 > bonus.
-> Status: **proposed** (not implemented). File/line references describe the
-> current tree (`main` @ `8bdbb57`).
+> Status: **implemented by CR3.T1–T11** (see `docs/roadmap-en.md` §2.6). File/line
+> references describe the tree before the change (`main` @ `8bdbb57`) and are
+> kept as history.
 
 ## 1. Core idea
 
