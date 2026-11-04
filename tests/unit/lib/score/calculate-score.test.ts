@@ -1,56 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { calculateScore, GOOD_MAX_RATIO } from '@/lib/score/calculate-score';
+import { calculateScore } from '@/lib/score/calculate-score';
 
-describe('calculateScore (M2.T9)', () => {
-  it('maps a ratio of 0 to excellent', () => {
-    expect(calculateScore(0)).toBe('excellent');
+describe('calculateScore (CR3.T3)', () => {
+  it.each([
+    [0, 'bad'],
+    [179, 'bad'],
+    [180, 'good'],
+    [419, 'good'],
+    [420, 'great'],
+    [599, 'great'],
+    [600, 'excellent'],
+  ])('maps %i of 600 characters to %s', (built, expected) => {
+    expect(calculateScore(built, 600)).toBe(expected);
   });
 
-  it('maps the good upper boundary (0.3) to good', () => {
-    expect(calculateScore(0.3)).toBe('good');
+  it.each([
+    [0, 'bad'],
+    [299, 'bad'],
+    [300, 'good'],
+    [699, 'good'],
+    [700, 'great'],
+    [999, 'great'],
+    [1000, 'excellent'],
+  ])('keeps the same percentages for a total of 1000: %i is %s', (built, expected) => {
+    expect(calculateScore(built, 1000)).toBe(expected);
   });
 
-  it('maps just above the boundary (0.31) to bad', () => {
-    expect(calculateScore(0.31)).toBe('bad');
+  it('starts the good band at ceil(30%) when the total is not a multiple', () => {
+    expect(calculateScore(180, 601)).toBe('bad');
+    expect(calculateScore(181, 601)).toBe('good');
   });
 
-  it('maps a full distraction ratio (1.0) to bad', () => {
-    expect(calculateScore(1.0)).toBe('bad');
+  it('floors a fractional character count', () => {
+    expect(calculateScore(179.9, 600)).toBe('bad');
+    expect(calculateScore(599.9, 600)).toBe('great');
   });
 
-  it('covers every threshold boundary parametrically', () => {
-    const cases: ReadonlyArray<readonly [number, ReturnType<typeof calculateScore>]> = [
-      [0, 'excellent'],
-      [0.001, 'good'],
-      [0.15, 'good'],
-      [0.3, 'good'],
-      [0.3000001, 'bad'],
-      [0.31, 'bad'],
-      [0.75, 'bad'],
-      [1.0, 'bad'],
-    ];
+  describe('defensive inputs', () => {
+    it.each([Number.NaN, -1, Number.NEGATIVE_INFINITY])(
+      'maps the invalid count %s to bad',
+      (built) => {
+        expect(calculateScore(built, 600)).toBe('bad');
+      },
+    );
 
-    for (const [ratio, expected] of cases) {
-      expect(calculateScore(ratio), `ratio ${String(ratio)}`).toBe(expected);
-    }
-  });
+    it.each([0, -600, Number.NaN, Number.POSITIVE_INFINITY])(
+      'maps the invalid total %s to bad',
+      (total) => {
+        expect(calculateScore(300, total)).toBe('bad');
+      },
+    );
 
-  it('treats the exact good boundary as inclusive and the next value as bad', () => {
-    expect(calculateScore(GOOD_MAX_RATIO)).toBe('good');
-    expect(calculateScore(GOOD_MAX_RATIO + Number.EPSILON)).toBe('bad');
-  });
-
-  it('treats only an exact zero as excellent', () => {
-    expect(calculateScore(0)).toBe('excellent');
-    expect(calculateScore(-0)).toBe('excellent');
-    expect(calculateScore(0.0001)).toBe('good');
-  });
-
-  it('is defensive with out-of-range input and never throws', () => {
-    expect(calculateScore(-0.5)).toBe('excellent');
-    expect(calculateScore(-Infinity)).toBe('excellent');
-    expect(calculateScore(1.5)).toBe('bad');
-    expect(calculateScore(Infinity)).toBe('bad');
-    expect(calculateScore(Number.NaN)).toBe('excellent');
+    it('clamps a count above the total to excellent', () => {
+      expect(calculateScore(900, 600)).toBe('excellent');
+      expect(calculateScore(Number.POSITIVE_INFINITY, 600)).toBe('excellent');
+    });
   });
 });
