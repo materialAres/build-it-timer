@@ -30,4 +30,4 @@ WXT MV3 browser extension ("Build-it! Timer Focus"): a focus-session timer that 
 - Language/framework versions and toolchain: `mem:tech_stack`.
 - Commands to develop, build, test: `mem:suggested_commands`.
 - Code style, slice/component patterns, test layout: `mem:conventions`.
-- Definition of done (checks + changelog + no commits): `mem:task_completion`.
+- Definition of done (checks + changelog + commits only via `commit` skill): `mem:task_completion`.

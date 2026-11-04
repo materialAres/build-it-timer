@@ -29,5 +29,5 @@
 
 ## Docs & process
 - Read `docs/roadmap-en.md` and `docs/changelog.md` in full for project context; task cards define acceptance criteria.
-- Never run git write commands (commit/push/tag/merge/rebase/reset); leave changes for the human to review and commit.
-- One changelog entry per completed task (what/API, files, deps, tests + counts, decisions, acceptance status); keep status marker and test counts truthful; commit column stays `—` until the human commits.
+- Commit only via the `commit` skill (`.claude/skills/commit/SKILL.md`) and only when the user asks; never run other git write commands (push/tag/merge/rebase/reset) unless explicitly requested.
+- One changelog entry per completed task (what/API, files, deps, tests + counts, decisions, acceptance status); keep status marker and test counts truthful; commit column stays `—` until a real commit exists.
