@@ -312,6 +312,17 @@ describe('popup → background timer path (M3.T3b)', () => {
     });
     await flushAsync();
     expect(selectPopulation(popupStore.getState())).toBe(10);
+    expect(popupStore.getState().score.level).toBe('bad');
+
+    // Crossing 30% (character 181) reaches the popup with the new rate and level.
+    now = T0 + TICK_MS * 181;
+    await sendMessage({
+      type: 'TIMER_TICK',
+      payload: { remainingSeconds: 1_000 },
+    });
+    await flushAsync();
+    expect(selectPopulation(popupStore.getState())).toBe(910);
+    expect(popupStore.getState().score.level).toBe('good');
 
     handle.dispose();
   });
