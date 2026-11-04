@@ -49,10 +49,10 @@ describe('SessionHistory (M3.T7)', () => {
   });
 
   it('renders the score level from the stored value without recalculating it', () => {
-    // distractionRatio 0 would derive 'excellent', but the stored summary says
+    // The live level is 'excellent', but the stored summary says
     // 'bad': the component must trust the stored level, never recompute it.
     useAppStore.setState((state) => ({
-      score: { ...state.score, level: 'excellent', distractionRatio: 0 },
+      score: { ...state.score, level: 'excellent' },
       sessionHistory: { sessions: [makeSummary('finished', 'bad', 35)] },
     }));
 
@@ -62,6 +62,17 @@ describe('SessionHistory (M3.T7)', () => {
     expect(item).toHaveAttribute('data-score', 'bad');
     expect(item).toHaveTextContent('Bad');
     expect(item).not.toHaveTextContent('Excellent');
+  });
+
+  it('renders a great entry with its label and class', () => {
+    setHistory([makeSummary('great-one', 'great', 4000)]);
+
+    render(<SessionHistory />);
+
+    const item = document.querySelector('.session-history__item');
+    expect(item).toHaveAttribute('data-score', 'great');
+    expect(item).toHaveTextContent('Great');
+    expect(document.querySelector('.session-history__score--great')).not.toBeNull();
   });
 
   it('shows the population and the score label of each session', () => {

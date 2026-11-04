@@ -3,11 +3,11 @@ import {
   advanceProgress,
   type AdvanceProgressOptions,
 } from '@/lib/timer/session-progress';
-import { calculatePopulation } from '@/lib/score/calculate-population';
 import type { TimerState } from '@/store/store.types';
 
 const T0 = 1_700_000_000_000;
 const TICK_MS = 3_000;
+const DURATION_MS = 1_500_000;
 
 function runningTimer(overrides: Partial<TimerState> = {}): TimerState {
   return {
@@ -27,7 +27,12 @@ function runningTimer(overrides: Partial<TimerState> = {}): TimerState {
 function options(
   overrides: Partial<AdvanceProgressOptions> = {},
 ): AdvanceProgressOptions {
-  return { distracted: false, tickMs: TICK_MS, ...overrides };
+  return {
+    distracted: false,
+    tickMs: TICK_MS,
+    durationMs: DURATION_MS,
+    ...overrides,
+  };
 }
 
 describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
@@ -76,7 +81,8 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       distractedMs: 0,
       lastAccountedAt: T0 + TICK_MS * 4,
       targetTicks: 5,
-      population: calculatePopulation(TICK_MS * 5, 0, TICK_MS),
+      // 15 000 ms of a 1 500 000 ms session worth 600 characters.
+      builtCharacters: 6,
     });
   });
 
@@ -92,10 +98,9 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       distractedMs: TICK_MS * 2,
       lastAccountedAt: T0 + TICK_MS * 2,
       targetTicks: 5,
-      population: calculatePopulation(TICK_MS * 5, TICK_MS * 2, TICK_MS),
+      // 6 focus characters minus 2 distraction characters (6 000 ms).
+      builtCharacters: 4,
     });
-    // Net loss: the city already has 5 ticks, the population drops by 2.
-    expect(progress?.population).toBe((5 - 2) * 5);
   });
 
   it('caps the credited stretch at endsAt (no time past the deadline)', () => {
@@ -111,7 +116,7 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
     expect(progress?.targetTicks).toBe(3);
   });
 
-  it('keeps the time but derives no reward from an invalid cadence', () => {
+  it('keeps the time and the score but derives no growth from an invalid cadence', () => {
     for (const tickMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const progress = advanceProgress(
         runningTimer(),
@@ -121,7 +126,8 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       expect(progress?.focusedMs).toBe(TICK_MS);
       expect(progress?.lastAccountedAt).toBe(T0 + TICK_MS);
       expect(progress?.targetTicks).toBe(0);
-      expect(progress?.population).toBe(0);
+      // Characters are counted from the duration, not from the cadence.
+      expect(progress?.builtCharacters).toBe(1);
     }
   });
 
@@ -148,5 +154,26 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       lastAccountedAt: first.lastAccountedAt,
     });
     expect(advanceProgress(applied, now, options())).toBeUndefined();
+  });
+
+  it('counts exactly the total for a perfect session, whatever the cadence', () => {
+    for (const tickMs of [TICK_MS, 2_500, 7_777]) {
+      const progress = advanceProgress(
+        runningTimer(),
+        T0 + DURATION_MS,
+        options({ tickMs }),
+      );
+      expect(progress?.builtCharacters).toBe(600);
+    }
+  });
+
+  it('degrades an invalid duration to no built characters', () => {
+    const progress = advanceProgress(
+      runningTimer(),
+      T0 + TICK_MS,
+      options({ durationMs: 0 }),
+    );
+    expect(progress?.focusedMs).toBe(TICK_MS);
+    expect(progress?.builtCharacters).toBe(0);
   });
 });
