@@ -69,7 +69,7 @@ export interface TimerSlice {
    */
   recordDistractedMs(distractedMs: number): void;
   /**
-   * Persist one accounting step produced by `advanceProgress` (M2.T15/M2.T18):
+   * Persist one accounting step produced by `advanceProgress` (M2.T15, CR3):
    * the two running-only accumulators and the new wall-clock checkpoint. The
    * background calls it on every wake (tick, progress alarm, restart) so a gap
    * with no sampling ticks is still credited. One `set` for all three fields

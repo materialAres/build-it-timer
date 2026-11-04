@@ -18,13 +18,14 @@ function normalizeCharacters(builtCharacters: number, total: number): number {
  */
 function populationForCharacters(built: number, total: number): number {
   let population = 0;
-  for (let i = 0; i < COMPLETION_BANDS.length - 1; i++) {
-    const band = COMPLETION_BANDS[i];
+  COMPLETION_BANDS.forEach((band, i) => {
+    const next = COMPLETION_BANDS[i + 1];
+    if (next === undefined) return;
     const start = bandCutoffCharacters(band.fromRatio, total);
-    const end = bandCutoffCharacters(COMPLETION_BANDS[i + 1].fromRatio, total);
-    population +=
-      band.populationPerCharacter * Math.max(0, Math.min(built, end) - start);
-  }
+    const end = bandCutoffCharacters(next.fromRatio, total);
+    const inBand = Math.max(0, Math.min(built, end) - start);
+    population += band.populationPerCharacter * inBand;
+  });
   return population;
 }
 
