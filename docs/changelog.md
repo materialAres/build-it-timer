@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR2.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR3.T11** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -18,8 +18,9 @@ description: Rules for updating the changelog
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
+- Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **767 passing tests** across 76 files (green).
+- Tests: `bun run test` → **863 passing tests** across 78 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -109,6 +110,17 @@ description: Rules for updating the changelog
 | CR2.T3b | Disable the tag editor while keeping its filter | completed | `f335d3b` |
 | CR2.T3c | Add the lock notice and the locale keys | completed | `3784330` |
 | CR2.T4 | Documentation, changelog, and final verification | completed | `3520784` |
+| CR3.T1 | Completion bands table and `calculateBuiltCharacters` | completed | `ac45122` |
+| CR3.T2 | `great` level: `ScoreLevel`, badge, history styles and locales | completed | `075ff9b` |
+| CR3.T3 | Tiered `calculatePopulation` and band-based `calculateScore` | completed | `50aa6d2` |
+| CR3.T4 | Progress accounting emits `builtCharacters` | completed | `33b4f23` |
+| CR3.T5 | Score slice stores `builtCharacters`; persistence rebuilds the score | completed | `0c4a381` |
+| CR3.T6 | Background writers use `setBuiltCharacters` | completed | `30e383f` |
+| CR3.T7 | Tests — pure score logic | completed | `a1208b6` |
+| CR3.T8 | Tests — progress accounting, slice and score components | completed | `a7dd650` |
+| CR3.T9 | Tests — integration (background, messaging, store) | completed | `6e7a97e` |
+| CR3.T10 | Documentation — README, instructions, analysis, memory | completed | `e288636` |
+| CR3.T11 | Changelog and final verification | completed | — (to be committed) |
 
 ---
 
@@ -1150,6 +1162,112 @@ description: Rules for updating the changelog
 - Acceptance criteria: verified — the analysis is marked implemented with every decision recorded, the README and memory describe the blocklist as editable only in `idle`, the changelog has one entry per CR2 task with real counts, and the full gate including e2e is green.
 - Commit: `3520784 feat(CR2): complete blocklist lock implementation; enforce edit restrictions during active timer states and update documentation`.
 
+### CR3.T1 — Completion bands table and `calculateBuiltCharacters`
+- `lib/score/completion-bands.ts`: `COMPLETION_BANDS` (`bad` 0 / 5, `good` 0.3 / 10, `great` 0.7 / 20, `excellent` 1 / 0), the `CompletionLevel` type derived from it, `COMPLETION_BONUS_SHARE = 0.07`, `bandCutoffCharacters(fromRatio, total) = ceil(fromRatio × total)` and `calculateCompletion` (ratio clamped to `[0, 1]`).
+- `lib/score/calculate-built-characters.ts`: `calculateBuiltCharacters(focusedMs, distractedMs, durationMs, total)` counts characters from the session duration (not from the rounded `tickMs`), caps focus at `total` and never goes below 0; invalid input degrades to 0.
+- Files created/modified: `lib/score/completion-bands.ts` (new), `lib/score/calculate-built-characters.ts` (new).
+- Dependencies added: none.
+- Tests: covered by CR3.T7.
+- Relevant notes/decisions: `+Infinity` focus time counts as 0 characters (all non-finite input degrades to 0). The task compiled on its own because nothing consumed the files yet.
+- Acceptance criteria: verified.
+- Commit: `ac45122 feat(CR3.T1): add completion bands table and calculateBuiltCharacters`.
+
+### CR3.T2 — `great` level: `ScoreLevel`, badge, history styles and locales
+- `ScoreLevel` is now `CompletionLevel` (`'excellent' | 'great' | 'good' | 'bad'`), derived from the bands table.
+- `ScoreBadge` gets the `great` label key and `.score-badge--great` (blue `#4dabf7`); `SessionHistory` gets `.session-history__score--great`; `score.great` is "Great" (EN) and "Ottimo" (IT).
+- Files created/modified: `store/store.types.ts`, `components/score/ScoreBadge.tsx`, `components/score/SessionHistory.tsx`, `locales/en.yml`, `locales/it.yml`.
+- Dependencies added: none.
+- Tests: covered by CR3.T8 (component tests) and the existing EN/IT key-parity test.
+- Relevant notes/decisions: the WXT i18n key types are generated, so `bunx wxt prepare` must be re-run after adding a key (it also runs on `postinstall`).
+- Acceptance criteria: verified.
+- Commit: `075ff9b feat(CR3.T2): add great score level to type, badge, history and locales`.
+
+### CR3.T3 — Tiered `calculatePopulation` and band-based `calculateScore`
+- `calculatePopulation(builtCharacters, total)`: marginal rate per band (5 / 10 / 20), plus `round(0.07 × population before the bonus)` when `builtCharacters === total`; for total 600 it gives `179 → 895`, `180 → 900`, `181 → 910`, `420 → 3300`, `421 → 3320`, `599 → 6880`, `600 → 7383`.
+- `calculateScore(builtCharacters, total)`: the level of the highest band whose cutoff is reached; invalid input → `bad`, above `total` → `excellent`.
+- `POPULATION_PER_TICK` and `GOOD_MAX_RATIO` are removed.
+- Files created/modified: `lib/score/calculate-population.ts`, `lib/score/calculate-score.ts`.
+- Dependencies added: none.
+- Tests: covered by CR3.T7.
+- Relevant notes/decisions: no hard-coded total; the 180th character earns 5 and the 181st earns 10 (the rate uses the completion before the character is built).
+- Acceptance criteria: verified.
+- Commit: `50aa6d2 feat(CR3.T3): rewrite population and score on the completion bands`.
+
+### CR3.T4 — Progress accounting emits `builtCharacters`
+- `advanceProgress` returns `builtCharacters` (from `calculateBuiltCharacters` with `TOTAL_CHARACTERS_PER_SESSION`) instead of `population`; its options gain `durationMs`. `tickMs` now only drives city growth.
+- Also fixes an unchecked band lookup in `calculatePopulation` left by CR3.T3 (strict indexed access).
+- Files created/modified: `lib/timer/session-progress.ts`, `store/timer.slice.ts` (doc comment), `lib/score/calculate-population.ts` (type fix).
+- Dependencies added: none.
+- Tests: covered by CR3.T8.
+- Relevant notes/decisions: the accounting rules (cap at `endsAt`, pause/resume, reconciliation) are unchanged; only the projection changes.
+- Acceptance criteria: verified.
+- Commit: `33b4f23 feat(CR3.T4): emit builtCharacters from progress accounting`.
+
+### CR3.T5 — Score slice stores `builtCharacters`; persistence rebuilds the score
+- `ScoreState` is `{ builtCharacters, level, population }`; `setBuiltCharacters(n)` normalizes the count and derives population and level through `deriveScoreState` (exported). `setDistractionRatio`, `setPopulation` and `selectDistractionRatio` are removed. The initial state is `0` / `bad` / `0`.
+- The persist `merge` rebuilds `score` from `saved.score.builtCharacters` and ignores every other saved score field, so a legacy snapshot is repaired.
+- Files created/modified: `store/score.slice.ts`, `store/index.ts`.
+- Dependencies added: none.
+- Tests: covered by CR3.T8 and CR3.T9.
+- Relevant notes/decisions: no `version` bump and no `migrate`; `sessionHistory` is untouched (old entries age out).
+- Acceptance criteria: verified.
+- Commit: `0c4a381 feat(CR3.T5): store builtCharacters in the score slice and rebuild score on rehydration`.
+
+### CR3.T6 — Background writers use `setBuiltCharacters`
+- The growth tracker passes `durationMs` to `advanceProgress` and writes `progress.builtCharacters` (skipped while unchanged); session completion recomputes the count with `calculateBuiltCharacters` and calls `setBuiltCharacters`, then builds the `SessionSummary` from `score.level` and `score.population` read after the final write.
+- Files created/modified: `entrypoints/background.ts`.
+- Dependencies added: none.
+- Tests: covered by CR3.T9.
+- Relevant notes/decisions: the doc comments about the population cadence and the `distractionRatio` open point are rewritten.
+- Acceptance criteria: verified — production code compiled and linted clean; both builds succeeded.
+- Commit: `30e383f feat(CR3.T6): write built characters from the background growth tracker and completion`.
+
+### CR3.T7 — Tests — pure score logic
+- Two new files (`completion-bands.test.ts`, `calculate-built-characters.test.ts`) and two rewrites (`calculate-score.test.ts`, `calculate-population.test.ts`).
+- Files created/modified: `tests/unit/lib/score/completion-bands.test.ts` (new), `tests/unit/lib/score/calculate-built-characters.test.ts` (new), `tests/unit/lib/score/calculate-score.test.ts`, `tests/unit/lib/score/calculate-population.test.ts`.
+- Dependencies added: none.
+- Tests: 18 + 39 + 24 + 23 = 104 tests (unit) — band table validity, cutoffs for totals 600/601/700/1000, boundaries at 600 and 1000, the reference populations, the 7% bonus at another total, monotonicity, defensive inputs, and the reachability guard (a perfect session of each of the 8 presets gives exactly `total` for 600, 700 and 1000).
+- Relevant notes/decisions: expected numbers are literals from the roadmap card, not recomputed with the production formula.
+- Acceptance criteria: verified.
+- Commit: `a1208b6 test(CR3.T7): cover completion bands, built characters, score and population`.
+
+### CR3.T8 — Tests — progress accounting, slice and score components
+- `session-progress.test.ts` asserts `builtCharacters` (6 for a stretch of focus, 4 after two distraction characters, exactly 600 for a perfect session whatever the cadence, 0 for an invalid duration); `score-slice.test.ts` is rewritten (initial `bad`, bands, drop-back, selectors, normalization, removed actions); `ScoreBadge`/`SessionHistory` tests cover `great`.
+- Files created/modified: `tests/unit/lib/timer/session-progress.test.ts`, `tests/unit/store/score-slice.test.ts`, `tests/unit/components/score/ScoreBadge.test.tsx`, `tests/unit/components/score/SessionHistory.test.tsx`.
+- Dependencies added: none.
+- Tests: 11 + 11 + 7 + 8 tests (unit/component) in the four files.
+- Relevant notes/decisions: `PopulationCounter.test.tsx` needed no change.
+- Acceptance criteria: verified.
+- Commit: `a7dd650 test(CR3.T8): migrate progress, score slice and score component tests`.
+
+### CR3.T9 — Tests — integration (background, messaging, store)
+- `growth-tick.test.ts`: the old population tests move to tiered values; new tests walk the live level through the bands (`179 … 600` characters) and show a distraction costing 20 in the `great` band, then 10 after dropping to `good`. `session-completion.test.ts`: a perfect session records `excellent` / 7383; a parametrized test ends sessions as `great` / 4500, `good` / 1500 and `bad` / 300. `timer-mutation-bus.test.ts`: the live level and population reach a read-only popup at the 30% cutoff. `store.test.ts`: default `bad`/0, a legacy score is rebuilt and `distractionRatio` dropped, and a persisted `builtCharacters` derives level and population.
+- Files created/modified: `tests/integration/background/growth-tick.test.ts`, `tests/integration/background/session-completion.test.ts`, `tests/integration/messaging/timer-mutation-bus.test.ts`, `tests/integration/store/store.test.ts`.
+- Dependencies added: none.
+- Tests: 863 passing tests across 78 files after this task (integration).
+- Relevant notes/decisions: `background.test.ts` needed no change.
+- Acceptance criteria: verified — the full gate is green again.
+- Commit: `6e7a97e test(CR3.T9): cover live bands, completion and legacy score rehydration`.
+
+### CR3.T10 — Documentation — README, instructions, analysis, memory
+- `README.md` describes the four levels, the 30% / 70% / 100% bands, the 5 / 10 / 20 rates and the 7% bonus; `.github/copilot-instructions.md` updates the `lib/score/` layout comments and the M2.T9 / M2.T17 / M2.T18 test-mapping rows and §3.4 item 4; the analysis document is marked implemented; `.serena/memories/core.md` records the invariant.
+- Files created/modified: `README.md`, `.github/copilot-instructions.md`, `docs/features-analysis/score-population.md`, `.serena/memories/core.md`.
+- Dependencies added: none.
+- Tests: none (documentation only).
+- Relevant notes/decisions: the analysis document keeps its pre-change file/line references as history.
+- Acceptance criteria: verified.
+- Commit: `e288636 docs(CR3.T10): document completion-based score and tiered population`.
+
+### CR3.T11 — Changelog and final verification
+- This changelog: summary rows and detail entries for CR3.T1–T11, the updated current status and counts, and the open issue about the `distractionRatio` formula removed.
+- Final gate: `bun run compile` and `bun run lint` clean; `bun run test` → **863 passing tests across 78 files**; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → **1 passing test**. A search for `distractionRatio`, `setPopulation`, `POPULATION_PER_TICK` and `GOOD_MAX_RATIO` in the source finds no runtime reference — only the legacy-snapshot fixtures in `store.test.ts`, the "removed action" assertion in `score-slice.test.ts` and a local helper named `setPopulation` in `PopulationCounter.test.tsx`.
+- Files created/modified: `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: no test added in this task; the suite grew from 767 tests / 76 files to 863 / 78 over CR3.
+- Relevant notes/decisions: no persistence version bump, so there is no migration entry. The amended criteria of roadmap §2.6.3 now match the implementation.
+- Acceptance criteria: verified.
+- Commit: — (to be committed).
+
 ---
 
 ## Dependencies added over the course of the tasks
@@ -1168,7 +1286,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 
 ## Open issues and points to clarify
 
-1. **Roadmap §4 open point** not to be anticipated (YAGNI): exact `distractionRatio` formula; behavior beyond grid capacity.
+1. **Roadmap §4 open point** not to be anticipated (YAGNI): behavior beyond grid capacity. *(The exact `distractionRatio` formula is resolved by CR3: the ratio path was removed and the score derives from `builtCharacters`.)*
 2. **Resolved (M3.T5)** — `framer-motion` was not installed; it is now a runtime dependency (`^14.0.0`) used by `CityCell.tsx` and mocked in `tests/setup.ts`.
 3. **`store-analysis.md` note (M2.T1)** — the analysis predicted that adding action functions to a slice would break `PersistedState = Omit<AppState, keyof UiSlice>`; the type is now declared explicitly (`store/index.ts`), so a future action cannot leak into storage.
 4. **Manifest permissions are not auto-detected by WXT** — they must be declared in `wxt.config.ts` (`storage`/`alarms` added in the M2.T1 fix, `declarativeNetRequest` in M2.T7, `host_permissions: ['<all_urls>']` in M2.T8, `tabs` in M2.T10). `fakeBrowser` does **not** mask a missing permission the way a hand-written mock would: it exposes the API *namespaces* but leaves every method unimplemented (each throws `MockNotImplementedError`), so a background test that reaches an unimplemented API fails at that boundary rather than silently succeeding. What the suite still cannot verify is the manifest itself — `fakeBrowser` never reads it, so a permission declared in code but missing from `wxt.config.ts` stays invisible to vitest; only a real-browser run (dev/e2e) can catch that. (Corrected during the DNR test-noise fix: `declarativeNetRequest` is now backed by the shared in-memory fake in `tests/helpers/fake-declarative-net-request.ts`, installed from `tests/setup.ts`.)
