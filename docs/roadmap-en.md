@@ -1027,4 +1027,192 @@ The following main-task criteria are intentionally amended by CR2. They remain i
 | M3.T3 | `SiteList` adds and removes sites at any time | add form and remove buttons disabled outside `idle` (CR2.T3a) |
 | M3.T4 | the blocklist section is a pure composition of the three editors | it also renders the single lock notice (CR2.T3c) |
 
+### 2.6 Change request CR3 — Completion-based score and tiered population
+
+**Analysis.** The pre-change map (current code, numbers, reachability issue, persistence, UI, tests) is `docs/features-analysis/score-population.md`; the decisions below are the ones agreed there (§10 of that document).
+
+**Goal.** The session score and the population growth both depend on the **percentage of city characters built**, never on a fixed character count: `TOTAL_CHARACTERS_PER_SESSION` (600 today) may grow, and no rule may hard-code 600 or a population number.
+
+**Behavioral rule after the change.**
+- `builtCharacters = max(0, focusCharacters − distractionCharacters)`, `completion = builtCharacters / TOTAL_CHARACTERS_PER_SESSION`. Characters are counted from the session duration, not from the rounded `tickMs`: `focusCharacters = min(total, floor(focusedMs × total / durationMs))`, `distractionCharacters = floor(distractedMs × total / durationMs)`, so a perfect session always gives exactly `total` for any total and preset.
+- Contiguous half-open bands, shared by the score and the population rate:
+
+  | Completion | Score | Population per character |
+  |---|---|---|
+  | `< 30%` | `bad` | 5 |
+  | `30%` to `< 70%` | `good` | 10 |
+  | `70%` to `< 100%` | `great` (new) | 20 |
+  | `= 100%` | `excellent` | — (+ bonus) |
+
+- The rate is **marginal**: a character earns the rate of the band it is built in (chosen by the completion *before* it is built, `(k − 1) / total`); crossing a cutoff never changes earlier characters. A distraction takes back the latest character at its band's rate. The population never goes below 0.
+- Band cutoffs in characters are `ceil(ratio × total)`.
+- At 100% the population gets a bonus of **7% of the population reached** (the maximum before the bonus): `round(0.07 × 6900) = 483`, final `7383` today. It scales with the total and the rates.
+- The badge is live: `bad` at the start, `good` at 30%, `great` at 70%, `excellent` only on the final character; it drops back when a distraction removes characters.
+- `great` is shown in blue `#4dabf7`, labelled "Great" (EN) / "Ottimo" (IT).
+- `distractionRatio`, `setDistractionRatio`, `selectDistractionRatio`, `setPopulation`, `GOOD_MAX_RATIO` and `POPULATION_PER_TICK` are removed; the slice stores `builtCharacters` and derives `population` and `level` from it.
+
+**Sequencing note.** The pure logic comes first (`CR3.T1`, `CR3.T3`) with the `ScoreLevel` type and UI in between (`CR3.T2`) so the `satisfies Record<ScoreLevel, …>` maps never fail to compile. Then the callers move to `builtCharacters` one layer at a time (`CR3.T4` progress accounting, `CR3.T5` slice and persistence, `CR3.T6` background). As in CR1, production tasks may leave `bun run compile` red **only** in the callers/tests owned by a later task; `bun run build` and `bun run build:firefox` stay green throughout. Tests are separate tasks (`CR3.T7`–`CR3.T9`), documentation is separate (`CR3.T10`), and the changelog plus the final gate close the change request (`CR3.T11`). Each task touches at most six files; a smaller model should do one task per run and not read ahead.
+
+#### 2.6.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR3.T1 | Completion bands table and `calculateBuiltCharacters` | — |
+| CR3.T2 | `great` level: `ScoreLevel`, badge, history styles and locales | CR3.T1 |
+| CR3.T3 | Tiered `calculatePopulation` and band-based `calculateScore` | CR3.T1, CR3.T2 |
+| CR3.T4 | Progress accounting emits `builtCharacters` | CR3.T1, CR3.T3 |
+| CR3.T5 | Score slice stores `builtCharacters`; persistence rebuilds the score | CR3.T3 |
+| CR3.T6 | Background writers use `setBuiltCharacters` | CR3.T4, CR3.T5 |
+| CR3.T7 | Tests — pure score logic | CR3.T3 |
+| CR3.T8 | Tests — progress accounting, slice and score components | CR3.T4, CR3.T5, CR3.T2 |
+| CR3.T9 | Tests — integration (background, messaging, store) | CR3.T6, CR3.T8 |
+| CR3.T10 | Documentation — README, instructions, analysis, memory | CR3.T6 |
+| CR3.T11 | Changelog and final verification | CR3.T7, CR3.T8, CR3.T9, CR3.T10 |
+
+#### 2.6.2 Task cards
+
+##### CR3.T1 — Completion bands table and `calculateBuiltCharacters`
+* **Objective**: create the single data table that drives both the score and the population rate, and the pure function that counts built characters.
+* **Files to create/modify**: `lib/score/completion-bands.ts` (new), `lib/score/calculate-built-characters.ts` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - `completion-bands.ts` exports `COMPLETION_BANDS` (`as const`, ascending): `{ fromRatio: 0, level: 'bad', populationPerCharacter: 5 }`, `{ 0.3, 'good', 10 }`, `{ 0.7, 'great', 20 }`, `{ 1, 'excellent', 0 }`; `COMPLETION_BONUS_SHARE = 0.07` (with a one-line comment: share of the population reached); the type `CompletionLevel = (typeof COMPLETION_BANDS)[number]['level']`.
+  - It also exports two pure helpers: `bandCutoffCharacters(fromRatio, total) = ceil(fromRatio × total)` and `calculateCompletion(builtCharacters, total)` → ratio clamped to `[0, 1]` (non-finite or `total ≤ 0` → `0`).
+  - `calculate-built-characters.ts` exports `calculateBuiltCharacters(focusedMs, distractedMs, durationMs, total): number` implementing exactly `max(0, min(total, floor(focusedMs × total / durationMs)) − floor(distractedMs × total / durationMs))`; `NaN`, negatives, `±Infinity`, `durationMs ≤ 0` or `total ≤ 0` → `0`; result is always an integer in `[0, total]`.
+  - No `Date.now()`, no `Math.random()`, no browser import, no literal `600`: the total is a parameter.
+  - Each file is ≤ 200 lines and each function ≤ 40.
+* **Notes/decisions**: nothing consumes these files yet, so the task compiles on its own. The tests are CR3.T7.
+
+##### CR3.T2 — `great` level: `ScoreLevel`, badge, history styles and locales
+* **Objective**: add the fourth score level everywhere the user sees it.
+* **Files to create/modify**: `store/store.types.ts`, `components/score/ScoreBadge.tsx`, `components/score/SessionHistory.tsx`, `locales/en.yml`, `locales/it.yml`.
+* **Dependencies**: CR3.T1
+* **Acceptance criteria**:
+  - `ScoreLevel` (`store/store.types.ts`) is derived from the table: `export type ScoreLevel = CompletionLevel` (imported from `lib/score/completion-bands.ts`), i.e. `'excellent' | 'great' | 'good' | 'bad'`.
+  - `ScoreBadge.tsx`: `SCORE_LEVEL_LABEL_KEYS` gains `great: 'score.great'` (the existing `satisfies Record<ScoreLevel, string>` enforces it); the style block gains `.score-badge--great` in blue `#4dabf7`; the comment that says "three variants" is updated.
+  - `SessionHistory.tsx` gains `.session-history__score--great` with the same blue `#4dabf7`.
+  - `locales/en.yml` gets `score.great: Great` and `locales/it.yml` gets `score.great: Ottimo`, next to the other `score.*` keys.
+  - `bun run compile` is green for these files; no other production file needs a change.
+* **Notes/decisions**: do not touch the score slice or `calculateScore` here; they still return the three old levels until CR3.T3, which is valid because the union only grew.
+
+##### CR3.T3 — Tiered `calculatePopulation` and band-based `calculateScore`
+* **Objective**: rewrite the two pure score functions on top of `COMPLETION_BANDS`.
+* **Files to create/modify**: `lib/score/calculate-population.ts`, `lib/score/calculate-score.ts`.
+* **Dependencies**: CR3.T1, CR3.T2
+* **Acceptance criteria**:
+  - `calculatePopulation(builtCharacters: number, total: number): number`: normalize (non-finite or negative → `0`, floor, clamp to `total`; `total` non-finite or `≤ 0` → `0`); for every band below `excellent` add `populationPerCharacter × (characters of builtCharacters inside [cutoff, nextCutoff))`, with `cutoff = bandCutoffCharacters(fromRatio, total)`; when `builtCharacters === total` add `round(COMPLETION_BONUS_SHARE × populationBeforeBonus)`.
+  - Reference values for `total = 600`: `0 → 0`, `179 → 895`, `180 → 900`, `181 → 910`, `420 → 3300`, `421 → 3320`, `599 → 6880`, `600 → 7383`. The function is monotonic non-decreasing in `builtCharacters`.
+  - `calculateScore(builtCharacters: number, total: number): ScoreLevel` returns the level of the highest band whose cutoff `builtCharacters` reaches; for `total = 600`: `179 → bad`, `180 → good`, `419 → good`, `420 → great`, `599 → great`, `600 → excellent`. `NaN`/negative/invalid `total` → `bad`; above `total` → clamped (`excellent`).
+  - `POPULATION_PER_TICK` and `GOOD_MAX_RATIO` are deleted, together with the ratio doc comments; the new doc comments state the band rules and that no number depends on 600.
+  - `bun run compile` may fail **only** in the callers of the old signatures (`lib/timer/session-progress.ts`, `store/score.slice.ts`, `entrypoints/background.ts`) and in their tests; they are fixed by CR3.T4–T6 and CR3.T7–T9.
+* **Notes/decisions**: the marginal rate means the 180th character earns 5 and the 181st earns 10 (the rate uses the completion before the character is built). The cutoffs use `ceil`, so with `total = 601` the `good` band starts at character 181.
+
+##### CR3.T4 — Progress accounting emits `builtCharacters`
+* **Objective**: make the shared accounting step produce the character count instead of a population.
+* **Files to create/modify**: `lib/timer/session-progress.ts`, `store/timer.slice.ts` (doc comment only, if it mentions the population).
+* **Dependencies**: CR3.T1, CR3.T3
+* **Acceptance criteria**:
+  - `SessionProgress` replaces `population` with `builtCharacters`, computed by `calculateBuiltCharacters(focusedMs, distractedMs, durationMs, total)` with the **accumulated** values after the step; the options gain `durationMs` (from `timer.durationSeconds × 1000`) next to the existing ones, and `total` is `TOTAL_CHARACTERS_PER_SESSION` passed by the caller or read from `lib/timer/focus-presets.ts`, never a literal.
+  - The accounting rules (cap at `endsAt`, pause/resume, reconciliation, `tickMs` for city growth cadence) are unchanged; only the projection changes. `tickMs` is still used by the growth tracker for the city, not for the score.
+  - Doc comments that describe the population in `session-progress.ts` and the `advanceProgress` mention in `store/timer.slice.ts:72` are updated.
+  - `bun run compile` may fail **only** in `entrypoints/background.ts`, `store/score.slice.ts` and the tests; no `as`/`@ts-expect-error` hides it.
+* **Notes/decisions**: a perfect session of every preset must yield exactly `total` here; that is asserted in CR3.T7/T8.
+
+##### CR3.T5 — Score slice stores `builtCharacters`; persistence rebuilds the score
+* **Objective**: make `builtCharacters` the single stored source of truth and derive `population` and `level` from it in one place.
+* **Files to create/modify**: `store/score.slice.ts`, `store/index.ts`.
+* **Dependencies**: CR3.T3
+* **Acceptance criteria**:
+  - `ScoreState` drops `distractionRatio` and gains `builtCharacters`; `setBuiltCharacters(builtCharacters)` normalizes the input and stores `builtCharacters`, `population = calculatePopulation(builtCharacters, TOTAL_CHARACTERS_PER_SESSION)` and `level = calculateScore(builtCharacters, TOTAL_CHARACTERS_PER_SESSION)`.
+  - `setDistractionRatio`, `setPopulation` and `selectDistractionRatio` are removed (including the re-export in `store/index.ts`); `selectPopulation` and `selectScoreLevel` keep their contracts.
+  - The initial state is derived from `0` characters: `builtCharacters: 0`, `population: 0`, `level: 'bad'`.
+  - In `store/index.ts` the `merge` (≈ lines 256–270) rebuilds `score` from `saved.score.builtCharacters` (default `0`, via the same derivation) and ignores every other saved score field, so a legacy snapshot with `distractionRatio` / a stale `'excellent'` is repaired. No `version` bump and no `migrate`.
+  - The slice stays a thin delegation layer: no band logic inside it. Both files stay ≤ 200 lines.
+  - `bun run compile` may fail **only** in `entrypoints/background.ts` and the tests.
+* **Notes/decisions**: `sessionHistory` is untouched (old entries keep their level and population and age out; no migration). During a running session the startup reconciliation recomputes `builtCharacters` from the persisted timer anyway.
+
+##### CR3.T6 — Background writers use `setBuiltCharacters`
+* **Objective**: connect the two background writers (live growth tracker and session completion) to the new action.
+* **Files to create/modify**: `entrypoints/background.ts`.
+* **Dependencies**: CR3.T4, CR3.T5
+* **Acceptance criteria**:
+  - The growth tracker (≈ line 210) writes `progress.builtCharacters` with `setBuiltCharacters`; the call to `advanceProgress` passes `durationMs`.
+  - Session completion (≈ lines 293–308) computes the final value with `calculateBuiltCharacters(getFocusedMs(), getDistractedMs(), durationMs, TOTAL_CHARACTERS_PER_SESSION)` and calls `setBuiltCharacters`; it no longer calls `calculatePopulation` or `setPopulation`.
+  - The `SessionSummary` is built exactly as before, reading `score.level` and `score.population` **after** the final write; `recordSession` and `SESSION_ENDED` are unchanged.
+  - The doc comments about the population cadence and the `distractionRatio` open point (≈ lines 103–110 and 270–272) are rewritten to describe `builtCharacters`.
+  - `bun run compile` is green for production code (`bun run build` and `bun run build:firefox` succeed); only tests may still fail, fixed by CR3.T7–T9.
+* **Notes/decisions**: no other background logic changes. If the file would exceed 200 lines or a function 40, extract the new block into a small helper in the same file rather than growing the existing function.
+
+##### CR3.T7 — Tests — pure score logic
+* **Objective**: cover the bands, the character counting, the tiered population and the score with parametric boundary tests.
+* **Files to create/modify**: `tests/unit/lib/score/completion-bands.test.ts` (new), `tests/unit/lib/score/calculate-built-characters.test.ts` (new), `tests/unit/lib/score/calculate-score.test.ts` (rewrite), `tests/unit/lib/score/calculate-population.test.ts` (rewrite).
+* **Dependencies**: CR3.T3
+* **Acceptance criteria**:
+  - `completion-bands.test.ts`: the table is ascending, starts at `0`, ends at exactly `1`, and the `excellent` band has rate `0`; `bandCutoffCharacters` for totals 600 (`180/420/600`), 601 (`181/421/601`) and 700 (`210/490/700`); `calculateCompletion` clamps to `[0, 1]` and handles `NaN`.
+  - `calculate-built-characters.test.ts`: net count clamped at `0`; capped at `total`; defensive inputs (`NaN`, negatives, `±Infinity`, `durationMs = 0`); **for every focus preset (5, 10, 20, 30, 45, 60, 90, 120 minutes) a perfect session gives exactly `total`**, for 600 and for hypothetical totals 700 and 1000 (this is the guard for the reachability issue).
+  - `calculate-score.test.ts`: parametric table at total 600 on `0, 179, 180, 419, 420, 599, 600`; the same boundaries scaled for total 1000 (`299/300/699/700/999/1000`); defensive inputs (`NaN`, negative, `±Infinity`, invalid total).
+  - `calculate-population.test.ts`: the reference values of CR3.T3 (`179 → 895` … `600 → 7383`); the bonus appears only at 100% and equals `round(0.07 × populationBeforeBonus)` for another total; marginal rate (no retroactive jump at a cutoff); monotonic; defensive inputs.
+  - `bun run test -- tests/unit/lib/score` passes.
+* **Notes/decisions**: write the expected numbers as literals taken from this card, not by re-computing them with the production formula, otherwise the test proves nothing.
+
+##### CR3.T8 — Tests — progress accounting, slice and score components
+* **Objective**: migrate the unit tests that consume the new `builtCharacters` contract and the `great` level.
+* **Files to create/modify**: `tests/unit/lib/timer/session-progress.test.ts`, `tests/unit/store/score-slice.test.ts`, `tests/unit/components/score/ScoreBadge.test.tsx`, `tests/unit/components/score/SessionHistory.test.tsx`, `tests/unit/components/score/PopulationCounter.test.tsx`.
+* **Dependencies**: CR3.T2, CR3.T4, CR3.T5
+* **Acceptance criteria**:
+  - `session-progress.test.ts`: every `population` expectation becomes `builtCharacters`; add a case where `durationMs` is passed and a perfect session ends at exactly `total`.
+  - `score-slice.test.ts`: initial state `builtCharacters 0 / population 0 / level 'bad'`; `setBuiltCharacters` derives population and level in every band (`0`, `179`, `180`, `420`, `600`); the `distractionRatio` and `setPopulation` tests are removed; `selectPopulation` and `selectScoreLevel` still work.
+  - `ScoreBadge.test.tsx`: four variants including `great`, labels `Excellent / Great / Good / Bad`, and the `.score-badge--great` rule in the style block.
+  - `SessionHistory.test.tsx`: the `distractionRatio` fixture (≈ line 55) is replaced by `builtCharacters`; a `great` entry renders with its label and class.
+  - `PopulationCounter.test.tsx`: only changes if it uses a removed action; the displayed literals stay valid.
+  - `bun run test -- tests/unit/lib/timer tests/unit/store/score-slice.test.ts tests/unit/components/score` passes.
+* **Notes/decisions**: if a test file only needs a fixture rename, make just that change; do not rewrite passing assertions.
+
+##### CR3.T9 — Tests — integration (background, messaging, store)
+* **Objective**: prove the live bands, the session completion and the legacy rehydration end to end.
+* **Files to create/modify**: `tests/integration/background/growth-tick.test.ts`, `tests/integration/background/session-completion.test.ts`, `tests/integration/background/background.test.ts`, `tests/integration/messaging/timer-mutation-bus.test.ts`, `tests/integration/store/store.test.ts`.
+* **Dependencies**: CR3.T6, CR3.T8
+* **Acceptance criteria**:
+  - Population expectations move to the tiered values: only files whose assertions actually fail need edits.
+  - `growth-tick.test.ts`: the live level goes `bad → good → great` as ticks cross 30% and 70%, and drops back after a distraction; a distraction in the `great` band removes 20.
+  - `session-completion.test.ts`: a perfect session records `excellent` with population `7383`; a shortened session stops in `great` / `good` / `bad` with the matching population; exactly one history entry and one `SESSION_ENDED`.
+  - `timer-mutation-bus.test.ts`: the live population still reaches a read-only popup store (≈ line 280), now with a tiered value.
+  - `store/store.test.ts`: the default score is `bad`/0; rehydrating a legacy `score` (`distractionRatio`, `level: 'excellent'`, flat `population`) rebuilds it from `builtCharacters` (default `0`) and drops `distractionRatio`.
+  - `bun run test` is fully green and `bun run compile` is green (tests included).
+* **Notes/decisions**: this task restores the green gate. Re-run the timer/population regression suites (M2.T2, M2.T18, M3.T3c).
+
+##### CR3.T10 — Documentation — README, instructions, analysis, memory
+* **Objective**: bring the user-facing and agent-facing documents in line with the new rules.
+* **Files to create/modify**: `README.md`, `.github/copilot-instructions.md`, `docs/features-analysis/score-population.md`, `.serena/memories/core.md`.
+* **Dependencies**: CR3.T6
+* **Acceptance criteria**:
+  - `README.md` (score bullet ≈ line 12) describes the four levels, the 30% / 70% / 100% bands, the 5 / 10 / 20 population rates and the 7% completion bonus.
+  - `.github/copilot-instructions.md`: the `calculate-score.ts` / `calculate-population.ts` comments in §1.2, the M2.T9 / M2.T17 / M2.T18 rows of §3.3 and §3.4 item 4 mention four levels, completion bands and tiered population instead of the ratio and the flat rate.
+  - `docs/features-analysis/score-population.md` is marked **implemented by CR3.T1–T11** (replace "Status: proposed") and its file/line references are left as history.
+  - `.serena/memories/core.md` records the invariant: score and population derive from `builtCharacters / TOTAL_CHARACTERS_PER_SESSION`, nothing is hard-coded to 600, and characters are counted from the session duration.
+  - No code or test file is touched.
+* **Notes/decisions**: `docs/roadmap-en.md` and `docs/changelog.md` are handled by this change request's own sections and CR3.T11.
+
+##### CR3.T11 — Changelog and final verification
+* **Objective**: record the change request and prove the full gate is green.
+* **Files to create/modify**: `docs/changelog.md`.
+* **Dependencies**: CR3.T7, CR3.T8, CR3.T9, CR3.T10
+* **Acceptance criteria**:
+  - `docs/changelog.md` gets one detail entry per CR3 task (files, tests, decisions) in the standard format, the summary rows, the updated "Current status" with the **real** test counts, and the "exact `distractionRatio` formula" is removed from "Open issues" (resolved by CR3). `Commit: —` until the developer commits.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build` and `bun run build:firefox` are green; run `bun run e2e` if the Playwright suite is available.
+  - A search for `distractionRatio`, `setPopulation`, `POPULATION_PER_TICK` and `GOOD_MAX_RATIO` finds no runtime reference (legacy-snapshot test fixtures excepted).
+* **Notes/decisions**: no persistence version bump, so there is no migration entry. The change request is complete only when the gate is green and the amended criteria in §2.6.3 are reflected in the docs.
+
+#### 2.6.3 Amended acceptance criteria in Section 1
+
+The following main-task criteria are intentionally amended by CR3. They remain in the document as history, but the completion-based rules above win:
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M2.T9 | `calculateScore(distractionRatio)` with ratio thresholds and three levels | `calculateScore(builtCharacters, total)` on the completion bands, four levels (CR3.T3) |
+| M2.T17 | `ScoreBadge` with three variants | four variants including `great` (CR3.T2) |
+| M2.T18 | population is a flat `+5` per focus tick, max 3000 | tiered per-character rate by completion band plus a 7% completion bonus, max 7383 today (CR3.T3) |
+| M3.T3c | completion recomputes the population from ticks | completion recomputes `builtCharacters` from the duration (CR3.T6) |
+| §4 open point (ratio formula) | exact `distractionRatio` formula to be defined | resolved: the ratio path is removed, score derives from `builtCharacters` (CR3.T5) |
+
 ---
