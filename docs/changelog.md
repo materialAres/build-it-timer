@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **PR6.T1** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **PR6.T2** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -20,7 +20,7 @@ description: Rules for updating the changelog
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **873 passing tests** across 78 files (green).
+- Tests: `bun run test` → **874 passing tests** across 78 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -122,6 +122,7 @@ description: Rules for updating the changelog
 | CR3.T9 | Tests — integration (background, messaging, store) | completed | `6e7a97e` |
 | CR3.T10 | Documentation — README, instructions, analysis, memory | completed | `e288636` |
 | CR3.T11 | Changelog and final verification | completed | — (to be committed) |
+| PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | — (to be committed) |
 
 ---
 
@@ -1279,6 +1280,20 @@ description: Rules for updating the changelog
 - Tests: no test added in this task; the suite grew from 767 tests / 76 files to 863 / 78 over CR3.
 - Relevant notes/decisions: no persistence version bump, so there is no migration entry. The amended criteria of roadmap §2.6.3 now match the implementation.
 - Acceptance criteria: verified.
+- Commit: — (to be committed).
+
+---
+
+## PR reviews
+
+### PR6.T2 — `calculateScore` treats a non-finite count as `'bad'`
+
+- `calculateScore(builtCharacters, total)` now returns `'bad'` for any non-finite `builtCharacters` (`NaN`, `+Infinity`, `-Infinity`): the guard is `!Number.isFinite(builtCharacters)` in place of `Number.isNaN`. A finite count above `total` is still clamped to `'excellent'`, and the invalid-`total` check is unchanged. The doc comment is rewritten to match. `calculatePopulation` is not touched, so both functions now treat a non-finite count as invalid input.
+- Files created/modified: `lib/score/calculate-score.ts`, `tests/unit/lib/score/calculate-score.test.ts`, `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: `tests/unit/lib/score/calculate-score.test.ts` — `+Infinity` moved from the "clamps a count above the total" test into the invalid-count cases. Written red first (the new case failed with `'excellent'`), then green after the change. Run: `bun run test -- tests/unit/lib/score tests/unit/store/score-slice.test.ts` → **133 passing tests across 6 files**; full `bun run test` → **874 passing tests across 78 files**; `bun run compile` clean.
+- Relevant notes/decisions: this fixes the contract only. Per the PR6.T2 card, a non-finite count cannot reach the function today because `setBuiltCharacters` normalizes the value first. The CR3.T3 and CR3.T7 cards that describe `+Infinity` → `excellent` are history and are not edited.
+- Acceptance criteria: verified — `NaN`, `±Infinity` → `'bad'`; `900` → `'excellent'`; all CR3.T3 reference boundaries unchanged and green.
 - Commit: — (to be committed).
 
 ---

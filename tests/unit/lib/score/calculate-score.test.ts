@@ -37,7 +37,7 @@ describe('calculateScore (CR3.T3)', () => {
   });
 
   describe('defensive inputs', () => {
-    it.each([Number.NaN, -1, Number.NEGATIVE_INFINITY])(
+    it.each([Number.NaN, -1, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY])(
       'maps the invalid count %s to bad',
       (built) => {
         expect(calculateScore(built, 600)).toBe('bad');
@@ -53,7 +53,6 @@ describe('calculateScore (CR3.T3)', () => {
 
     it('clamps a count above the total to excellent', () => {
       expect(calculateScore(900, 600)).toBe('excellent');
-      expect(calculateScore(Number.POSITIVE_INFINITY, 600)).toBe('excellent');
     });
   });
 });

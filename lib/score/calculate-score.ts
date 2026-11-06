@@ -13,15 +13,19 @@ import { bandCutoffCharacters, COMPLETION_BANDS } from './completion-bands';
  * It is recalculated from the live count, so the level can drop back when a
  * distraction removes characters.
  *
- * Total and defensive: `NaN`, negative values and an invalid `total` give
- * `'bad'`; a count above `total` (including `+Infinity`) is clamped to
+ * Total and defensive: `NaN`, `±Infinity`, negative values and an invalid
+ * `total` give `'bad'`; a finite count above `total` is clamped to
  * `'excellent'`. Never throws.
  */
 export function calculateScore(
   builtCharacters: number,
   total: number,
 ): ScoreLevel {
-  if (Number.isNaN(builtCharacters) || !Number.isFinite(total) || total <= 0) {
+  if (
+    !Number.isFinite(builtCharacters) ||
+    !Number.isFinite(total) ||
+    total <= 0
+  ) {
     return 'bad';
   }
   const built = Math.min(total, Math.floor(builtCharacters));
