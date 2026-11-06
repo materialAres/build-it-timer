@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR3.T11** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); nine post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **PR6.T1** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -19,8 +19,8 @@ description: Rules for updating the changelog
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
-- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start).
-- Tests: `bun run test` → **863 passing tests** across 78 files (green).
+- Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
+- Tests: `bun run test` → **873 passing tests** across 78 files (green).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean**.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -96,6 +96,7 @@ description: Rules for updating the changelog
 | I007 | Start stayed clickable after the session completed (only Reset is valid) | fixed | `e7939b6` |
 | I008 | Blocked-site overlay reappeared after choosing "Yes" | fixed | `f1c9b87` |
 | I009 | Malus not applied to a blocked site already open at session start | fixed | `afc2224` |
+| I010 | Focus time lost before the first checkpoint (perfect session ended at 599 characters) | fixed | `4ac0794` |
 | CR1.T1 | Remove the allowlist from the popup UI and locales | completed | `13598d1` |
 | CR1.T2 | Remove the `list` discriminator from mutation messages | completed | `157b6f2` |
 | CR1.T3 | Migrate persisted allowlist data to the effective blocklist | completed | `eeb9fc7` |
@@ -987,6 +988,18 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the refresh is deliberately tied to the **running** transition (start, resume, rehydrate), not to every store write — the store changes on every tick, so querying the tabs there would be wasteful. The malus still begins only on the overlay's "Yes" (pre-`proceed` time stays forgiven, M2.T10); the fix does not auto-apply a malus for a tab the user never confirmed. **Known follow-up (not addressed here)**: adding a domain to the blocklist while its tab is already open has the same stale-set shape; it would need a refresh on blocklist/allowlist changes.
 - Acceptance criteria: verified — the already-open blocked tab charges the city from the first session tick after **Yes**; the pre-refresh stretch is preserved and a departed tab is dropped; the `onUpdated` path for newly opened sites is unchanged. Not re-confirmed in a live browser in this session.
 - Commit: `afc2224 fix: apply malus to blocked sites already open at session start and enhance distraction tracking`.
+
+### I010 — Focus time lost before the first checkpoint (perfect session ended at 599 characters)
+
+- **Problem**: a perfect session ended at 599 of 600 characters (population 6880 instead of 7383). `startTimer`/`resumeTimer` left `lastAccountedAt` empty until the background observed `running`, so the focus time between the start instant and that observation was never credited.
+- **Root cause**: the score and population floor the built characters, so one lost millisecond dropped a whole character at the cutoff.
+- **Fix**: `store/timer.slice.ts` — the checkpoint is now set to `startedAt` (`startTimer`) and `resumedAt` (`resumeTimer`), the same instant the countdown is armed from, so the whole countdown is accounted for.
+- Files created/modified: `store/timer.slice.ts`, `tests/unit/store/timer-slice.test.ts` (+2 tests), `tests/integration/popup/app-composition.test.tsx` (the simulated tick is placed one session tick after the store's own `sessionStartedAt`, not after the test's fixed clock).
+- Dependencies added: none.
+- Tests: `tests/unit/store/timer-slice.test.ts` (+2 tests, unit) — `startTimer` checkpoints the accounting clock at the start instant; resuming checkpoints it at the resume instant. Re-run of `tests/unit/store/timer-slice.test.ts` and `tests/integration/background`: **105 passing tests across 8 files**. Full run: `bun run test` → **873 passing tests across 78 files**; `bun run compile` and `bun run lint` clean.
+- Relevant notes/decisions: critical logic (§3.4 item 1). The commit was made without a changelog entry; this entry records it after the fact.
+- Acceptance criteria: verified — the checkpoint starts at the session start and at each resume, and the timer-slice and background integration suites are green in this run.
+- Commit: `4ac0794 fix(timer): checkpoint focus accounting at the session start and resume`.
 
 ---
 
