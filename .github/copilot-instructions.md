@@ -159,6 +159,7 @@ This also applies to partial tasks: if you only complete part of a task, update 
 - The agent may use git **read-only** (`git status`, `git log`, `git diff`, `git show`, `git rev-parse`) to gather information (e.g. the hash of an already-existing commit).
 - Unless the user asks for a commit, all changes (code, tests, changelog) are left **uncommitted** for the human developer to review.
 - The changelog's `Commit` column is filled in only with a real hash of an existing commit (read via `git log --oneline -1` / `git rev-parse --short HEAD`). While the commit does not exist, the agent writes `—` (or `to be committed`) and **never makes up a hash**.
+- A commit cannot contain its own hash, so the commit that edits the changelog never records its own hash: it stays `—` until the next changelog edit made for another reason, which fills it in. **No commit is made only to backfill a hash** (that would create a new hash to backfill, without end), and `git commit --amend` is never used for it. If the last commit of a series only touches the changelog, its hash stays `—`.
 
 ### 4.3 When to update
 

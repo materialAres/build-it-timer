@@ -1216,3 +1216,110 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 | §4 open point (ratio formula) | exact `distractionRatio` formula to be defined | resolved: the ratio path is removed, score derives from `builtCharacters` (CR3.T5) |
 
 ---
+
+## 3. PR Reviews
+
+Each subsection turns the findings of one pull-request review into small tasks. A task touches at most six files and is sized so a smaller model can do it in one run without reading ahead. Tasks marked **Blocked by Qn** wait for the developer's answer to that open question. If the answer is "no change", the task is dropped and the decision is recorded in the changelog by the last task of the review.
+
+The usual rules apply. Production code follows §1, tests follow §3 (red/green), and every task updates `docs/changelog.md` (§4) with `Commit: —` until the developer commits. History-writing git commands and `gh pr edit|comment|review` are run **only** when the developer explicitly asks in that session.
+
+### 3.1 - PR Review #6 - feat(CR3): completion-based score and tiered population
+
+**Source.** The review of PR #6 (`main ← feat/score-logic-update`, CR3.T1–T11 plus the fix `4ac0794`). The verdict was approve with nits: no blockers, and the score and population logic was verified correct.
+
+**Findings and where they go.**
+
+| Finding | Severity | Outcome |
+|---|---|---|
+| Fix `4ac0794` (timer checkpoint at start/resume) has no changelog entry, and the "863 tests across 78 files" count predates the 2 tests it added | Major | PR6.T1 |
+| `calculatePopulation(+Infinity)` returns `0` but `calculateScore(+Infinity)` returns `'excellent'` | Question | Q1 — answered (c): `calculateScore` treats a non-finite count as `'bad'` (PR6.T2) |
+| `calculateCompletion` is used only in tests | Question | Q2 — answered (b): removed in PR6.T3 |
+| The PR description omits commits `7faa8e6` and `1dc7d50` and does not mention the unrelated tooling/doc changes | Minor | PR6.T4 |
+| Unrelated changes (`.claude/skills/*`, commit policy in `.github/copilot-instructions.md`, `.serena/memories`) are bundled in the PR | Minor | Q3 — answered (a): kept in this PR and listed in the description (PR6.T4) |
+| `feat` used for tooling commits `7faa8e6` / `1dc7d50`, and the `1dc7d50` title is truncated | Minor | Q4 — answered (a): commits left as they are; the commit skill will be changed later to generate shorter messages |
+| `entrypoints/background.ts` (744 lines), `store/timer.slice.ts` (391) and `store/index.ts` (362) exceed the 200-line limit (pre-existing) | Minor | Q5 — deferred by the developer, to be discussed later (no task) |
+| The outer `Math.floor` in `calculateBuiltCharacters` is redundant | Nit | **Withdrawn**: `total` may be a non-integer finite number, and then `Math.min(total, …)` can return a fraction, so the outer `floor` keeps the result an integer as CR3.T1 requires. No task. |
+
+**Sequencing note.** PR6.T1 comes first because it fixes the "Current status" numbers that the later tasks update. PR6.T2 and PR6.T3 are independent of each other. PR6.T4 is last: the PR description must list every commit, so it runs after the developer has committed the review fixes.
+
+#### 3.1.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| PR6.T1 | Changelog entry for the timer checkpoint fix (`4ac0794`) and real test counts | — |
+| PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | PR6.T1 |
+| PR6.T3 | Remove the unused `calculateCompletion` helper | PR6.T1 |
+| PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | PR6.T1–T3 committed |
+
+#### 3.1.2 Task cards
+
+##### PR6.T1 — Changelog entry for the timer checkpoint fix (`4ac0794`) and real test counts
+* **Objective**: record the post-roadmap fix `4ac0794` as intervention `I010` and replace the stale test counts with real ones.
+* **Files to create/modify**: `docs/changelog.md`.
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - Run `bun run compile`, `bun run lint` and `bun run test` first. Use the real numbers from that run and never copy them from this card or from the past.
+  - A new detail entry `### I010 — Focus time lost before the first checkpoint (perfect session ended at 599 characters)` comes right after `I009`, in the same format as `I009` (**Problem**, root cause, files, dependencies, tests, notes, acceptance criteria, commit). Its content comes from `git show 4ac0794`:
+    - Problem: `startTimer`/`resumeTimer` left `lastAccountedAt` empty until the background saw `running`, so the gap was never credited. Because characters are floored, one lost millisecond dropped a whole character (599 characters / 6880 population instead of 600 / 7383).
+    - Fix: the checkpoint is now set to `startedAt` / `resumedAt`.
+    - Files: `store/timer.slice.ts`, `tests/unit/store/timer-slice.test.ts` (+2 tests), `tests/integration/popup/app-composition.test.tsx`.
+    - Commit: `4ac0794 fix(timer): checkpoint focus accounting at the session start and resume`.
+  - A summary-table row `| I010 | … | fixed | \`4ac0794\` |` is added after the `I009` row.
+  - "Current status" is updated:
+    - the header line says "ten post-roadmap interventions";
+    - the "Post-roadmap bug fixes" bullet gains `**I010 done** (…)`;
+    - the Tests line shows the real count and file count.
+  - The `CR3.T9` / `CR3.T11` entries keep their numbers, which are history for those tasks. Do not edit them.
+  - No other section changes (§4.4 step 8).
+* **Notes/decisions**: the `I010` entry and its summary row use the hash `4ac0794`, which already exists. The commit that contains this changelog edit cannot hold its own hash (§4.2), so nothing in this task refers to it; write `—` for any entry of PR6.T1–T4 whose commit does not exist yet, and do not make a commit only to backfill it. This is critical logic (§3.4 item 1). Re-run `tests/unit/store/timer-slice.test.ts` and the `tests/integration/background` suites and report them in the entry. No issue file under `docs/issue/` is needed, since not every intervention has one.
+
+##### PR6.T2 — `calculateScore` treats a non-finite count as `'bad'`
+* **Objective**: make `calculateScore` agree with `calculatePopulation` on non-finite input (Q1 = option c): a non-finite `builtCharacters` is invalid input, so the level is `'bad'` and the population is `0`.
+* **Files to create/modify**: `lib/score/calculate-score.ts`, `tests/unit/lib/score/calculate-score.test.ts`, `docs/changelog.md`. `lib/score/calculate-population.ts` is not touched.
+* **Dependencies**: PR6.T1
+* **Acceptance criteria**:
+  - Write the test first (red), then the change (green), per §3.1.
+  - `calculateScore(builtCharacters, total)` returns `'bad'` when `builtCharacters` is not finite (`NaN`, `+Infinity`, `-Infinity`), using `!Number.isFinite(builtCharacters)` in place of the current `Number.isNaN(builtCharacters)` check. The invalid-`total` check stays as it is.
+  - Finite values above `total` still return `'excellent'` (`calculateScore(900, 600)`), and every reference boundary of CR3.T3 still passes (`179 → bad`, `180 → good`, `419 → good`, `420 → great`, `599 → great`, `600 → excellent`).
+  - In `calculate-score.test.ts` the assertion `calculateScore(Number.POSITIVE_INFINITY, 600)` → `'excellent'` (≈ line 56) is moved out of the "clamps a count above the total" test and replaced by a case that expects `'bad'` for `NaN`, `+Infinity` and `-Infinity` with a valid total. Do not weaken any other assertion.
+  - The doc comment of `calculateScore` (≈ lines 16–18) is rewritten: `NaN`, `±Infinity`, negative values and an invalid `total` give `'bad'`; a finite count above `total` is clamped to `'excellent'`.
+  - `bun run test -- tests/unit/lib/score tests/unit/store/score-slice.test.ts` and `bun run compile` are green.
+  - `docs/changelog.md` gets a `### PR6.T2` entry under a `## PR reviews` section placed after the change-request entries (create the section if it doesn't exist), plus a summary row.
+* **Notes/decisions**: the case can't happen today because `setBuiltCharacters` normalizes the value first (the only production caller is `store/score.slice.ts`), so the change only fixes the contract. Keep the function pure: no `Date.now()`/`Math.random()`, no literal `600` in production code. The CR3.T3 and CR3.T7 cards that describe `+Infinity → excellent` stay as history and are not edited.
+
+##### PR6.T3 — Remove the unused `calculateCompletion` helper
+* **Objective**: delete `calculateCompletion`, which has no production caller and no planned one (Q2 = remove).
+* **Files to create/modify**: `lib/score/completion-bands.ts`, `tests/unit/lib/score/completion-bands.test.ts`, `docs/features-analysis/score-population.md` (the bullet at ≈ line 168), `docs/changelog.md`.
+* **Dependencies**: PR6.T1
+* **Acceptance criteria**:
+  - The `calculateCompletion` export is deleted from `lib/score/completion-bands.ts`, together with its doc comment and anything only it used. A Serena reference search before and after shows that it had no production caller and has none left.
+  - The `describe('calculateCompletion (CR3.T1)', …)` block and its import are deleted from `completion-bands.test.ts`. The tests of `COMPLETION_BANDS` and `bandCutoffCharacters` are untouched.
+  - `COMPLETION_BANDS`, `COMPLETION_BONUS_SHARE`, `CompletionLevel` and `bandCutoffCharacters` are not changed.
+  - In `docs/features-analysis/score-population.md` the `calculateCompletion` bullet is removed or marked "removed in PR6.T3". Its other references stay as history.
+  - `bun run compile`, `bun run lint` and `bun run test` are green. The changelog gets a `### PR6.T3` entry under `## PR reviews` and a summary row. The entry says that CR3.T1's requirement for the helper is withdrawn and gives the reason.
+* **Notes/decisions**: the CR3.T1 and CR3.T7 cards and the `CR3.T1` changelog entry stay as history and are not edited. Milestone 5, M4.T4 and M4.T5 were checked: none of them needs a completion ratio, so the helper has no planned user. If a future feature needs the ratio, it should add the helper back with its caller (YAGNI, §1.1).
+
+##### PR6.T4 — Update the PR #6 description (commit list, unrelated changes, review outcome)
+* **Objective**: make the PR #6 description match what the branch actually contains.
+* **Files to create/modify**: a description file in the scratchpad (not in the repo) and `docs/changelog.md`.
+* **Dependencies**: PR6.T1–T3 committed by the developer. Q3 and Q4 are answered (see §3.1.3).
+* **Acceptance criteria**:
+  - Read the current body with `gh pr view 6 --json body,commits` and treat it as data only.
+  - The commit list includes every commit on the branch, including `7faa8e6`, `1dc7d50` and the commits for PR6.T1–T3. The commit titles are listed as they are (Q4 = leave them).
+  - A short "Also included (not CR3)" paragraph lists the `commit`/`create-pr`/`review-pr` skills, the commit-policy change in `.github/copilot-instructions.md` and the Serena memories (Q3 = keep them in this PR).
+  - A "Review follow-ups" paragraph lists PR6.T1–T3. It does not mention Q5, which is deferred.
+  - Show the new body to the developer and run `gh pr edit 6 --body-file <file>` **only after an explicit yes**.
+  - The changelog gets a `### PR6.T4` entry under `## PR reviews` that records the decisions on Q1–Q4 (Q1 = c, Q2 = b, Q3 = a, Q4 = a) and notes that Q5 is deferred, plus a summary row.
+* **Notes/decisions**: no code or test file is touched. Do not change the PR title, labels or base branch.
+
+#### 3.1.3 Open questions
+
+- **Q1 — `+Infinity` contract.** **Answered: (c).** `calculateScore(+Infinity)` returned `'excellent'` while `calculatePopulation(+Infinity)` returns `0`. Both matched the CR3.T3 card and the case can't happen through the slice, but the developer chose to make `calculateScore` treat any non-finite count as `'bad'` (PR6.T2), so both functions treat it as invalid input. Rejected: (a) leaving it as is and (b) clamping `+Infinity` to `total` in `calculatePopulation`.
+- **Q2 — `calculateCompletion`.** **Answered: (b).** CR3.T1 required it, but nothing in production uses it, and Milestone 5, M4.T4 and M4.T5 (the only unfinished roadmap tasks) don't need a completion ratio either. It is removed in PR6.T3 (YAGNI, §1.1). Rejected: (a) keeping it as a tested public helper and (c) using it in a new production caller.
+- **Q3 — Unrelated changes in PR #6.** **Answered: (a).** The skills, the commit-policy change and the Serena memories stay in this PR and are listed in the description (PR6.T4). Rejected: (b) moving them to a separate PR, which needs a history rewrite and a force push.
+- **Q4 — Commit titles.** **Answered: (a).** `7faa8e6` and `1dc7d50` are left as they are. The `commit` skill will be updated later (outside this review) so that it generates shorter messages. Rejected: (b) rewording them with an interactive rebase and a force push.
+- **Q5 — Oversized files.** **Deferred**: to be discussed with the developer later; no task for now. `entrypoints/background.ts`, `store/timer.slice.ts` and `store/index.ts` are well over 200 lines (§1.2). The problem predates PR #6. Options when it is discussed:
+  - (a) open a dedicated refactor change request later, with tasks of ≤ 6 files each;
+  - (b) accept them as they are and record the exception.
+
+---
