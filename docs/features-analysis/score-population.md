@@ -165,7 +165,7 @@ Helpers (pure, total):
 - `bandCutoffCharacters(fromRatio, total) = ceil(fromRatio × total)` — the first
   character count belonging to the band. `ceil` keeps "≥ 30%" exact when
   `30% × total` is not an integer (total 601 → 181, i.e. 30.12%).
-- `calculateCompletion(builtCharacters, total)` → ratio clamped to `[0, 1]`.
+- `calculateCompletion(builtCharacters, total)` → ratio clamped to `[0, 1]` — removed in PR6.T3 (no production caller).
 - A table-validation test: ratios strictly ascending, starting at `0`, ending at
   exactly `1`; the `excellent` band adds no per-character rate.
 

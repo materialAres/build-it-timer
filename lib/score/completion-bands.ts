@@ -29,17 +29,3 @@ export function bandCutoffCharacters(fromRatio: number, total: number): number {
   if (!Number.isFinite(total) || total <= 0) return 0;
   return Math.ceil(fromRatio * total);
 }
-
-/**
- * Completion ratio clamped to `[0, 1]`. Untrusted input is defensive:
- * non-finite or negative characters, and a non-finite or non-positive total,
- * all degrade to 0 instead of `NaN`.
- */
-export function calculateCompletion(
-  builtCharacters: number,
-  total: number,
-): number {
-  if (!Number.isFinite(builtCharacters) || !Number.isFinite(total)) return 0;
-  if (builtCharacters <= 0 || total <= 0) return 0;
-  return Math.min(1, builtCharacters / total);
-}

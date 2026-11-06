@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   bandCutoffCharacters,
-  calculateCompletion,
   COMPLETION_BANDS,
   COMPLETION_BONUS_SHARE,
 } from '@/lib/score/completion-bands';
@@ -55,23 +54,4 @@ describe('bandCutoffCharacters (CR3.T1)', () => {
       expect(bandCutoffCharacters(0.3, total)).toBe(0);
     },
   );
-});
-
-describe('calculateCompletion (CR3.T1)', () => {
-  it.each([
-    [0, 600, 0],
-    [300, 600, 0.5],
-    [600, 600, 1],
-    [900, 600, 1],
-    [-10, 600, 0],
-  ])('maps %i of %i characters to %d', (built, total, expected) => {
-    expect(calculateCompletion(built, total)).toBe(expected);
-  });
-
-  it('degrades invalid input to 0', () => {
-    expect(calculateCompletion(Number.NaN, 600)).toBe(0);
-    expect(calculateCompletion(10, Number.NaN)).toBe(0);
-    expect(calculateCompletion(10, 0)).toBe(0);
-    expect(calculateCompletion(Number.NEGATIVE_INFINITY, 600)).toBe(0);
-  });
 });
