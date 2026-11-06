@@ -30,6 +30,7 @@ city:
 
 score:
   excellent: Excellent
+  great: Great
   good: Good
   bad: Bad
   badgeAriaLabel: 'Focus score: $1'

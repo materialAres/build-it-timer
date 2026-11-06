@@ -5,7 +5,6 @@ import { sendMessage } from '@/lib/messaging/bus';
 import { createAppStore, STORE_NAME } from '@/store';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { timerAlarmName } from '@/lib/timer/session';
-import { calculatePopulation } from '@/lib/score/calculate-population';
 import {
   DEFAULT_FOCUS_PRESET,
   tickMsForDurationSeconds,
@@ -62,17 +61,16 @@ describe('session completion (M3.T3c)', () => {
     // Only the first 10 minutes are sampled by popup ticks, then the popup is
     // closed: the remaining 20 minutes must still be credited on completion
     // (regression: the city/population used to freeze without TIMER_TICKs).
-    const ticks = await runSession(10 * 60_000);
-    const sampledPopulation = calculatePopulation(ticks * TICK_MS, 0, TICK_MS);
+    await runSession(10 * 60_000);
+    // 200 of 600 characters: 180 x 5 + 20 x 10.
+    const sampledPopulation = 1100;
+    expect(store.getState().score.population).toBe(sampledPopulation);
 
     now = T0 + FOCUS_SECONDS * 1000;
     alarmProvider.advanceBy(FOCUS_SECONDS * 1000);
 
-    const expectedPopulation = calculatePopulation(
-      FOCUS_SECONDS * 1000,
-      0,
-      TICK_MS,
-    );
+    // A perfect session: 6900 + the 7% completion bonus (483).
+    const expectedPopulation = 7383;
     expect(expectedPopulation).toBeGreaterThan(sampledPopulation);
 
     const { sessionHistory, score, timer } = store.getState();
@@ -86,6 +84,61 @@ describe('session completion (M3.T3c)', () => {
 
     handle.dispose();
   });
+
+  it.each([
+    // [focus until (ms), expected level, expected population]
+    // built = focus characters - distraction characters, out of 600.
+    [1_620_000, 'great', 4500], // 540 - 60 = 480 (80%)
+    [1_260_000, 'good', 1500], // 420 - 180 = 240 (40%)
+    [990_000, 'bad', 300], // 330 - 270 = 60 (10%)
+  ])(
+    'a session distracted after %i ms ends as %s with population %i',
+    async (focusUntilMs, level, population) => {
+      const store = createAppStore({
+        dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+      });
+      let blockedUrl: string | undefined;
+      let reflectTabUpdate: (url: string | undefined) => void = () => {};
+      const handle = startBackground({
+        store,
+        alarmProvider,
+        now: () => now,
+        tabEventSource: {
+          queryTabs: () => Promise.resolve([{ id: 1, url: blockedUrl }]),
+          onUpdated: (listener) => {
+            reflectTabUpdate = (url) => {
+              blockedUrl = url;
+              listener({ id: 1, url });
+            };
+            return () => {};
+          },
+          onRemoved: () => () => {},
+        },
+      });
+      await handle.ready;
+      await sendMessage({
+        type: 'BLOCKLIST_ADD_SITE',
+        payload: { site: 'x.com' },
+      });
+      await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+
+      now = T0 + focusUntilMs;
+      await sendMessage({
+        type: 'TIMER_TICK',
+        payload: { remainingSeconds: FOCUS_SECONDS },
+      });
+      reflectTabUpdate('https://x.com/feed');
+      now = T0 + FOCUS_SECONDS * 1000;
+      alarmProvider.advanceBy(FOCUS_SECONDS * 1000);
+
+      const { sessionHistory } = store.getState();
+      expect(sessionHistory.sessions).toHaveLength(1);
+      expect(sessionHistory.sessions[0]?.score).toBe(level);
+      expect(sessionHistory.sessions[0]?.population).toBe(population);
+
+      handle.dispose();
+    },
+  );
 
   it('emits SESSION_ENDED with the recorded summary', async () => {
     const { store, handle } = startWiredBackground();

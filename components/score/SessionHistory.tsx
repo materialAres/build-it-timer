@@ -47,6 +47,7 @@ const SESSION_HISTORY_STYLES = `
     text-shadow: 0 0 4px currentColor;
   }
   .session-history__score--excellent { color: #51cf66; }
+  .session-history__score--great { color: #4dabf7; }
   .session-history__score--good { color: #fcc419; }
   .session-history__score--bad { color: #ff6b6b; }
   .session-history__population { opacity: 0.85; }

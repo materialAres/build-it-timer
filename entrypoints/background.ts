@@ -18,8 +18,11 @@ import {
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
-import { calculatePopulation } from '@/lib/score/calculate-population';
-import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
+import { calculateBuiltCharacters } from '@/lib/score/calculate-built-characters';
+import {
+  TOTAL_CHARACTERS_PER_SESSION,
+  tickMsForDurationSeconds,
+} from '@/lib/timer/focus-presets';
 import { TIMER_PROGRESS_ALARM, timerAlarmName } from '@/lib/timer/session';
 import { advanceProgress } from '@/lib/timer/session-progress';
 import type { SessionSummary, TimerState } from '@/store/store.types';
@@ -103,10 +106,10 @@ export interface BackgroundHandle {
  *
  * The tracker also accumulates the same running-only elapsed time as
  * `focusedMs`, which is what session completion (M3.T3c) feeds to
- * `calculatePopulation` (M2.T18), on the same session cadence. Sharing the
- * measure is deliberate: the population then always agrees with the city that
- * was actually built, instead of being derived from a second, differently-clocked
- * quantity.
+ * `calculateBuiltCharacters` (CR3), the same function the live accounting uses.
+ * Sharing the measure is deliberate: the final score and population always
+ * agree with the live ones, instead of being derived from a second,
+ * differently-clocked quantity.
  */
 export interface GrowthTickHandle {
   /** Handle one `TIMER_TICK` (the tick handler wired into the message bus). */
@@ -184,6 +187,7 @@ function createGrowthTick({
     const progress = advanceProgress(timer, now(), {
       distracted: isDistracted(),
       tickMs: tickMsForDurationSeconds(timer.durationSeconds),
+      durationMs: timer.durationSeconds * 1000,
     });
     if (progress === undefined) return;
 
@@ -205,10 +209,11 @@ function createGrowthTick({
       appliedTicks = progress.targetTicks;
     }
 
-    // Live population (M2.T18): same measures as the city and the malus. The
-    // write is skipped while the value is unchanged — `score` is persisted.
-    if (progress.population !== score.population) {
-      store.getState().setPopulation(progress.population);
+    // Live score and population (CR3): both derive from the built characters,
+    // computed from the same measures as the city and the malus. The write is
+    // skipped while the count is unchanged — `score` is persisted.
+    if (progress.builtCharacters !== score.builtCharacters) {
+      store.getState().setBuiltCharacters(progress.builtCharacters);
     }
   };
 
@@ -265,11 +270,11 @@ export interface SessionCompletion {
  * session (or a firing that arrives after a pause/reset) must not complete the
  * session that is running now.
  *
- * The population is derived from the focus time the growth tracker accumulated
- * (M2.T15) rather than from the wall clock, so it agrees with the city that was
- * actually built and excludes paused gaps. The score is whatever the score
- * slice holds: the `distractionRatio` formula is still the roadmap §4 open
- * point, and this task deliberately consumes the value instead of defining it.
+ * The built characters are derived from the focus and distraction time the
+ * growth tracker accumulated (M2.T15) rather than from the wall clock, so they
+ * agree with the city that was actually built and exclude paused gaps. The
+ * final population and score are then derived by the score slice, exactly like
+ * the live ones (CR3).
  */
 export function createSessionCompletion({
   store,
@@ -290,17 +295,22 @@ export function createSessionCompletion({
       // before the checkpoint is cleared by `completeTimer`.
       account();
 
-      const population = calculatePopulation(
-        getFocusedMs(),
-        getDistractedMs(),
-        tickMsForDurationSeconds(timer.durationSeconds),
-      );
-      store.getState().setPopulation(population);
+      store
+        .getState()
+        .setBuiltCharacters(
+          calculateBuiltCharacters(
+            getFocusedMs(),
+            getDistractedMs(),
+            timer.durationSeconds * 1000,
+            TOTAL_CHARACTERS_PER_SESSION,
+          ),
+        );
       void store.getState().completeTimer();
 
+      const { level, population } = store.getState().score;
       const summary: SessionSummary = {
         sessionId: timer.sessionId,
-        score: store.getState().score.level,
+        score: level,
         population,
         endedAt: now(),
       };

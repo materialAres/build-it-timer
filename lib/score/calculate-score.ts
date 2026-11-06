@@ -1,35 +1,39 @@
 import type { ScoreLevel } from '@/store/store.types';
+import { bandCutoffCharacters, COMPLETION_BANDS } from './completion-bands';
 
 /**
- * Inclusive upper boundary of the `'good'` band, as a distraction ratio.
- * `0` is `'excellent'`, `(0, 0.3]` is `'good'`, anything above is `'bad'`.
+ * Session score level for `builtCharacters` out of `total` (CR3, supersedes
+ * the ratio thresholds of M2.T9).
+ *
+ * The level is the one of the highest band in {@link COMPLETION_BANDS} whose
+ * cutoff (`ceil(fromRatio × total)`) the built characters reach: `bad` below
+ * 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. Nothing
+ * depends on the value of `total`, so the same rule holds if it grows.
+ *
+ * It is recalculated from the live count, so the level can drop back when a
+ * distraction removes characters.
+ *
+ * Total and defensive: `NaN`, `±Infinity`, negative values and an invalid
+ * `total` give `'bad'`; a finite count above `total` is clamped to
+ * `'excellent'`. Never throws.
  */
-export const GOOD_MAX_RATIO = 0.3;
-
-/**
- * Map a distraction ratio to the session score level (M2.T9).
- *
- * The ratio is the distraction time divided by the focus time **actually
- * elapsed so far** (not the planned session duration), so it is recalculated at
- * every check and the level can change during a session. How the ratio is
- * derived from individual distraction events is an open point of the plan
- * (roadmap §4): this function only owns the stable `ratio -> level` threshold,
- * independent of how the ratio is computed upstream.
- *
- * Thresholds (updated): exactly `0` is `'excellent'`, `<= 0.3` is `'good'`,
- * `> 0.3` is `'bad'` — two thresholds, three levels, no gray zones.
- *
- * Total and defensive (the ratio crosses an untrusted boundary): a non-finite
- * value is clamped into `[0, 1]` rather than allowed to leak into a comparison
- * (`NaN` is treated as `0`, the "no distraction observed" default, mirroring
- * `formatDuration`, M2.T3). Never throws.
- */
-export function calculateScore(distractionRatio: number): ScoreLevel {
-  const ratio = Number.isNaN(distractionRatio)
-    ? 0
-    : Math.min(1, Math.max(0, distractionRatio));
-
-  if (ratio === 0) return 'excellent';
-  if (ratio <= GOOD_MAX_RATIO) return 'good';
-  return 'bad';
+export function calculateScore(
+  builtCharacters: number,
+  total: number,
+): ScoreLevel {
+  if (
+    !Number.isFinite(builtCharacters) ||
+    !Number.isFinite(total) ||
+    total <= 0
+  ) {
+    return 'bad';
+  }
+  const built = Math.min(total, Math.floor(builtCharacters));
+  let level: ScoreLevel = COMPLETION_BANDS[0].level;
+  for (const band of COMPLETION_BANDS) {
+    if (built >= bandCutoffCharacters(band.fromRatio, total)) {
+      level = band.level;
+    }
+  }
+  return level;
 }

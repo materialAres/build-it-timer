@@ -5,6 +5,8 @@ import { createAppStore, DEFAULT_FOCUS_SECONDS } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
 import { generateSessionId } from '@/lib/timer/session';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
+import { advanceProgress } from '@/lib/timer/session-progress';
+import { PRESET_MINUTES, tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
 
 const START_MS = 1_700_000_000_000;
 
@@ -346,4 +348,63 @@ describe('session helpers (M2.T1)', () => {
   it('namespaces the alarm name by session id', () => {
     expect(timerAlarmName('session-1')).not.toBe(timerAlarmName('session-2'));
   });
+});
+
+describe('accounting checkpoint at the session boundaries (CR3 regression)', () => {
+  let alarmProvider: FakeAlarmProvider;
+  let nowMs: number;
+
+  const createStore = (): ReturnType<typeof createAppStore> =>
+    createAppStore({
+      dependencies: {
+        alarmProvider,
+        now: () => nowMs,
+        random: () => 0.5,
+      },
+    });
+
+  beforeEach(() => {
+    fakeBrowser.reset();
+    alarmProvider = new FakeAlarmProvider(START_MS);
+    nowMs = START_MS;
+  });
+
+  it('startTimer checkpoints the accounting clock at the start instant', async () => {
+    const store = createStore();
+
+    await store.getState().startTimer();
+
+    expect(store.getState().timer.lastAccountedAt).toBe(START_MS);
+  });
+
+  it('resuming checkpoints the accounting clock at the resume instant', async () => {
+    const store = createStore();
+    await store.getState().startTimer();
+    nowMs = START_MS + 1_000;
+    await store.getState().pauseTimer();
+    nowMs = START_MS + 5_000;
+
+    await store.getState().startTimer();
+
+    expect(store.getState().timer.lastAccountedAt).toBe(START_MS + 5_000);
+  });
+
+  it.each(PRESET_MINUTES)(
+    'a perfect %i-minute session is worth all 600 characters, with no lost millisecond',
+    async (minutes) => {
+      const store = createStore();
+      const seconds = minutes * 60;
+      store.getState().setFocusDuration(seconds);
+      await store.getState().startTimer();
+      const { timer } = store.getState();
+
+      const progress = advanceProgress(timer, timer.endsAt ?? 0, {
+        distracted: false,
+        tickMs: tickMsForDurationSeconds(seconds),
+        durationMs: seconds * 1000,
+      });
+
+      expect(progress?.builtCharacters).toBe(600);
+    },
+  );
 });

@@ -69,7 +69,7 @@ export interface TimerSlice {
    */
   recordDistractedMs(distractedMs: number): void;
   /**
-   * Persist one accounting step produced by `advanceProgress` (M2.T15/M2.T18):
+   * Persist one accounting step produced by `advanceProgress` (M2.T15, CR3):
    * the two running-only accumulators and the new wall-clock checkpoint. The
    * background calls it on every wake (tick, progress alarm, restart) so a gap
    * with no sampling ticks is still credited. One `set` for all three fields
@@ -157,14 +157,16 @@ export function createTimerSlice(
         const endsAt = resumedAt + timer.remainingSeconds * 1000;
         // The accumulated focus time is kept: a resume continues the same
         // session's city and population, it does not restart them. The
-        // checkpoint is (re)initialized by the background on the running
-        // transition, so it uses the same clock as the accounting step.
+        // checkpoint starts at the same instant the countdown is re-armed from:
+        // any gap before the background observes `running` would be focus time
+        // that is never credited, and a single lost millisecond costs a whole
+        // character at the score's floor.
         set({
           timer: {
             ...timer,
             status: 'running',
             endsAt,
-            lastAccountedAt: null,
+            lastAccountedAt: resumedAt,
           },
         });
         if (sessionId !== null) {
@@ -192,10 +194,11 @@ export function createTimerSlice(
           endsAt,
           // A brand-new session starts with an empty focus accumulator; the
           // previous session's total must not bleed into the new city. The
-          // background initializes the checkpoint when it observes `running`.
+          // checkpoint is the session's own start instant, so the whole
+          // countdown is accounted for (see the resume branch above).
           focusedMs: 0,
           distractedMs: 0,
-          lastAccountedAt: null,
+          lastAccountedAt: startedAt,
         },
       });
       await alarmProvider.schedule(timerAlarmName(sessionId), endsAt);

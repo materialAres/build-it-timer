@@ -1,10 +1,11 @@
 import type { TimerState } from '@/store/store.types';
-import { calculatePopulation } from '@/lib/score/calculate-population';
+import { calculateBuiltCharacters } from '@/lib/score/calculate-built-characters';
+import { TOTAL_CHARACTERS_PER_SESSION } from '@/lib/timer/focus-presets';
 
 /**
  * The accumulators and derived values a completed accounting step produces.
  * `focusedMs`/`distractedMs` remain the single source of truth; the tick target
- * and the population are pure projections of them (M2.T15/M2.T18).
+ * and the built-character count are pure projections of them (M2.T15, CR3).
  */
 export interface SessionProgress {
   readonly focusedMs: number;
@@ -13,19 +14,24 @@ export interface SessionProgress {
   readonly lastAccountedAt: number;
   /** Absolute growth target: `floor(focusedMs / tickMs)`. */
   readonly targetTicks: number;
-  /** Live population for the same measures. */
-  readonly population: number;
+  /**
+   * Net characters built for the same measures (CR3): the score slice derives
+   * the live population and level from it.
+   */
+  readonly builtCharacters: number;
 }
 
 export interface AdvanceProgressOptions {
   /**
    * Whether the whole stretch since the checkpoint was spent on a blocked site.
    * The caller supplies the current observation; the city does not grow while
-   * distracted and the population books the time as a penalty instead.
+   * distracted and the built-character count books the time as a penalty instead.
    */
   readonly distracted: boolean;
-  /** Session cadence in ms (`lib/timer/focus-presets.ts`). */
+  /** Session cadence in ms (`lib/timer/focus-presets.ts`); drives city growth only. */
   readonly tickMs: number;
+  /** Session length in ms, from which `builtCharacters` is counted (CR3). */
+  readonly durationMs: number;
 }
 
 /**
@@ -82,7 +88,8 @@ export function advanceProgress(
     : distractedBefore;
 
   // An invalid cadence has no meaningful ticks: keep the time (so the
-  // checkpoint advances) but derive no growth or population for it.
+  // checkpoint advances) but derive no growth for it. The score does not use
+  // `tickMs`: characters are counted from the duration so 100% stays reachable.
   const tickMs =
     Number.isFinite(options.tickMs) && options.tickMs > 0
       ? options.tickMs
@@ -94,6 +101,11 @@ export function advanceProgress(
     lastAccountedAt: until,
     targetTicks:
       tickMs === Number.POSITIVE_INFINITY ? 0 : Math.floor(focusedMs / tickMs),
-    population: calculatePopulation(focusedMs, distractedMs, tickMs),
+    builtCharacters: calculateBuiltCharacters(
+      focusedMs,
+      distractedMs,
+      options.durationMs,
+      TOTAL_CHARACTERS_PER_SESSION,
+    ),
   };
 }

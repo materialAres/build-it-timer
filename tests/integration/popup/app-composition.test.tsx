@@ -227,7 +227,10 @@ describe('popup App composition (M3.T4)', () => {
     await flushAsync();
     const empty = useAppStore.getState().city.layers;
 
-    now = T0 + TICK_MS;
+    // The singleton store stamps the session start with its own clock (the
+    // real one), so the tick is placed one session tick after that instant.
+    const startedAt = useAppStore.getState().timer.sessionStartedAt ?? now;
+    now = startedAt + TICK_MS;
     await act(async () => {
       await fakeBrowser.runtime.sendMessage({
         type: 'TIMER_TICK',

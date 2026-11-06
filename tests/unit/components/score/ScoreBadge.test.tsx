@@ -4,9 +4,9 @@ import { ScoreBadge, scoreLevelLabel } from '@/components/score/ScoreBadge';
 import { useAppStore } from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
-function setScore(level: ScoreLevel, distractionRatio = 0): void {
+function setScore(level: ScoreLevel): void {
   useAppStore.setState((state) => ({
-    score: { ...state.score, level, distractionRatio },
+    score: { ...state.score, level },
   }));
 }
 
@@ -26,8 +26,19 @@ describe('ScoreBadge (M2.T17)', () => {
     expect(badge).toHaveAttribute('data-level', 'excellent');
   });
 
+  it('renders the great variant from the store level', () => {
+    setScore('great');
+
+    render(<ScoreBadge />);
+
+    const badge = screen.getByRole('status');
+    expect(badge).toHaveTextContent('Great');
+    expect(badge).toHaveClass('score-badge--great');
+    expect(badge).toHaveAttribute('data-level', 'great');
+  });
+
   it('renders the good variant from the store level', () => {
-    setScore('good', 0.3);
+    setScore('good');
 
     render(<ScoreBadge />);
 
@@ -38,7 +49,7 @@ describe('ScoreBadge (M2.T17)', () => {
   });
 
   it('renders the bad variant from the store level', () => {
-    setScore('bad', 0.5);
+    setScore('bad');
 
     render(<ScoreBadge />);
 
@@ -57,7 +68,7 @@ describe('ScoreBadge (M2.T17)', () => {
     // The store notifies the subscribed component, so the same mounted node
     // must switch both its label and its variant class without a remount.
     act(() => {
-      setScore('bad', 0.5);
+      setScore('bad');
     });
 
     const badge = screen.getByRole('status');
@@ -67,12 +78,12 @@ describe('ScoreBadge (M2.T17)', () => {
   });
 
   it('gives each level a distinct label and modifier class', () => {
-    const levels: readonly ScoreLevel[] = ['excellent', 'good', 'bad'];
+    const levels: readonly ScoreLevel[] = ['excellent', 'great', 'good', 'bad'];
 
     const labels = levels.map((level) => scoreLevelLabel(level));
 
     expect(new Set(labels).size).toBe(levels.length);
-    expect(labels).toEqual(['Excellent', 'Good', 'Bad']);
+    expect(labels).toEqual(['Excellent', 'Great', 'Good', 'Bad']);
   });
 
   it('carries the per-level color stylesheet', () => {
@@ -80,6 +91,7 @@ describe('ScoreBadge (M2.T17)', () => {
 
     const style = container.querySelector('style');
     expect(style?.textContent).toContain('.score-badge--excellent');
+    expect(style?.textContent).toContain('.score-badge--great');
     expect(style?.textContent).toContain('.score-badge--good');
     expect(style?.textContent).toContain('.score-badge--bad');
     expect(style?.textContent).toContain('text-shadow: 0 0 4px currentColor');

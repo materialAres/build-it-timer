@@ -9,7 +9,8 @@ Start a focus session and every 2 seconds of undistracted work grows your city b
 * **Timer** — start / pause / reset a countdown session. Remaining time is persisted and reconciled with the browser alarm clock, so it survives a service-worker restart.
 * **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session. The list can only be edited while no session is in progress (before Start or after Reset).
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
-* **Score** — `excellent` (0% distraction), `good` (≤ 30%) or `bad` (> 30%), recalculated from distraction time relative to elapsed focus time.
+* **Score** — based on the percentage of the city built (focus characters minus distraction characters, never below 0): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
+* **Population** — each character earns a rate by completion band (5 below 30%, 10 from 30%, 20 from 70%), and finishing the whole city adds a bonus of 7% of the population reached.
 * **ASCII city** — deterministic, seeded growth composed from a library of ASCII building modules, with a per-domain colour palette.
 
 ## Tech stack

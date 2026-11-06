@@ -3,9 +3,8 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
-import { createAppStore, selectPopulation } from '@/store';
+import { createAppStore, selectPopulation, selectScoreLevel } from '@/store';
 import { growCityByTicks, seedFromSession } from '@/lib/city/growth-engine';
-import { calculatePopulation } from '@/lib/score/calculate-population';
 import {
   DEFAULT_FOCUS_PRESET,
   tickMsForDurationSeconds,
@@ -184,12 +183,38 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
-    // 10 minutes of focus: one +5 batch per completed session tick.
+    // 10 minutes of a 30-minute session = 200 of 600 characters: 180 at +5
+    // and the last 20 at +10 (the band changes at 30%).
     const ticks = await runFocused(10 * 60_000);
-    expect(selectPopulation(store.getState())).toBe(
-      calculatePopulation(ticks * TICK_MS, 0, TICK_MS),
-    );
-    expect(selectPopulation(store.getState())).toBe(ticks * 5);
+    expect(ticks).toBe(200);
+    expect(selectPopulation(store.getState())).toBe(1100);
+    expect(selectScoreLevel(store.getState())).toBe('good');
+
+    handle.dispose();
+  });
+
+  it('moves the live level and rate through the bands as characters are built', async () => {
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+
+    // One character per tick for the default preset (600 over 30 minutes).
+    const expectations: ReadonlyArray<readonly [number, string, number]> = [
+      [179, 'bad', 895],
+      [180, 'good', 900],
+      [181, 'good', 910],
+      [419, 'good', 3290],
+      [420, 'great', 3300],
+      [421, 'great', 3320],
+      [599, 'great', 6880],
+      [600, 'excellent', 7383],
+    ];
+    for (const [characters, level, population] of expectations) {
+      now = T0 + characters * TICK_MS;
+      await tick();
+      expect(selectScoreLevel(store.getState())).toBe(level);
+      expect(selectPopulation(store.getState())).toBe(population);
+    }
 
     handle.dispose();
   });
@@ -212,6 +237,55 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     now = T0 + TICK_MS * 3;
     await tick();
     expect(selectPopulation(store.getState())).toBe(15);
+
+    handle.dispose();
+  });
+
+  it('drops the level back and costs 20 per character when distracted in the great band', async () => {
+    const store = createAppStore({
+      dependencies: { alarmProvider, now: () => now, random: () => 0.5 },
+    });
+    let blockedUrl: string | undefined;
+    const handle = startBackground({
+      store,
+      alarmProvider,
+      now: () => now,
+      tabEventSource: {
+        queryTabs: () => Promise.resolve([{ id: 1, url: blockedUrl }]),
+        onUpdated: (listener) => {
+          reflectTabUpdate = (url) => {
+            blockedUrl = url;
+            listener({ id: 1, url });
+          };
+          return () => {};
+        },
+        onRemoved: () => () => {},
+      },
+    });
+    await handle.ready;
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'x.com' },
+    });
+    await sendMessage({ type: 'TIMER_STARTED', payload: {} });
+
+    now = T0 + 421 * TICK_MS;
+    await tick();
+    expect(selectScoreLevel(store.getState())).toBe('great');
+    expect(selectPopulation(store.getState())).toBe(3320);
+
+    // One distraction character takes back the 421st character at +20.
+    reflectTabUpdate('https://x.com/feed');
+    now = T0 + 422 * TICK_MS;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(3300);
+    expect(selectScoreLevel(store.getState())).toBe('great');
+
+    // A second one crosses back below 70%: the level drops and the rate is 10.
+    now = T0 + 423 * TICK_MS;
+    await tick();
+    expect(selectPopulation(store.getState())).toBe(3290);
+    expect(selectScoreLevel(store.getState())).toBe('good');
 
     handle.dispose();
   });
@@ -522,9 +596,9 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
 
     expect(store.getState().timer.focusedMs).toBe(sessionMs);
     expect(store.getState().timer.lastAccountedAt).toBe(T0 + sessionMs);
-    expect(selectPopulation(store.getState())).toBe(
-      calculatePopulation(sessionMs, 0, TICK_MS),
-    );
+    // The whole session is worth 100% of the characters: 6900 + the 7% bonus.
+    expect(selectPopulation(store.getState())).toBe(7383);
+    expect(selectScoreLevel(store.getState())).toBe('excellent');
     // The city may saturate before the tick target (its grid is finite), but it
     // must never grow past what the capped focus time is worth.
     const occupied = countOccupied(store.getState().city.layers);

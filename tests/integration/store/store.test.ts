@@ -27,7 +27,11 @@ describe('useAppStore', () => {
     expect(state.timer.status).toBe('idle');
     expect(state.timer.sessionId).toBeNull();
     expect(state.blocklist).toEqual({ blocklist: [], customTags: [] });
-    expect(state.score.level).toBe('excellent');
+    expect(state.score).toEqual({
+      builtCharacters: 0,
+      level: 'bad',
+      population: 0,
+    });
     expect(state.city.layers.background.width).toBeGreaterThan(0);
     expect(state.sessionHistory.sessions).toEqual([]);
     expect(state.ui.activeTab).toBe('timer');
@@ -186,6 +190,46 @@ describe('useAppStore', () => {
 
     expect(store.getState().blocklist.customTags).toEqual([testTag]);
     expect(records).toEqual([]);
+  });
+
+  it('rebuilds a legacy score from builtCharacters and drops distractionRatio (CR3.T5)', async () => {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          score: { level: 'excellent', distractionRatio: 0.2, population: 3000 },
+        },
+        version: 2,
+      }),
+    });
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    expect(store.getState().score).toEqual({
+      builtCharacters: 0,
+      level: 'bad',
+      population: 0,
+    });
+    expect('distractionRatio' in store.getState().score).toBe(false);
+  });
+
+  it('derives level and population from a persisted builtCharacters (CR3.T5)', async () => {
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          // The stale level and population are ignored: only the count is trusted.
+          score: { builtCharacters: 421, level: 'bad', population: 1 },
+        },
+        version: 2,
+      }),
+    });
+    const store = createAppStore();
+    await store.persist.rehydrate();
+
+    expect(store.getState().score).toEqual({
+      builtCharacters: 421,
+      level: 'great',
+      population: 3320,
+    });
   });
 
   it('fills fields a persisted snapshot predates (slice-aware merge, CI-2)', async () => {

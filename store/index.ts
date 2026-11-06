@@ -26,7 +26,7 @@ import {
   type BlocklistSlice,
   type BlocklistState,
 } from './blocklist.slice';
-import { createScoreSlice, type ScoreSlice } from './score.slice';
+import { createScoreSlice, deriveScoreState, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
@@ -263,7 +263,9 @@ function buildStore(
           blocklist: saved.blocklist
             ? { ...current.blocklist, ...sanitizeBlocklistState(saved.blocklist) }
             : current.blocklist,
-          score: saved.score ? { ...current.score, ...saved.score } : current.score,
+          score: saved.score
+            ? deriveScoreState((saved.score as { builtCharacters?: unknown }).builtCharacters)
+            : current.score,
           sessionHistory: saved.sessionHistory
             ? { ...current.sessionHistory, ...saved.sessionHistory }
             : current.sessionHistory,
@@ -349,7 +351,6 @@ export type {
 export {
   createScoreSlice,
   selectScoreLevel,
-  selectDistractionRatio,
   selectPopulation,
 } from './score.slice';
 export type { TimerSlice } from './timer.slice';
