@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **PR6.T3** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **PR6.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -123,7 +123,8 @@ description: Rules for updating the changelog
 | CR3.T10 | Documentation — README, instructions, analysis, memory | completed | `e288636` |
 | CR3.T11 | Changelog and final verification | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
-| PR6.T3 | Remove the unused `calculateCompletion` helper | completed | — (to be committed) |
+| PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
+| PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
 
 ---
 
@@ -1308,6 +1309,19 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/score/completion-bands.test.ts` — the six `calculateCompletion` cases (five `it.each` rows and one invalid-input test) are removed; the `COMPLETION_BANDS` and `bandCutoffCharacters` tests are unchanged. Run: `bun run compile` and `bun run lint` clean; `bun run test` → **868 passing tests across 78 files** (874 before, minus the six removed).
 - Relevant notes/decisions: reference search with Serena before the change: the only references were in `completion-bands.test.ts`. After the change, `fs.search_for_pattern` finds no reference in `lib/`, `store/`, `components/`, `entrypoints/` or `tests/`. The remaining mentions are history in the roadmap, this changelog and the features-analysis document.
 - Acceptance criteria: verified.
+- Commit: `14384b6 refactor(score): remove the unused calculateCompletion helper`.
+
+---
+
+### PR6.T4 — Update the PR #6 description (commit list, unrelated changes, review outcome)
+
+- The PR #6 description now lists every commit on the branch (20 commits, titles as they are), a short "Also included (not CR3)" paragraph for the `commit`, `create-pr` and `review-pr` skills, the commit-policy change and the Serena memories, and a "Review follow-ups" paragraph listing PR6.T1–T3. It does not mention Q5. Title, base branch and labels are unchanged.
+- Decisions recorded: **Q1 = c** — a non-finite count is invalid input and gives `'bad'` (PR6.T2). **Q2 = b** — `calculateCompletion` is removed (PR6.T3). **Q3 = a** — the skills, the commit-policy change and the Serena memories stay in this PR and are listed in its description. **Q4 = a** — commit titles are left as they are; the commit skill will generate shorter messages later. **Q5 is deferred** (oversized files): to be discussed later, either as a dedicated refactor change request or by accepting the exception.
+- Files created/modified: `docs/changelog.md`. The description draft was saved in the job's scratch directory, outside the repository. No code or test file is touched.
+- Dependencies added: none.
+- Tests: none added; no code changed, so the counts above are unchanged.
+- Relevant notes/decisions: `gh pr edit 6 --body-file` failed twice with a GraphQL error about the deprecated Projects (classic) field (`repository.pullRequest.projectCards`). The same body was applied with `gh api -X PATCH repos/{owner}/{repo}/pulls/6 -F body=@<file>`, after the developer approved the update. The description read back from GitHub matches the draft, apart from a trailing newline added by GitHub.
+- Acceptance criteria: verified — the body was read back with `gh api` and checked: both review-follow-up and "also included" sections present, 20 commit lines, no mention of Q5.
 - Commit: — (to be committed).
 
 ---
