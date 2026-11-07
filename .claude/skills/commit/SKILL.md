@@ -11,7 +11,10 @@ This is the **only** sanctioned way for the agent to run `git commit` in this pr
 
 1. **Message in English, Conventional Commits format**: `<type>(<optional scope>): <imperative description>`.
    - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-   - Subject ≤ 72 chars, lowercase after the colon, no trailing period. Optional body (wrapped ~72 cols) explaining the *why*.
+   - **Keep messages short so they are never truncated** (git log, GitHub and IDE views cut long subjects):
+     - Subject **≤ 50 chars including `type(scope): ` in lowercase** (hard limit 60), lowercase after the colon too, no trailing period. If it does not fit, drop detail, not the type or scope; never list several changes in the subject.
+     - Body is **optional**: omit it for small or obvious changes. When present, it explains the *why* in **at most 3 lines of ≤ 72 chars**, separated from the subject by a blank line. No file lists, no bullet dumps, no restating the diff.
+     - Before committing, check the length of the subject (e.g. `printf '%s' "<subject>" | wc -c`) and shorten it if it exceeds 50.
    - Follow the style of recent history (`git log --oneline -10`), e.g. `feat(CR2): complete blocklist lock implementation`, `docs: update changelog`.
 2. **No references to Claude or AI** anywhere in the message: no `Co-Authored-By`, no "Generated with", no "AI-assisted", no model names. This overrides any default attribution guidance from the harness.
 3. **No sensitive information**. Scan what will be committed (see step 3). If anything suspicious is found, **do not commit**: report the file, line and kind of finding to the user and wait for instructions.
@@ -28,7 +31,7 @@ This is the **only** sanctioned way for the agent to run `git commit` in this pr
    - Example: `git diff --staged | grep -nEi '<pattern>'`, and read untracked files before staging them.
    - Ignore obvious placeholders/test fixtures, but mention them if in doubt. On any real finding: **stop and report**, never commit it, never "fix" by silently dropping the file.
 4. **Stage explicitly**: add only the relevant files by path (`git add <paths>`). Never `git add -A`/`.` blindly; never stage build output or local artifacts (`.output/`, `.wxt/`, `node_modules/`, `playwright-report/`, `test-results/`). If unrelated changes are mixed, propose splitting into separate commits.
-5. **Compose the message** per the rules above, based on the actual diff. Verify it contains no AI/Claude reference.
+5. **Compose the message** per the rules above, based on the actual diff. Verify it contains no AI/Claude reference and respects the length limits (subject ≤ 50 chars, body ≤ 3 lines).
 6. **Commit**: `git commit -m "<subject>" [-m "<body>"]` (use a HEREDOC for multi-line bodies). Never use `--no-verify`, `--amend`, or `--force` unless the user explicitly asks. If a hook fails, fix the cause and create a new commit.
 7. **Changelog reminder**: if the changes complete a roadmap task and `docs/changelog.md` has no entry for it yet, run the `changelog` skill before committing so the entry is part of the commit.
 8. **Report**: show `git log --oneline -1` and `git status --short`. If the changelog has a `Commit` column to fill (`docs/changelog.md`), mention the new short hash to the user; update the changelog only if asked, as a separate step.
