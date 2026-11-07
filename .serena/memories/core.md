@@ -11,7 +11,7 @@ WXT MV3 browser extension ("Build-it! Timer Focus"): a focus-session timer that 
 - `tests/` — unit · integration · e2e · helpers; unit tests mirror the source tree.
 - `docs/` — `roadmap-en.md` (authoritative task cards), `changelog.md` (mandatory per-task record), `store-analysis.md`, `issue/`.
 - `locales/en.yml` (default) + `locales/it.yml`.
-- `.github/copilot-instructions.md` — binding design/testing/changelog rules; consult before implementing a roadmap task.
+- `CLAUDE.md` — binding design/testing rules (loaded every session). On demand: `docs/project-structure.md`, `docs/testing-matrix.md`; changelog procedure lives in the `changelog` skill (`.claude/skills/changelog/`).
 
 ## Invariants
 - **Three worlds, typed messages only**: background / content script / popup never import each other's modules; they exchange `RuntimeMessage` variants (`lib/messaging/messages.types.ts`) via `sendMessage`/`onMessage` (`lib/messaging/bus.ts`).

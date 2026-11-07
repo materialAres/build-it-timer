@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a GitHub pull request of this project (Focus Timer / BuildIt) against .github/copilot-instructions.md and report findings in the chat. Use when the user says "review PR", "look at PR #123", "check this pull request", or pastes a GitHub PR URL. Usage - /review-pr [PR number | URL | branch] (no argument = the PR of the current branch). Read-only by default; it posts to GitHub only after explicit confirmation. Not for creating PRs (use create-pr) or committing (use commit).
+description: Review a GitHub pull request of this project (Focus Timer / BuildIt) against CLAUDE.md and report findings in the chat. Use when the user says "review PR", "look at PR #123", "check this pull request", or pastes a GitHub PR URL. Usage - /review-pr [PR number | URL | branch] (no argument = the PR of the current branch). Read-only by default; it posts to GitHub only after explicit confirmation. Not for creating PRs (use create-pr) or committing (use commit).
 ---
 
 # review-pr skill
@@ -27,7 +27,7 @@ Reviews a pull request with `gh` and the project rules. Output is English. All c
 
 ## Review checklist
 
-Check the diff against `.github/copilot-instructions.md`:
+Check the diff against `CLAUDE.md`:
 
 | Section | Look for |
 |---|---|
@@ -35,7 +35,7 @@ Check the diff against `.github/copilot-instructions.md`:
 | §1.2 conventions | `any`, missing return types, untyped messages, naming, file > 200 / function > 40 lines |
 | §1.3 state | logic or browser APIs in components, persisted vs volatile misplacement, non-granular selectors |
 | §1.4 quality | missing `Result`-style handling, empty `catch`, useless comments, unjustified dependencies |
-| §3.1 / §3.3 TDD | new logic without tests, missing edge cases from the mapping table, weakened or skipped tests |
+| §3.1 / §3.3 TDD | new logic without tests, missing edge cases from the mapping table (`docs/testing-matrix.md`, grep the task ID), weakened or skipped tests |
 | §3.4 critical logic + security | if the diff touches timer persistence, `tldts` parsing, blocking, score/malus or palette: review deeper; hostile-input coverage for messages, domains, DNR filters; any reintroduced allowlist or precedence rule |
 | i18n | hardcoded strings, `en.yml` / `it.yml` key parity |
 | §4 changelog | if a roadmap task is completed: one detail entry, summary row, truthful counts, dependencies, no invented hash |

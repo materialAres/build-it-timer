@@ -30,7 +30,8 @@ This is the **only** sanctioned way for the agent to run `git commit` in this pr
 4. **Stage explicitly**: add only the relevant files by path (`git add <paths>`). Never `git add -A`/`.` blindly; never stage build output or local artifacts (`.output/`, `.wxt/`, `node_modules/`, `playwright-report/`, `test-results/`). If unrelated changes are mixed, propose splitting into separate commits.
 5. **Compose the message** per the rules above, based on the actual diff. Verify it contains no AI/Claude reference.
 6. **Commit**: `git commit -m "<subject>" [-m "<body>"]` (use a HEREDOC for multi-line bodies). Never use `--no-verify`, `--amend`, or `--force` unless the user explicitly asks. If a hook fails, fix the cause and create a new commit.
-7. **Report**: show `git log --oneline -1` and `git status --short`. If the changelog has a `Commit` column to fill (`docs/changelog.md`), mention the new short hash to the user; update the changelog only if asked, as a separate step.
+7. **Changelog reminder**: if the changes complete a roadmap task and `docs/changelog.md` has no entry for it yet, run the `changelog` skill before committing so the entry is part of the commit.
+8. **Report**: show `git log --oneline -1` and `git status --short`. If the changelog has a `Commit` column to fill (`docs/changelog.md`), mention the new short hash to the user; update the changelog only if asked, as a separate step.
 
 ## Scope limits
 
