@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **PR6.T4** (Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR4.T1** (change request CR4 **in progress** — the analysis `docs/features-analysis/saved-presets.md` is written, no production code yet; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -19,10 +19,11 @@ description: Rules for updating the changelog
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
+- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis) done; CR4.T2 … CR4.T6 remaining. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **868 passing tests** across 78 files (green).
+- Tests: `bun run test` → **879 passing tests** across 79 files (green; +11 tests/+1 file since the last roadmap entry come from UI.T1, which has no roadmap card).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
-- Lint: `bun run lint` → **clean**.
+- Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
 - E2E: `bun run e2e` (Playwright, Chromium) → **1 passing test** (`tests/e2e/popup.spec.ts`).
 
@@ -122,6 +123,7 @@ description: Rules for updating the changelog
 | CR3.T9 | Tests — integration (background, messaging, store) | completed | `6e7a97e` |
 | CR3.T10 | Documentation — README, instructions, analysis, memory | completed | `e288636` |
 | CR3.T11 | Changelog and final verification | completed | — (to be committed) |
+| CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1284,6 +1286,17 @@ description: Rules for updating the changelog
 - Acceptance criteria: verified.
 - Commit: — (to be committed).
 
+### CR4.T1 — Analysis: preset sources, toggles, saved presets, v3 migration
+- `docs/features-analysis/saved-presets.md` maps every write and read path of `applyPreset`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`, `tagIds` and `customTags` (store, `apply-mutation.ts`, `messages.types.ts`, persistence, snapshot parsing, components, locales, test footprint) and records the decisions CR4.T2–T6 implement.
+- Decisions: entries carry `manual: boolean` + `presetIds: string[]` instead of `tagIds`; applied presets are **persisted** (`appliedPresetIds`), not derived; `userPresets` replaces `customTags` and `Preset` loses `tag`; user ids are `user:<time>-<entropy>`; messages `PRESET_TOGGLE` (explicit `applied` target), `PRESET_SAVE`, `PRESET_RENAME`, `PRESET_DELETE` replace `BLOCKLIST_APPLY_PRESET` and `TAG_*`; lock matrix per operation including the CR5 add-only window; persistence `version: 3` with the v2 migration and the accepted `manual` limit; `parseStoreSnapshot` keeps accepting v2 and v3 (domains only).
+- Decisions that refine the CR4 text and need the developer's eye: saving a preset captures the whole current list (no "empty and filled later" in v1); saving clears `manual` on captured entries; deleting a preset keeps its sites blocked (they become manual); CR4.T2 and CR4.T3 land in one commit because the type change breaks the tree.
+- Files created/modified: `docs/features-analysis/saved-presets.md` (new), `docs/roadmap-en.md` (CR4 analysis pointer, entry-shape sentence, T2/T3 file lists), `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: none — no production code in this task. Impact list (tests to change, enforcement tests that must only get fixture edits) is in §8 of the analysis.
+- Relevant notes/decisions: `store/blocklist.slice.ts` is ~420 lines (limit 200); CR4.T3 splits the site helpers into `lib/blocking/blocklist-sites.ts` and the migration into `lib/blocking/migrate-presets.ts`.
+- Acceptance criteria: verified — every path mapped, entry-source shape, applied-set representation, id scheme, v2→v3 migration with the accepted limit, message set and lock/CR5 behavior decided, tests to change vs keep listed.
+- Commit: — (to be committed).
+
 ---
 
 ## PR reviews
@@ -1362,6 +1375,8 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 18. **The drawn city is scattered characters, not recognizable buildings (I002, open — description now stale)** — the growth engine picks each character by global tick index (`glyphFor` flattens the composed building and takes `characters.charAt(tick % characters.length)`) while `nextFreeSlot` picks the cell independently, so the character and its position are unrelated and the composer's building never materializes. The three layers are also absolutely stacked at the same coordinates, so the scattered glyphs superimpose into noise. No remaining task owns this: M2.T12b only adds decoration on top of the structure (and is itself unwired), and M4.T2 (sprite-sheet renderer) is skipped for now. Tracked in `docs/issue/I002-scattered-city-draw.md`. **Update (I003)**: `glyphFor` no longer exists in `lib/city/growth-engine.ts` — the function was replaced by the lot-based placement strategy (`planLayer`/`nextFreeCellInLot`/`glyphAt`) in `3c03dea`, which anchors each structure in its own lot and walks it bottom-up, so the described character/position mismatch is gone and the built extension now renders recognizable buildings with intact roofs. The issue file and this entry therefore describe code that is no longer there; what survives of the *symptom* is the layer stacking, which `CityCanvas` compensates for by fading the layers by depth (0.4/0.75/1) rather than overlaying them at the same coordinates. Left open pending a decision to re-verify and close it.
 19. **The city still freezes for the last ~10 minutes of a session (I003)** — with the floor ceiling raised and the grid at 60 × 20 the city saturates at **15.1 minutes** of the default 25-minute session (measured), down from 6.7 minutes before. **72 × 24** would fill at 24.2 minutes and match the session length, and still fits the popup cap (~530 px at `0.85rem`). Left as a follow-up rather than applied: the size is a single constant pair in `lib/city/city-size.ts`, so changing it is a one-line edit plus a re-baseline of the saturation figures in the I003 entry.
 20. **`GROWTH_TICK_MS` is temporarily set to `20` in the working tree (not committed)** — the production value is `2_000` (one character per 2 seconds, roadmap M2.T12). The `20` in the current working tree is a local experiment to make the city draw faster; it makes 10 existing integration/unit tests fail, because `lib/timer/tick-emitter.ts` derives `TICK_INTERVAL_MS` from this constant and those tests assert the 2s cadence by name (verified: the whole suite is green again at `2_000`). The comment above the constant still says "one character of city per 2 seconds", which contradicts the value. **Must be reverted before committing.**
+
+21. **`bun run lint` exits non-zero on installed skill scripts** — ESLint reports 5 parsing errors in `.claude/skills/impeccable/scripts/*.js`, added by the skill install commit `1895c37`; project code lints clean. Fix when wanted: add `.claude/` to the ESLint ignores. Not part of any roadmap task.
 
 ---
 

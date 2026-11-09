@@ -1219,12 +1219,12 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 **Origin.** The UI critique of 2026-11-09 (`docs/ui/ui-review-tasks.md`, UI.T2/UI.T3; snapshot `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md`). Developer decisions: presets become toggles; custom tags become saved presets.
 
-**Analysis.** To be written by `CR4.T1` in `docs/features-analysis/saved-presets.md` before any production change, following the CR2/CR3 practice (map every write path, persistence, UI, i18n and tests first).
+**Analysis.** Written by `CR4.T1` in `docs/features-analysis/saved-presets.md` (write/read paths, entry-source shape, persisted applied set, v3 migration, message set, lock matrix, test impact). Its decisions bind CR4.T2–CR4.T6; where they refine the rules below, the analysis wins.
 
 **Goal.** Today `applyPreset` is a one-shot insert with no state and no undo, and custom tags affect nothing: no blocking code reads `tagIds` or `customTags` (only `lib/blocking/store-snapshot.ts` validates them and `lib/blocking/legacy-blocklist.ts` migrates them). After the change a preset — built-in (Social, Video, News) or saved by the user — is a **toggle** over the single blocklist, and user-created tags no longer exist as a separate concept.
 
 **Behavioral rule after the change.**
-- Each `BlocklistEntry` records **where it came from**: its sources are any of `manual` and one or more preset ids. Today's `tagIds` cannot tell a manual entry from a preset-only one once a tag is removed, so explicit source tracking replaces `tagIds` (final shape decided in CR4.T1).
+- Each `BlocklistEntry` records **where it came from**: its sources are any of `manual` and one or more preset ids. Today's `tagIds` cannot tell a manual entry from a preset-only one once a tag is removed, so explicit source tracking replaces `tagIds` (decided in CR4.T1: `manual: boolean` + `presetIds: string[]` per entry, a persisted `appliedPresetIds`, and `userPresets` replacing `customTags`).
 - A preset is **applied** when it is in the applied set; applying it adds its domains with that preset as a source; un-applying it removes the preset as a source and deletes only entries left with no source. A domain added manually or by another applied preset survives.
 - Removing a single entry (×) removes it whatever its sources; the presets that contributed it stay applied but no longer cover that domain until re-applied.
 - **Saved presets**: the user can create a preset (named, from the current list or empty and filled later), rename it, delete it (with confirmation or undo), and toggle it exactly like a built-in one. Built-in presets stay data in `lib/blocking/presets.ts` (Open/Closed, §1.1); user presets are persisted data with the same `Preset` shape, not new branching logic.
@@ -1261,7 +1261,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T2 — Pure preset-toggle and source logic in `lib/blocking/`
 * **Objective**: pure, browser-free functions that toggle a preset over the blocklist and maintain entry sources.
-* **Files to create/modify**: `lib/blocking/preset-toggle.ts` (new), `tests/unit/blocking/preset-toggle.test.ts` (new), `store/store.types.ts` (types only).
+* **Files to create/modify**: `lib/blocking/preset-toggle.ts` (new), `tests/unit/blocking/preset-toggle.test.ts` (new), `store/store.types.ts` (types only: `BlocklistEntry`, `Preset` without `tag`). Lands in one commit with CR4.T3, because the type change breaks the tree until the store is migrated.
 * **Dependencies**: CR4.T1
 * **Acceptance criteria**:
   - Tests written first: apply adds missing domains and the source; un-apply removes only entries with no remaining source; a manual entry and an entry shared by two applied presets survive un-apply; re-apply is idempotent; domains are canonicalized through `getRegistrableDomain` (DRY).
@@ -1270,7 +1270,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T3 — Store model, slice actions and persistence v3 migration
 * **Objective**: move `BlocklistState` to entry sources, applied presets and user presets; migrate persisted v2 data.
-* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new).
+* **Files to create/modify**: `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
 * **Dependencies**: CR4.T2
 * **Acceptance criteria**:
   - Actions `togglePreset`, `savePreset`, `renamePreset`, `deletePreset` replace `applyPreset` and the tag actions; granular selectors expose applied state and per-preset counts.
