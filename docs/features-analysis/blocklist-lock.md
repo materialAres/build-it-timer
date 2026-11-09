@@ -1,6 +1,13 @@
 # Blocklist lock during a session — code analysis
 
 > Change request: **the blocklist cannot be edited once the timer starts.**
+>
+> **Amended by CR5** (`docs/roadmap-en.md` §2.8): *adding* is allowed in `idle`,
+> `running` and `paused`; every other mutation stays `idle`-only and `completed`
+> allows none. The text below describes the original CR2 rule (everything
+> `idle`-only); the two windows live in `store/blocklist-lock.ts`
+> (`isBlocklistEditable`, `isBlocklistAddAllowed`) and the per-operation matrix is
+> in `docs/features-analysis/saved-presets.md` §3.6.
 > Status: **implemented** by CR2.T1–CR2.T4 (the UI was split into CR2.T3a for the
 > site/preset editors, CR2.T3b for the tag editor and CR2.T3c for the notice and
 > locales). The file/line references below describe the code *before* CR2 unless
