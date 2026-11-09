@@ -1215,6 +1215,174 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 | M3.T3c | completion recomputes the population from ticks | completion recomputes `builtCharacters` from the duration (CR3.T6) |
 | §4 open point (ratio formula) | exact `distractionRatio` formula to be defined | resolved: the ratio path is removed, score derives from `builtCharacters` (CR3.T5) |
 
+### 2.7 Change request CR4 — Presets as toggles and saved custom presets
+
+**Origin.** The UI critique of 2026-11-09 (`docs/ui/ui-review-tasks.md`, UI.T2/UI.T3; snapshot `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md`). Developer decisions: presets become toggles; custom tags become saved presets.
+
+**Analysis.** To be written by `CR4.T1` in `docs/features-analysis/saved-presets.md` before any production change, following the CR2/CR3 practice (map every write path, persistence, UI, i18n and tests first).
+
+**Goal.** Today `applyPreset` is a one-shot insert with no state and no undo, and custom tags affect nothing: no blocking code reads `tagIds` or `customTags` (only `lib/blocking/store-snapshot.ts` validates them and `lib/blocking/legacy-blocklist.ts` migrates them). After the change a preset — built-in (Social, Video, News) or saved by the user — is a **toggle** over the single blocklist, and user-created tags no longer exist as a separate concept.
+
+**Behavioral rule after the change.**
+- Each `BlocklistEntry` records **where it came from**: its sources are any of `manual` and one or more preset ids. Today's `tagIds` cannot tell a manual entry from a preset-only one once a tag is removed, so explicit source tracking replaces `tagIds` (final shape decided in CR4.T1).
+- A preset is **applied** when it is in the applied set; applying it adds its domains with that preset as a source; un-applying it removes the preset as a source and deletes only entries left with no source. A domain added manually or by another applied preset survives.
+- Removing a single entry (×) removes it whatever its sources; the presets that contributed it stay applied but no longer cover that domain until re-applied.
+- **Saved presets**: the user can create a preset (named, from the current list or empty and filled later), rename it, delete it (with confirmation or undo), and toggle it exactly like a built-in one. Built-in presets stay data in `lib/blocking/presets.ts` (Open/Closed, §1.1); user presets are persisted data with the same `Preset` shape, not new branching logic.
+- The standalone tag editor (create/assign/filter tags) is removed from the popup; the list shows each entry's sources as chips.
+- Enforcement is unchanged: `buildDnrRules` and `isDomainBlocked` read domains only, never sources.
+- Persistence `version` goes from 2 to 3 with a migration: `customTags` become user presets whose domains are the entries carrying that tag; preset `tagIds` map to preset sources; an entry with no tag becomes `manual`. Known limit (accepted, recorded): an entry that was both typed manually and tagged in v2 migrates without the `manual` source.
+- The CR2 lock still applies: every preset/blocklist mutation is `idle`-only, except the add-direction cases CR5 opens up.
+
+**Sequencing note.** Analysis first (`CR4.T1`). Pure logic with its tests (`CR4.T2`, red/green §3.1), then the store and the v3 migration (`CR4.T3`), then messages and the background handler (`CR4.T4`), then the UI (`CR4.T5`, coordinated with UI.T1's single-list layout — UI.T1 lands first), then docs and the gate (`CR4.T6`). Each task touches at most six files.
+
+#### 2.7.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | — |
+| CR4.T2 | Pure preset-toggle and source logic in `lib/blocking/` | CR4.T1 |
+| CR4.T3 | Store model, slice actions and persistence v3 migration | CR4.T2 |
+| CR4.T4 | Preset mutation messages and background handler | CR4.T3 |
+| CR4.T5 | Popup: preset toggles, saved-preset management, tag editor removed | CR4.T4, UI.T1 |
+| CR4.T6 | Documentation, changelog and final verification | CR4.T1–CR4.T5 |
+
+#### 2.7.2 Task cards
+
+##### CR4.T1 — Analysis: preset sources, toggles, saved presets, v3 migration
+* **Objective**: write `docs/features-analysis/saved-presets.md` mapping the current preset/tag paths and recording the decisions the later tasks implement.
+* **Files to create/modify**: `docs/features-analysis/saved-presets.md` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - Maps every write and read path of `applyPreset`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`, `tagIds` and `customTags` (store, `lib/messaging/apply-mutation.ts`, `messages.types.ts`, persistence, components, locales, tests).
+  - Decides the entry source shape (replacing `tagIds`), the applied-presets representation (derived vs persisted), the user-preset storage key and id scheme, and the v2→v3 migration including the accepted limit above.
+  - Decides the message set replacing `BLOCKLIST_APPLY_PRESET` and `TAG_*` (e.g. `PRESET_TOGGLE`, `PRESET_SAVE`, `PRESET_RENAME`, `PRESET_DELETE`) and how the CR2 lock and CR5 add-only window apply to each.
+  - Lists the tests that change and the ones that must stay untouched (enforcement: `rules.ts`, `is-domain-blocked.ts`).
+* **Notes/decisions**: no production code in this task.
+
+##### CR4.T2 — Pure preset-toggle and source logic in `lib/blocking/`
+* **Objective**: pure, browser-free functions that toggle a preset over the blocklist and maintain entry sources.
+* **Files to create/modify**: `lib/blocking/preset-toggle.ts` (new), `tests/unit/blocking/preset-toggle.test.ts` (new), `store/store.types.ts` (types only).
+* **Dependencies**: CR4.T1
+* **Acceptance criteria**:
+  - Tests written first: apply adds missing domains and the source; un-apply removes only entries with no remaining source; a manual entry and an entry shared by two applied presets survive un-apply; re-apply is idempotent; domains are canonicalized through `getRegistrableDomain` (DRY).
+  - Functions are pure (no `Date.now()`, no browser APIs), have explicit return types and return new arrays.
+  - Existing enforcement tests stay green untouched.
+
+##### CR4.T3 — Store model, slice actions and persistence v3 migration
+* **Objective**: move `BlocklistState` to entry sources, applied presets and user presets; migrate persisted v2 data.
+* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new).
+* **Dependencies**: CR4.T2
+* **Acceptance criteria**:
+  - Actions `togglePreset`, `savePreset`, `renamePreset`, `deletePreset` replace `applyPreset` and the tag actions; granular selectors expose applied state and per-preset counts.
+  - CR2 lock preserved: all of them are no-ops outside `idle` (except what CR5 opens).
+  - `version: 3`; the migration turns v2 `customTags`/`tagIds` into user presets and sources as decided in CR4.T1, with fixtures for v1 and v2 snapshots.
+  - Snapshot validation rejects malformed v3 data with a `Result`, never a throw (§1.4).
+
+##### CR4.T4 — Preset mutation messages and background handler
+* **Objective**: replace `BLOCKLIST_APPLY_PRESET` and `TAG_*` with the preset message set; the background stays the single writer.
+* **Files to create/modify**: `lib/messaging/messages.types.ts`, `lib/messaging/apply-mutation.ts`, `lib/messaging/mutation-sender.ts`, `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`.
+* **Dependencies**: CR4.T3
+* **Acceptance criteria**:
+  - Discriminated-union messages, validated at the boundary; unknown or malformed payloads are dropped and logged at `debug` without the payload.
+  - The lock cases from CR2.T2 are re-expressed for the new types; DNR rules still follow the blocklist through `syncRules`.
+
+##### CR4.T5 — Popup: preset toggles, saved-preset management, tag editor removed
+* **Objective**: the UI side of UI.T2/UI.T3 on top of UI.T1's single list.
+* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `components/blocklist/SiteList.tsx`, `components/blocklist/TagEditor.tsx` (deleted), `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml` (component tests updated alongside).
+* **Dependencies**: CR4.T4, UI.T1
+* **Acceptance criteria**:
+  - Preset buttons expose `aria-pressed`, show applied state and count, and are dimmed when locked; their domains are inspectable before applying.
+  - User presets appear next to built-in ones and can be saved, renamed and deleted (confirmation or undo).
+  - List rows show source chips; no tag editor or checkbox grid remains.
+  - All strings localized in EN and IT; the i18n drift test stays green.
+
+##### CR4.T6 — Documentation, changelog and final verification
+* **Objective**: record the change and prove the gate.
+* **Files to create/modify**: `docs/features-analysis/saved-presets.md` (mark implemented), `README.md`, `DESIGN.md` (chips section if the source chip adds a pattern), `.serena/memories/core.md`, `docs/changelog.md`.
+* **Dependencies**: CR4.T1–CR4.T5
+* **Acceptance criteria**:
+  - Changelog entry per CR4 task with the v3 migration entry; `Commit: —` until committed.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, `bun run build:firefox` green; `bun run e2e` if available.
+
+#### 2.7.3 Amended acceptance criteria in Section 1
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M2.T5 | a preset expands into entries tagged with its tag | a preset is toggled; entries record it as a source (CR4.T2/T3) |
+| M3.T1 | `PresetPicker` applies a preset once | presets toggle and show applied state and count (CR4.T5) |
+| M3.T2 | `TagEditor` creates, assigns, filters and deletes custom tags | removed; replaced by saved user presets (CR4.T5) |
+| CR2.T1/T2/T3b | lock covers `createTag`/`deleteTag`/`assignTag`/`unassignTag` | lock covers the preset actions/messages instead (CR4.T3/T4) |
+
+### 2.8 Change request CR5 — Allow adding sites during a session
+
+**Origin.** The UI critique of 2026-11-09 (UI.T4) and the developer's decision: a forgotten site must not cost the whole city through Reset.
+
+**Goal.** CR2 locks the blocklist outside `idle` because loosening it mid-session is an escape from the block. **Tightening** it is not, so adds become allowed during a session; removals stay locked.
+
+**Behavioral rule after the change.**
+- In `running` and `paused`, **add-direction** mutations are accepted: `addSite`, and toggling a preset **on** (CR4). Everything that loosens or reshapes the list stays `idle`-only: `removeSite`, toggling a preset **off**, saving/renaming/deleting a user preset.
+- `completed` stays fully locked until Reset (CR2 decision A unchanged): the session is over, so tightening has no effect.
+- A new pure predicate `isBlocklistAddAllowed(status)` (`idle`, `running`, `paused`) sits next to `isBlocklistEditable(status)` (`idle` only); the three enforcement layers of CR2 (store, background, UI) each use the right one.
+- A site added during `running` is enforced immediately: `syncRules` already re-runs on every store change, and the overlay content script already re-evaluates on store updates, so an already-open tab on that domain shows the overlay. Being on that tab from then on counts as distraction under the existing malus rules — no retroactive malus for time before the add.
+- No persisted field and no version bump: the window is derived from `timer.status`.
+
+**Sequencing note.** Store first (`CR5.T1`), then the authoritative background (`CR5.T2`), then the UI and copy (`CR5.T3`), then docs (`CR5.T4`). The preset-on part depends on CR4's toggle; if CR5 lands before CR4, it covers `addSite` only and CR4.T3/T4 extend the add window to `togglePreset` on.
+
+#### 2.8.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR5.T1 | `isBlocklistAddAllowed` and the add-only window in the store | — (preset-on part: CR4.T3) |
+| CR5.T2 | Background accepts add-direction mutations mid-session | CR5.T1 |
+| CR5.T3 | Popup: add field enabled mid-session, removals locked, new notice copy | CR5.T2, UI.T1 |
+| CR5.T4 | Documentation, changelog and final verification | CR5.T1–CR5.T3 |
+
+#### 2.8.2 Task cards
+
+##### CR5.T1 — `isBlocklistAddAllowed` and the add-only window in the store
+* **Objective**: let add-direction actions through in `running`/`paused` while keeping every other mutation `idle`-only.
+* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts`.
+* **Dependencies**: — (preset-on part: CR4.T3)
+* **Acceptance criteria**:
+  - `isBlocklistAddAllowed(status: TimerStatus): boolean` is pure, `true` for `idle`, `running`, `paused`; `selectBlocklistAddAllowed` is exported.
+  - Truth-table tests per action and status: `addSite` applies in `idle`/`running`/`paused`, is a no-op in `completed`; `removeSite` (and preset-off / preset management after CR4) stay no-ops outside `idle`.
+  - Existing `idle` tests stay green unmodified.
+
+##### CR5.T2 — Background accepts add-direction mutations mid-session
+* **Objective**: the background, as single writer, applies the same window so a forged remove is still rejected.
+* **Files to create/modify**: `lib/messaging/apply-mutation.ts`, `tests/integration/background/blocklist-lock.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/malus.test.ts`.
+* **Dependencies**: CR5.T1
+* **Acceptance criteria**:
+  - `BLOCKLIST_ADD_SITE` (and preset-on after CR4) is accepted in `running`/`paused` and persisted once; removals and preset management are still dropped with the `debug` log of CR2.T2.
+  - A site added while `running` produces a DNR rule immediately; after Reset the rules are cleared as before.
+  - Malus: time on the newly blocked domain counts only from the add onward.
+
+##### CR5.T3 — Popup: add field enabled mid-session, removals locked, new notice copy
+* **Objective**: reflect the add-only window in the blocklist UI.
+* **Files to create/modify**: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/integration/popup/app-composition.test.tsx` (component tests updated alongside).
+* **Dependencies**: CR5.T2, UI.T1
+* **Acceptance criteria**:
+  - In `running`/`paused` the add field, Add button (and unapplied presets after CR4) are enabled; × buttons and applied-preset toggles are disabled; in `completed` everything is disabled.
+  - The notice copy states that sites can be added during a session and that removing needs Reset; `completed` keeps the Reset wording. Neutral voice (PRODUCT.md). Keys in EN and IT.
+
+##### CR5.T4 — Documentation, changelog and final verification
+* **Objective**: record the amendment to CR2 and prove the gate.
+* **Files to create/modify**: `docs/features-analysis/blocklist-lock.md` (amendment note), `README.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+* **Dependencies**: CR5.T1–CR5.T3
+* **Acceptance criteria**:
+  - README: sites can be added during a session; removing or editing presets needs the timer idle (before Start or after Reset).
+  - Serena memory invariant updated: adds allowed in `idle`/`running`/`paused`, everything else `idle`-only, enforced in store and background.
+  - Changelog entries per task; gate green as in CR4.T6.
+
+#### 2.8.3 Amended acceptance criteria in Section 2
+
+| Task | Amended part | New rule |
+|---|---|---|
+| CR2.T1 | every blocklist action is a no-op outside `idle` | add-direction actions also apply in `running`/`paused` (CR5.T1) |
+| CR2.T2 | the background drops every blocklist mutation outside `idle` | add-direction mutations accepted in `running`/`paused` (CR5.T2) |
+| CR2.T3a | `SiteList` input and Add disabled outside `idle` | enabled in `running`/`paused`; × still disabled (CR5.T3) |
+| CR2.T3c | notice says the list is locked and Reset unlocks it | during a session it says sites can be added and removal needs Reset (CR5.T3) |
+
 ---
 
 ## 3. PR Reviews

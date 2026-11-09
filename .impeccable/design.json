@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-09T16:19:08.253685+00:00",
+  "generatedAt": "2026-11-09T16:59:10.446653+00:00",
   "title": "Design System: Build-it! Timer Focus",
   "extensions": {
     "colorMeta": {
@@ -315,6 +315,14 @@
       "city": {
         "displayName": "City",
         "purpose": "The ASCII grid; line-height 1, one ch per column."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "The Timer tab's one big number: the drum's selected preset when idle, the countdown in session, same slot."
+      },
+      "numeral-neighbor": {
+        "displayName": "Numeral Neighbor",
+        "purpose": "Non-selected rows of the Duration Drum only."
       }
     },
     "shadows": [
@@ -349,6 +357,21 @@
         "name": "hover-wash",
         "value": "background 0.15s",
         "purpose": "Wash fill on outline buttons."
+      },
+      {
+        "name": "drum-step",
+        "value": "180ms cubic-bezier(0.22, 1, 0.36, 1); translateY one row; snap to nearest preset; 0.25-row rubber-band at ends",
+        "purpose": "Duration Drum step/flick settle."
+      },
+      {
+        "name": "drum-to-clock",
+        "value": "200ms opacity fade of neighbors/ruler/unit; selected row becomes the countdown in place",
+        "purpose": "Start/Reset transition of the Timer tab."
+      },
+      {
+        "name": "drum-reduced",
+        "value": "80ms opacity crossfade, no momentum",
+        "purpose": "prefers-reduced-motion fallback for the drum."
       }
     ],
     "breakpoints": []
@@ -371,12 +394,12 @@
       "css": ".ds-btn-pill{padding:.3rem .7rem;border:1px solid currentColor;border-radius:999px;background:transparent;color:#7dfba0;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;letter-spacing:.06em;text-shadow:0 0 4px currentColor;cursor:pointer;transition:background .15s} .ds-btn-pill:hover{background:rgba(125,251,160,.15)} .ds-btn-pill:focus-visible{outline:1px solid currentColor;outline-offset:2px}"
     },
     {
-      "name": "Duration Toggle",
-      "kind": "chip",
-      "refersTo": "button-outline",
-      "description": "A preset toggle; the pressed state turns phosphor green and glows.",
-      "html": "<div class=\"ds-toggles\"><button class=\"ds-toggle\" aria-pressed=\"false\">25 min</button><button class=\"ds-toggle\" aria-pressed=\"true\">30 min</button><button class=\"ds-toggle\" aria-pressed=\"false\">45 min</button></div>",
-      "css": ".ds-toggles{display:flex;gap:.35rem} .ds-toggle{padding:.2rem .6rem;border:1px solid rgba(230,230,230,.25);border-radius:999px;background:transparent;color:#e6e6e6;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.8rem;cursor:pointer} .ds-toggle:hover{border-color:rgba(125,251,160,.35)} .ds-toggle[aria-pressed='true']{border-color:#7dfba0;color:#7dfba0;text-shadow:0 0 4px currentColor} .ds-toggle:focus-visible{outline:1px solid #7dfba0;outline-offset:2px}"
+      "name": "Duration Drum",
+      "kind": "custom",
+      "refersTo": "duration-drum",
+      "description": "Signature: terminal scroll-wheel over FOCUS_PRESETS; selected row glows between hairlines, ruler ticks frame it like a crosshair. Becomes the countdown in session.",
+      "html": "<div class=\"ds-drum\" role=\"spinbutton\" tabindex=\"0\" aria-label=\"Focus duration\" aria-valuemin=\"5\" aria-valuemax=\"120\" aria-valuenow=\"30\" aria-valuetext=\"30 min\"><div class=\"ds-drum__ruler ds-drum__ruler--l\" aria-hidden=\"true\">╴\n╴\n──┤\n╴\n╴</div><div class=\"ds-drum__rows\" aria-hidden=\"true\"><span class=\"ds-drum__row ds-drum__row--far\">010</span><span class=\"ds-drum__row ds-drum__row--near\">020</span><span class=\"ds-drum__row ds-drum__row--sel\">030</span><span class=\"ds-drum__row ds-drum__row--near\">045</span><span class=\"ds-drum__row ds-drum__row--far\">060</span></div><span class=\"ds-drum__unit\" aria-hidden=\"true\">MIN</span><div class=\"ds-drum__ruler ds-drum__ruler--r\" aria-hidden=\"true\">╶\n╶\n├──\n╶\n╶</div></div>",
+      "css": ".ds-drum{position:relative;overflow:hidden;display:grid;grid-template-columns:3ch 1fr 3ch;align-items:center;height:8.5rem;padding:0 .5rem;background:#050805;border:1px solid #1f3d2b;border-radius:4px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-feature-settings:'tnum' 1} .ds-drum:focus-visible{outline:1px solid #7dfba0;outline-offset:2px} .ds-drum::before,.ds-drum::after{content:'';position:absolute;left:3ch;right:3ch;height:1px;background:rgba(125,251,160,.35)} .ds-drum::before{top:calc(50% - 1.45rem)} .ds-drum::after{top:calc(50% + 1.45rem)} .ds-drum__rows,.ds-drum__ruler{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent)} .ds-drum__rows{display:flex;flex-direction:column;align-items:center;gap:.35rem;line-height:1;letter-spacing:.08em} .ds-drum__row{color:#e6e6e6;font-size:1.35rem} .ds-drum__row--near{opacity:.35} .ds-drum__row--far{opacity:.12} .ds-drum__row--sel{color:#7dfba0;font-size:2.25rem;text-shadow:0 0 6px currentColor;margin:.35rem 0} .ds-drum__unit{position:absolute;left:calc(50% + 3.6rem);top:50%;transform:translateY(-10%);color:#7dfba0;opacity:.8;font-size:.7rem;letter-spacing:.14em} .ds-drum__ruler{white-space:pre;line-height:1.55rem;color:rgba(125,251,160,.35);font-size:.75rem} .ds-drum__ruler--l{text-align:right}"
     },
     {
       "name": "Text Input",
@@ -461,9 +484,10 @@
     ],
     "donts": [
       "**Don't** add a second interface accent. The blue (`#4dabf7`) on blocklist presets, tag chips, inputs and the domain preview is a known deviation to move to phosphor green. Score-tier blue stays.",
-      "**Don't** leave native buttons unstyled. Start/Pause/Reset and the duration presets currently render as browser-default grey sans buttons, a known deviation to restyle as outline pills and toggles.",
-      "**Don't** rely on inherited font settings in the popup. The timer readout and controls currently render in Chrome's injected sans at 12px, a known deviation. The countdown should also become the Timer tab's prominent numeral rather than body-sized text.",
-      "**Don't** use offset drop shadows, gradients or solid-filled buttons.",
+      "**Don't** leave native buttons unstyled. Start/Pause/Reset currently render as browser-default grey sans buttons, a known deviation to restyle as outline pills. The duration presets are a row of grey buttons, a known deviation to replace with the Duration Drum.",
+      "**Don't** rely on inherited font settings in the popup. The timer readout and controls currently render in Chrome's injected sans at 12px, a known deviation. The countdown becomes the Numeral in the Duration Drum's slot.",
+      "**Don't** use offset drop shadows, gradients or solid-filled buttons. The Duration Drum's edge fade is a `mask-image`, not a painted gradient, and is the only exception.",
+      "**Don't** copy the drum reference's look. No 3D cylinder, white card, grey shading or hour/minute pair, and no \"cyberpunk\" clichés either: no glitch, scanline, chromatic-aberration or neon-magenta effects. Terminal character comes from the monospace grid, the ruler ticks and the single green beam.",
       "**Don't** glow resting text. Glow marks active, selected, earned or alarming state only."
     ]
   }
