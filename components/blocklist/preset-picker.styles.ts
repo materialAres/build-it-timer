@@ -9,7 +9,7 @@ export const PRESET_PICKER_STYLES = `
   .preset-picker {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.6rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   .preset-picker button,
@@ -20,7 +20,7 @@ export const PRESET_PICKER_STYLES = `
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
   .preset-picker__label {
     margin-right: 0.2rem;
@@ -39,6 +39,7 @@ export const PRESET_PICKER_STYLES = `
     color: #cfe9d8;
     font-size: 0.8rem;
     letter-spacing: 0.06em;
+    text-shadow: none;
     cursor: pointer;
   }
   .preset-picker__action {
@@ -74,13 +75,13 @@ export const PRESET_PICKER_STYLES = `
   .preset-picker__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
   .preset-form {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
     margin: 0;
   }
   .preset-form__input {

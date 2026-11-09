@@ -240,7 +240,7 @@ Quiet, labeled like a terminal.
 - **Default:** transparent, phosphor green at 65% opacity, uppercase 0.75rem with 0.1em spacing, padding 0.35rem 0.7rem.
 - **Hover:** full opacity.
 - **Selected:** a phosphor-rule border on three sides, a phosphor-wash fill, and a 6px glow.
-- **Focus:** a 1px `currentColor` outline offset by 1px.
+- **Focus:** a 1px `currentColor` outline offset by 1px. Every other focusable control in the popup gets a 1px phosphor outline offset by 2px (`:where(.popup) :focus-visible`), never the browser's white ring.
 
 ### Buttons
 - **Outline pill (canonical):** a 1px `currentColor` border, 999px radius, transparent background, phosphor green, 0.06em spacing, a 4px glow, and a phosphor-wash fill on hover. Used for export, and it's the intended style for every popup action.
@@ -251,7 +251,8 @@ Quiet, labeled like a terminal.
 - **Source chip:** on each blocklist row, a read-only outline pill (1px phosphor border at 35% opacity, phosphor text at 80% opacity, 0.65rem uppercase, 0.08em spacing, 0 0.4rem padding) naming the preset that put the site on the list. It has no hover, focus or active state because it isn't interactive.
 
 ### Inputs / Fields
-- **Style:** an `ink-field` background, a 1px border, inherited text color, 0.3rem 0.5rem padding.
+- **Style:** an `ink-field` background, a 1px `moss-frame` border with 4px corners that turns phosphor green on focus, `screen-white` text in the monospace stack, 0.8rem, 0.3rem 0.5rem padding and a phosphor caret.
+- **Placeholder:** `#8a948e`, 6.14:1 on `ink-field` (the browser default `#757575` is 4.17:1 and fails AA).
 - **Feedback:** an info line in `score-excellent` green and an error line in `alarm-red`, both 0.75rem.
 
 ### Score Badge and Population
@@ -296,9 +297,9 @@ A 1px 60% amber frame, amber text, 0.75rem, 0.35rem 0.5rem padding. Shown in the
 - **Do** keep the city font's line height at 1 and the canvas content box at exactly 60ch × 20 rows.
 
 ### Don't:
-- **Don't** add a second interface accent. The blue (`#4dabf7`) on the blocklist input and the domain preview is a known deviation to move to phosphor green. Score-tier blue stays.
-- **Don't** leave native buttons unstyled. Start/Pause/Reset currently render as browser-default grey sans buttons, a known deviation to restyle as outline pills. The duration presets are a row of grey buttons, a known deviation to replace with the Duration Drum.
-- **Don't** rely on inherited font settings in the popup. The timer readout and controls currently render in Chrome's injected sans at 12px, a known deviation. The countdown becomes the Numeral in the Duration Drum's slot.
+- **Don't** add a second interface accent. The blocklist input and the domain preview are phosphor green now; only the score tier's blue (`#4dabf7`) remains, and that is data, not interface.
+- **Don't** leave native buttons unstyled. Every popup button is the outline pill by default (`:where(.popup) button` in `entrypoints/popup/App.css`, zero specificity so a component's own class overrides it). The duration presets are pills too until the Duration Drum replaces them.
+- **Don't** rely on inherited font settings in the popup. Buttons and inputs inherit the monospace stack from `entrypoints/popup/style.css`, which Chrome would otherwise replace with its sans. The countdown is still body-sized text, a known deviation: it becomes the Numeral in the Duration Drum's slot.
 - **Don't** use offset drop shadows, gradients or solid-filled buttons. The Duration Drum's edge fade is a `mask-image`, not a painted gradient, and is the only exception.
 - **Don't** copy the drum reference's look. No 3D cylinder, white card, grey shading or hour/minute pair, and no "cyberpunk" clichés either: no glitch, scanline, chromatic-aberration or neon-magenta effects. Terminal character comes from the monospace grid, the ruler ticks and the single green beam.
 - **Don't** glow resting text. Glow marks active, selected, earned or alarming state only.

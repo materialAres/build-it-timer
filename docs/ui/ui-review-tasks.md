@@ -128,6 +128,8 @@ Notes:
 #### UI.T5 — Visual coherence across the popup
 **Priority**: P1 · **Command**: `/impeccable polish` (then `/impeccable typeset` for the timer numeral) · **Dependencies**: UI.T1–UI.T4
 
+**Status**: done (2026-11-09). Implemented directly, without running the impeccable command. Shared rules in `entrypoints/popup/App.css`, all in `:where()` so components override them: every popup button is the outline pill (Start/Pause/Reset, Add, ×, the duration buttons until UI.T9), one phosphor focus ring, the placeholder at `#8a948e` (6.14:1, was 4.17:1) and `.timer-controls` spaced. `entrypoints/popup/style.css` gives inputs the monospace stack. The blocklist input and preview are phosphor green (no blue left outside the score tier), `#e9ecef` became `#e6e6e6`, blocks are 0.6rem apart and rows 0.35rem. `tests/unit/styles/popup-styles.test.ts` guards these. The timer numeral and the duration picker stay with UI.T9. Checked in the built extension at 420px (idle, running, empty, 22 sites with the save form open, the notice): the tallest state is 565px, under Chrome's 600px cap.
+
 **Problem** (DESIGN.md "known deviations")
 - Blue accent `#4dabf7` in `PresetPicker.tsx:21`, `TagEditor.tsx:32,51`, `SiteList.tsx:32,39` (One Beam Rule).
 - Browser-default grey buttons: Add, ×, Create tag, Start/Pause/Reset, durations; grey buttons nested in tag pills.

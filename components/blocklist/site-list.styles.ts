@@ -9,9 +9,9 @@ export const SITE_LIST_STYLES = `
     flex-direction: column;
     gap: 0.75rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #e9ecef;
+    color: #e6e6e6;
   }
-  .site-list__compose { display: flex; flex-direction: column; gap: 0.4rem; }
+  .site-list__compose { display: flex; flex-direction: column; gap: 0.6rem; }
   .site-list__title {
     display: flex;
     align-items: baseline;
@@ -28,18 +28,23 @@ export const SITE_LIST_STYLES = `
     letter-spacing: 0.04em;
     font-variant-numeric: tabular-nums;
   }
-  .site-list__form { display: flex; gap: 0.4rem; }
+  .site-list__form { display: flex; gap: 0.35rem; }
   .site-list__input {
     flex: 1;
+    min-width: 0;
     background: #0b0f14;
-    border: 1px solid #4dabf7;
-    color: inherit;
+    border: 1px solid #1f3d2b;
+    border-radius: 4px;
+    color: #e6e6e6;
+    font-size: 0.8rem;
     padding: 0.3rem 0.5rem;
+    caret-color: #7dfba0;
   }
+  .site-list__input:focus { border-color: #7dfba0; }
   .site-list__preview {
     margin: 0;
     font-size: 0.7rem;
-    color: #4dabf7;
+    color: #7dfba0;
     opacity: 0.9;
   }
   .site-list__feedback { margin: 0; font-size: 0.75rem; }
@@ -59,7 +64,12 @@ export const SITE_LIST_STYLES = `
     scrollbar-width: thin;
     scrollbar-color: rgba(125, 251, 160, 0.35) transparent;
   }
-  .site-entry { display: flex; align-items: center; gap: 0.4rem; min-height: 1.6rem; }
+  .site-entry { display: flex; align-items: center; gap: 0.35rem; min-height: 1.6rem; }
+  .site-entry button {
+    padding: 0 0.55rem;
+    line-height: 1.5;
+    text-shadow: none;
+  }
   .site-entry__domain {
     flex: 1;
     min-width: 0;
