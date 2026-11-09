@@ -1261,7 +1261,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T2 — Pure preset-toggle and source logic in `lib/blocking/`
 * **Objective**: pure, browser-free functions that toggle a preset over the blocklist and maintain entry sources.
-* **Files to create/modify**: `lib/blocking/preset-toggle.ts` (new), `tests/unit/blocking/preset-toggle.test.ts` (new), `store/store.types.ts` (types only: `BlocklistEntry`, `Preset` without `tag`). Lands in one commit with CR4.T3, because the type change breaks the tree until the store is migrated.
+* **Files to create/modify**: `lib/blocking/preset-toggle.types.ts`, `lib/blocking/preset-toggle.ts`, `lib/blocking/saved-presets.ts` (all new), `tests/unit/lib/blocking/preset-toggle.test.ts` and `saved-presets.test.ts` (new). The new model gets its own types so `store/store.types.ts` stays untouched and the tree stays green; CR4.T3 aligns the store types with them.
 * **Dependencies**: CR4.T1
 * **Acceptance criteria**:
   - Tests written first: apply adds missing domains and the source; un-apply removes only entries with no remaining source; a manual entry and an entry shared by two applied presets survive un-apply; re-apply is idempotent; domains are canonicalized through `getRegistrableDomain` (DRY).
@@ -1270,7 +1270,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T3 — Store model, slice actions and persistence v3 migration
 * **Objective**: move `BlocklistState` to entry sources, applied presets and user presets; migrate persisted v2 data.
-* **Files to create/modify**: `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
+* **Files to create/modify**: `store/store.types.ts` (`BlocklistEntry`/`Preset` become the CR4.T2 shapes), `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
 * **Dependencies**: CR4.T2
 * **Acceptance criteria**:
   - Actions `togglePreset`, `savePreset`, `renamePreset`, `deletePreset` replace `applyPreset` and the tag actions; granular selectors expose applied state and per-preset counts.

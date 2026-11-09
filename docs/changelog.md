@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR4.T1** (change request CR4 **in progress** — the analysis `docs/features-analysis/saved-presets.md` is written, no production code yet; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR4.T2** (change request CR4 **in progress** — the analysis `docs/features-analysis/saved-presets.md` is written and the pure preset logic is in place, not yet wired into the store; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -19,9 +19,9 @@ description: Rules for updating the changelog
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
-- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis) done; CR4.T2 … CR4.T6 remaining. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
+- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis) and CR4.T2 (pure logic) done; CR4.T3 … CR4.T6 remaining. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **879 passing tests** across 79 files (green; +11 tests/+1 file since the last roadmap entry come from UI.T1, which has no roadmap card).
+- Tests: `bun run test` → **909 passing tests** across 81 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -123,7 +123,8 @@ description: Rules for updating the changelog
 | CR3.T9 | Tests — integration (background, messaging, store) | completed | `6e7a97e` |
 | CR3.T10 | Documentation — README, instructions, analysis, memory | completed | `e288636` |
 | CR3.T11 | Changelog and final verification | completed | — (to be committed) |
-| CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | completed | — (to be committed) |
+| CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | completed | `1096924` |
+| CR4.T2 | Pure preset-toggle and source logic in `lib/blocking/` | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1289,12 +1290,24 @@ description: Rules for updating the changelog
 ### CR4.T1 — Analysis: preset sources, toggles, saved presets, v3 migration
 - `docs/features-analysis/saved-presets.md` maps every write and read path of `applyPreset`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`, `tagIds` and `customTags` (store, `apply-mutation.ts`, `messages.types.ts`, persistence, snapshot parsing, components, locales, test footprint) and records the decisions CR4.T2–T6 implement.
 - Decisions: entries carry `manual: boolean` + `presetIds: string[]` instead of `tagIds`; applied presets are **persisted** (`appliedPresetIds`), not derived; `userPresets` replaces `customTags` and `Preset` loses `tag`; user ids are `user:<time>-<entropy>`; messages `PRESET_TOGGLE` (explicit `applied` target), `PRESET_SAVE`, `PRESET_RENAME`, `PRESET_DELETE` replace `BLOCKLIST_APPLY_PRESET` and `TAG_*`; lock matrix per operation including the CR5 add-only window; persistence `version: 3` with the v2 migration and the accepted `manual` limit; `parseStoreSnapshot` keeps accepting v2 and v3 (domains only).
-- Decisions that refine the CR4 text and need the developer's eye: saving a preset captures the whole current list (no "empty and filled later" in v1); saving clears `manual` on captured entries; deleting a preset keeps its sites blocked (they become manual); CR4.T2 and CR4.T3 land in one commit because the type change breaks the tree.
+- Decisions that refine the CR4 text and need the developer's eye: saving a preset captures the whole current list (no "empty and filled later" in v1); saving clears `manual` on captured entries; deleting a preset keeps its sites blocked (they become manual); CR4.T2 and CR4.T3 land in one commit because the type change breaks the tree (revised in CR4.T2: the new model has its own types, so T2 commits on its own).
 - Files created/modified: `docs/features-analysis/saved-presets.md` (new), `docs/roadmap-en.md` (CR4 analysis pointer, entry-shape sentence, T2/T3 file lists), `docs/changelog.md`.
 - Dependencies added: none.
 - Tests: none — no production code in this task. Impact list (tests to change, enforcement tests that must only get fixture edits) is in §8 of the analysis.
 - Relevant notes/decisions: `store/blocklist.slice.ts` is ~420 lines (limit 200); CR4.T3 splits the site helpers into `lib/blocking/blocklist-sites.ts` and the migration into `lib/blocking/migrate-presets.ts`.
 - Acceptance criteria: verified — every path mapped, entry-source shape, applied-set representation, id scheme, v2→v3 migration with the accepted limit, message set and lock/CR5 behavior decided, tests to change vs keep listed.
+- Commit: `1096924 docs(CR4.T1): analyse saved presets and toggles`.
+
+### CR4.T2 — Pure preset-toggle and source logic in `lib/blocking/`
+- `lib/blocking/preset-toggle.ts`: `togglePreset(state, preset, applied)` with an explicit target state — on adds the missing domains (canonicalized with `normalizeEntry`, invalid ones skipped) and the preset as a source, restoring domains removed with ×; off drops the id from the applied set and from every entry and deletes only entries left with no source. Also `isPresetApplied`, `computePresetCoverage` (`{ covered, total }`) and `dropSource` (shared with the saved-preset module).
+- `lib/blocking/saved-presets.ts`: `saveUserPreset` (snapshots the whole list into an applied preset, clears `manual` on captured entries, rejects an empty list, blank/over-24/duplicate names — case-insensitive across built-in and user presets — and a taken id), `renameUserPreset`, `deleteUserPreset` (orphaned entries become manual, sites stay blocked), `generatePresetId` (`user:<time>-<entropy>`), `MAX_PRESET_NAME_LENGTH`.
+- `lib/blocking/preset-toggle.types.ts`: `SourcedEntry`, `PresetBlocklistState`, `PresetShape`, `PresetCoverage`.
+- Every function is pure, takes the clock/entropy as arguments, returns new arrays and returns the **same state reference** when nothing changes.
+- Files created/modified: the three modules above, `tests/unit/lib/blocking/preset-toggle.test.ts` (16 tests) and `tests/unit/lib/blocking/saved-presets.test.ts` (14 tests), plus docs (`docs/features-analysis/saved-presets.md` §7/§9, `docs/roadmap-en.md` CR4.T2/T3 file lists, this changelog).
+- Dependencies added: none.
+- Tests: 30 unit tests, written first (red) — apply/un-apply/idempotence, manual and shared entries surviving, restore after ×, canonicalization, no input mutation, coverage, name and id rules, rename edge cases, delete keeping sites.
+- Relevant notes/decisions: deviation from the card — the new model has its own types instead of editing `store/store.types.ts`, so the tree stays green and T2 commits alone; the tests sit in `tests/unit/lib/blocking/` (the project convention) rather than `tests/unit/blocking/`. CR4.T3 aligns `BlocklistEntry`/`Preset` with these types. The module is split in two to respect the 200-line rule.
+- Acceptance criteria: verified — tests first, apply adds domains and source, un-apply removes only source-less entries, manual and shared entries survive, re-apply idempotent, canonicalization through `normalizeEntry` (the `getRegistrableDomain` wrapper), pure functions with explicit return types; enforcement tests untouched. Gate: `bun run compile` clean, 909 tests green.
 - Commit: — (to be committed).
 
 ---

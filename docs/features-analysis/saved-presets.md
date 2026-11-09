@@ -252,7 +252,7 @@ keys belong to CR4.T5.
 
 | File | Action |
 |---|---|
-| `lib/blocking/preset-toggle.ts` | new (CR4.T2) — toggle/save/rename/delete, ≤200 lines |
+| `lib/blocking/preset-toggle.ts`, `saved-presets.ts`, `preset-toggle.types.ts` | new (CR4.T2) — toggle and coverage / save, rename, delete and ids / types |
 | `lib/blocking/blocklist-sites.ts` | new (CR4.T3) — `addBlocklistSite`/`removeBlocklistSite`/`toEntry` moved out of the slice |
 | `store/blocklist.slice.ts` | actions + selectors only (CR4.T3); drops 6 tag/preset helpers |
 | `lib/blocking/legacy-blocklist.ts` | v3 `sanitize`; `migrateToPresets` in its own file `lib/blocking/migrate-presets.ts` if it passes 200 lines |
@@ -284,11 +284,15 @@ table for the four preset messages (CR4.T4).
 
 ## 9. Roadmap deltas
 
-- CR4.T2: changing `BlocklistEntry`/`Preset`/`BlocklistState` in
-  `store/store.types.ts` breaks compilation of the slice, the legacy helpers and
-  many tests at once, so **CR4.T2 and CR4.T3 land in one commit** (T2's tests are
-  written first, red, then T3's store work turns the tree green). They stay two
-  tasks for review and changelog purposes.
+- CR4.T2 (**revised while implementing**): to keep the tree green and commit T2 on
+  its own, the new model lives in `lib/blocking/preset-toggle.types.ts`
+  (`SourcedEntry`, `PresetBlocklistState`, `PresetShape`) and the logic in
+  `lib/blocking/preset-toggle.ts` (toggle, applied state, coverage) and
+  `lib/blocking/saved-presets.ts` (save/rename/delete, name rules, ids — split
+  for the 200-line rule). `store/store.types.ts` is **not** touched in T2.
+  CR4.T3 then makes `BlocklistEntry` = `SourcedEntry`, `Preset` = `PresetShape`
+  and the persisted state = `PresetBlocklistState`, and deletes the duplicates.
+  The earlier "T2 and T3 in one commit" rule is withdrawn.
 - CR4.T3: adds `lib/blocking/blocklist-sites.ts` and `lib/blocking/migrate-presets.ts`.
 - CR4.T5 confirmation copy: deleting a preset keeps its sites blocked; toggling a
   saved preset off removes its sites.
