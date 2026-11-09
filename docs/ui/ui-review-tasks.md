@@ -112,6 +112,8 @@ Notes:
 #### UI.T4 — Reassurance before the session lock
 **Priority**: P1 · **Command**: `/impeccable clarify` · **Dependencies**: UI.T1, CR5 (`docs/roadmap-en.md` §2.8; notice copy in CR5.T3)
 
+**Status**: done (2026-11-09). Implemented directly, without running the impeccable command. `BlocklistSummary` (`components/blocklist/BlocklistSummary.tsx`) sits under Start on the Timer tab as a monospace, dotted-underline link to the Blocklist tab: `Blocks N sites · add-only during a session` (singular `Blocks 1 site …`), or `No sites blocked`. The notice is shorter: `blocklist.addOnly` (running/paused) "Sites can be added during a session. Removing them needs a timer reset." and `blocklist.locked` (completed) "The blocklist is locked. Reset the timer to edit it.", rendered in explicit monospace; EN and IT. Checked in the built extension at 420px (empty, with sites, running, notice): the notice wraps to two lines and the Timer tab stays short.
+
 **Problem**
 - Start says nothing about the blocklist; users first learn about the lock from the amber notice afterwards, which tells them to Reset (losing the city).
 - Decided: sites can be added during a session (CR5), so a forgotten site no longer forces a Reset. Only removals and preset changes stay locked.

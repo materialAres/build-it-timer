@@ -36,11 +36,15 @@ describe('i18n shared instance (M3.T9)', () => {
       'Social preset, 4 of 4 sites blocked',
     );
     expect(i18n.t('blocklist.locked')).toBe(
-      'The blocklist is locked while a session is in progress. Reset the timer to edit it.',
+      'The blocklist is locked. Reset the timer to edit it.',
     );
     expect(i18n.t('blocklist.addOnly')).toBe(
-      'Sites can be added during a session. Removing sites or turning presets off needs a timer reset.',
+      'Sites can be added during a session. Removing them needs a timer reset.',
     );
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe(
+      'Blocks 3 sites · add-only during a session',
+    );
+    expect(i18n.t('blocklist.summaryEmpty')).toBe('No sites blocked');
   });
 
   it('renders a component\u2019s visible strings through i18n.t', () => {
@@ -93,11 +97,15 @@ describe('IT locale rendering (M3.T10)', () => {
       'Preset Social, 4 di 4 siti bloccati',
     );
     expect(i18n.t('blocklist.locked')).toBe(
-      'La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.',
+      'La lista è bloccata. Reimposta il timer per modificarla.',
     );
     expect(i18n.t('blocklist.addOnly')).toBe(
-      'Durante una sessione puoi aggiungere siti. Per rimuovere siti o disattivare i preset reimposta il timer.',
+      'Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.',
     );
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe(
+      'Blocca 3 siti · solo aggiunte durante una sessione',
+    );
+    expect(i18n.t('blocklist.summaryEmpty')).toBe('Nessun sito bloccato');
   });
 
   it('renders a popup component in Italian', () => {

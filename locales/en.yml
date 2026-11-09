@@ -72,8 +72,11 @@ blocklist:
   invalidUrl: Enter a valid URL
   alreadyInList: '$1 is already in the $2.'
   added: 'Added $1.'
-  locked: The blocklist is locked while a session is in progress. Reset the timer to edit it.
-  addOnly: Sites can be added during a session. Removing sites or turning presets off needs a timer reset.
+  locked: The blocklist is locked. Reset the timer to edit it.
+  addOnly: Sites can be added during a session. Removing them needs a timer reset.
+  summarySites: 'Blocks $1 sites · add-only during a session'
+  summarySite: 'Blocks 1 site · add-only during a session'
+  summaryEmpty: No sites blocked
 
 overlay:
   title: Stay focused

@@ -136,6 +136,36 @@ describe('popup App composition (M3.T4)', () => {
     ).toBeEnabled();
   });
 
+  it('summarises the blocklist under Start and opens the Blocklist tab (UI.T4)', async () => {
+    // The singleton store keeps the list a previous test built.
+    useAppStore.setState({
+      blocklist: { blocklist: [], appliedPresetIds: [], userPresets: [] },
+    });
+    useAppStore.getState().setActiveTab('timer');
+    render(<App />);
+
+    expect(
+      screen.getByRole('button', { name: 'No sites blocked' }),
+    ).toBeInTheDocument();
+
+    useAppStore.getState().addSite('facebook.com');
+    expect(
+      await screen.findByRole('button', {
+        name: 'Blocks 1 site · add-only during a session',
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /^Blocks 1 site/ }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Blocklist' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('region', { name: 'Blocked sites' })).toBeVisible();
+  });
+
   it('keeps the blocklist fully locked when the session completes', async () => {
     render(<App />);
 
@@ -146,7 +176,7 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('status')).toHaveTextContent(
-      /locked while a session is in progress/i,
+      /blocklist is locked.*reset the timer/i,
     );
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeDisabled();

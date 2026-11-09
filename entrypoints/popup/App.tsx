@@ -22,6 +22,7 @@ import { ExportCityButton } from '@/components/city/ExportCityButton';
 import { ScoreBadge } from '@/components/score/ScoreBadge';
 import { PopulationCounter } from '@/components/score/PopulationCounter';
 import { SessionHistory } from '@/components/score/SessionHistory';
+import { BlocklistSummary } from '@/components/blocklist/BlocklistSummary';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
 import { SiteList } from '@/components/blocklist/SiteList';
 import './App.css';
@@ -36,6 +37,7 @@ function TimerSection() {
     <div className="popup-section popup-section--timer">
       <TimerDisplay />
       <TimerControls />
+      <BlocklistSummary />
       <DurationPicker />
     </div>
   );

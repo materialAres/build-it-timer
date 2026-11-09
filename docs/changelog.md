@@ -22,7 +22,7 @@ description: Rules for updating the changelog
 - Change request CR4 (presets as toggles, saved custom presets) — **completed**: CR4.T1 (analysis), CR4.T2 (pure logic), CR4.T3 (store model, persistence v3), CR4.T4 (message boundary), CR4.T5 (popup) and CR4.T6 (documentation and final verification) done. CR4.T5 also completes UI.T2 and UI.T3 of `docs/ui/ui-review-tasks.md`. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
 - Change request CR5 (add sites during a session) — **completed**: CR5.T1 (`isBlocklistAddAllowed` and the add-only window in the store), CR5.T2 (the background applies the same window), CR5.T3 (the popup) and CR5.T4 (documentation and final verification) done.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **991 passing tests** across 83 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file, CR4.T6 is documentation only, CR5.T1 added 11 tests and replaced 6, CR5.T2 added 22, CR5.T3 added 4, CR5.T4 is documentation only).
+- Tests: `bun run test` → **998 passing tests** across 84 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file, CR4.T6 is documentation only, CR5.T1 added 11 tests and replaced 6, CR5.T2 added 22, CR5.T3 added 4, CR5.T4 is documentation only, which left 991 tests across 83 files; UI.T4, which has no roadmap card, then added 7 tests/1 file).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -133,7 +133,7 @@ description: Rules for updating the changelog
 | CR5.T1 | `isBlocklistAddAllowed` and the add-only window in the store | completed | `c2b0758` |
 | CR5.T2 | Background accepts add-direction mutations mid-session | completed | `cb63637` |
 | CR5.T3 | Popup: add field enabled mid-session, removals locked, new notice copy | completed | `efb5d68` |
-| CR5.T4 | Documentation, changelog and final verification | completed | — (to be committed) |
+| CR5.T4 | Documentation, changelog and final verification | completed | `a6874b8` |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1405,7 +1405,7 @@ description: Rules for updating the changelog
 - Tests: none added; the gate below was re-run on the committed CR5.T3 tree.
 - Relevant notes/decisions: the rest of `blocklist-lock.md` still describes the original CR2 rule; the amendment note says so instead of rewriting a historical analysis. Still open outside CR5: UI.T4 (the "Blocks N sites" line and notice wording) and UI.T5 in `docs/ui/ui-review-tasks.md`; `entrypoints/background.ts` is over the 200-line guideline (about 750 lines).
 - Acceptance criteria: verified — README and memory updated as specified, changelog entries per task. Gate: `bun run compile` clean, project lint clean (only the 5 known impeccable parsing errors, Open issues #21), 991 tests across 83 files green, both builds succeed, `bun run e2e` → 1 passing test.
-- Commit: — (to be committed).
+- Commit: `a6874b8 docs(CR5.T4): document add-only window, close CR5`.
 
 ---
 

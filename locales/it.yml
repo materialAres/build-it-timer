@@ -73,8 +73,11 @@ blocklist:
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
   added: 'Aggiunto $1.'
-  locked: La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.
-  addOnly: Durante una sessione puoi aggiungere siti. Per rimuovere siti o disattivare i preset reimposta il timer.
+  locked: La lista è bloccata. Reimposta il timer per modificarla.
+  addOnly: Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.
+  summarySites: 'Blocca $1 siti · solo aggiunte durante una sessione'
+  summarySite: 'Blocca 1 sito · solo aggiunte durante una sessione'
+  summaryEmpty: Nessun sito bloccato
 
 overlay:
   title: Resta concentrato
