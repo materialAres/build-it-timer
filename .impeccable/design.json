@@ -1,0 +1,470 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T16:19:08.253685+00:00",
+  "title": "Design System: Build-it! Timer Focus",
+  "extensions": {
+    "colorMeta": {
+      "phosphor-green": {
+        "role": "primary",
+        "displayName": "Phosphor Green",
+        "canonical": "#7dfba0",
+        "tonalRamp": [
+          "oklch(15% 0.083 151)",
+          "oklch(26% 0.107 151)",
+          "oklch(37% 0.130 151)",
+          "oklch(48% 0.154 151)",
+          "oklch(60% 0.158 151)",
+          "oklch(71% 0.135 151)",
+          "oklch(83% 0.109 151)",
+          "oklch(95% 0.083 151)"
+        ]
+      },
+      "crt-black": {
+        "role": "neutral",
+        "displayName": "CRT Black",
+        "canonical": "#050805",
+        "tonalRamp": [
+          "oklch(15% 0.005 145)",
+          "oklch(26% 0.007 145)",
+          "oklch(37% 0.008 145)",
+          "oklch(48% 0.010 145)",
+          "oklch(60% 0.010 145)",
+          "oklch(71% 0.009 145)",
+          "oklch(83% 0.007 145)",
+          "oklch(95% 0.005 145)"
+        ]
+      },
+      "night-sky": {
+        "role": "neutral",
+        "displayName": "Night Sky",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "oklch(15% 0.000 0)",
+          "oklch(26% 0.000 0)",
+          "oklch(37% 0.000 0)",
+          "oklch(48% 0.000 0)",
+          "oklch(60% 0.000 0)",
+          "oklch(71% 0.000 0)",
+          "oklch(83% 0.000 0)",
+          "oklch(95% 0.000 0)"
+        ]
+      },
+      "ink-field": {
+        "role": "neutral",
+        "displayName": "Ink Field",
+        "canonical": "#0b0f14",
+        "tonalRamp": [
+          "oklch(15% 0.006 254)",
+          "oklch(26% 0.008 254)",
+          "oklch(37% 0.010 254)",
+          "oklch(48% 0.011 254)",
+          "oklch(60% 0.012 254)",
+          "oklch(71% 0.010 254)",
+          "oklch(83% 0.008 254)",
+          "oklch(95% 0.006 254)"
+        ]
+      },
+      "moss-frame": {
+        "role": "neutral",
+        "displayName": "Moss Frame",
+        "canonical": "#1f3d2b",
+        "tonalRamp": [
+          "oklch(15% 0.024 156)",
+          "oklch(26% 0.031 156)",
+          "oklch(37% 0.037 156)",
+          "oklch(48% 0.044 156)",
+          "oklch(60% 0.045 156)",
+          "oklch(71% 0.039 156)",
+          "oklch(83% 0.031 156)",
+          "oklch(95% 0.024 156)"
+        ]
+      },
+      "overlay-panel": {
+        "role": "neutral",
+        "displayName": "Overlay Panel",
+        "canonical": "#0b1410",
+        "tonalRamp": [
+          "oklch(15% 0.008 165)",
+          "oklch(26% 0.010 165)",
+          "oklch(37% 0.012 165)",
+          "oklch(48% 0.014 165)",
+          "oklch(60% 0.015 165)",
+          "oklch(71% 0.013 165)",
+          "oklch(83% 0.010 165)",
+          "oklch(95% 0.008 165)"
+        ]
+      },
+      "overlay-frame": {
+        "role": "neutral",
+        "displayName": "Overlay Frame",
+        "canonical": "#2f6b45",
+        "tonalRamp": [
+          "oklch(15% 0.043 154)",
+          "oklch(26% 0.056 154)",
+          "oklch(37% 0.068 154)",
+          "oklch(48% 0.080 154)",
+          "oklch(60% 0.082 154)",
+          "oklch(71% 0.070 154)",
+          "oklch(83% 0.057 154)",
+          "oklch(95% 0.043 154)"
+        ]
+      },
+      "screen-white": {
+        "role": "neutral",
+        "displayName": "Screen White",
+        "canonical": "#e6e6e6",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(60% 0.000 90)",
+          "oklch(71% 0.000 90)",
+          "oklch(83% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "pale-phosphor": {
+        "role": "neutral",
+        "displayName": "Pale Phosphor",
+        "canonical": "#cfe9d8",
+        "tonalRamp": [
+          "oklch(15% 0.018 157)",
+          "oklch(26% 0.023 157)",
+          "oklch(37% 0.028 157)",
+          "oklch(48% 0.033 157)",
+          "oklch(60% 0.033 157)",
+          "oklch(71% 0.028 157)",
+          "oklch(83% 0.023 157)",
+          "oklch(95% 0.018 157)"
+        ]
+      },
+      "sodium-amber": {
+        "role": "signal",
+        "displayName": "Sodium Amber",
+        "canonical": "#ffd43b",
+        "tonalRamp": [
+          "oklch(15% 0.081 92)",
+          "oklch(26% 0.104 92)",
+          "oklch(37% 0.127 92)",
+          "oklch(48% 0.150 92)",
+          "oklch(60% 0.154 92)",
+          "oklch(71% 0.131 92)",
+          "oklch(83% 0.106 92)",
+          "oklch(95% 0.081 92)"
+        ]
+      },
+      "lamp-amber": {
+        "role": "signal",
+        "displayName": "Lamp Amber",
+        "canonical": "#ffd479",
+        "tonalRamp": [
+          "oklch(15% 0.059 85)",
+          "oklch(26% 0.076 85)",
+          "oklch(37% 0.092 85)",
+          "oklch(48% 0.109 85)",
+          "oklch(60% 0.112 85)",
+          "oklch(71% 0.095 85)",
+          "oklch(83% 0.077 85)",
+          "oklch(95% 0.059 85)"
+        ]
+      },
+      "alarm-red": {
+        "role": "signal",
+        "displayName": "Alarm Red",
+        "canonical": "#ff6b6b",
+        "tonalRamp": [
+          "oklch(15% 0.089 23)",
+          "oklch(26% 0.114 23)",
+          "oklch(37% 0.140 23)",
+          "oklch(48% 0.165 23)",
+          "oklch(60% 0.170 23)",
+          "oklch(71% 0.144 23)",
+          "oklch(83% 0.117 23)",
+          "oklch(95% 0.089 23)"
+        ]
+      },
+      "alarm-red-soft": {
+        "role": "signal",
+        "displayName": "Alarm Red Soft",
+        "canonical": "#ff9b9b",
+        "tonalRamp": [
+          "oklch(15% 0.059 20)",
+          "oklch(26% 0.076 20)",
+          "oklch(37% 0.093 20)",
+          "oklch(48% 0.109 20)",
+          "oklch(60% 0.112 20)",
+          "oklch(71% 0.096 20)",
+          "oklch(83% 0.077 20)",
+          "oklch(95% 0.059 20)"
+        ]
+      },
+      "alarm-red-frame": {
+        "role": "signal",
+        "displayName": "Alarm Red Frame",
+        "canonical": "#8c3b3b",
+        "tonalRamp": [
+          "oklch(15% 0.054 22)",
+          "oklch(26% 0.070 22)",
+          "oklch(37% 0.085 22)",
+          "oklch(48% 0.101 22)",
+          "oklch(60% 0.104 22)",
+          "oklch(71% 0.088 22)",
+          "oklch(83% 0.071 22)",
+          "oklch(95% 0.054 22)"
+        ]
+      },
+      "score-excellent": {
+        "role": "score",
+        "displayName": "Score Excellent",
+        "canonical": "#51cf66",
+        "tonalRamp": [
+          "oklch(15% 0.090 147)",
+          "oklch(26% 0.116 147)",
+          "oklch(37% 0.141 147)",
+          "oklch(48% 0.167 147)",
+          "oklch(60% 0.172 147)",
+          "oklch(71% 0.146 147)",
+          "oklch(83% 0.118 147)",
+          "oklch(95% 0.090 147)"
+        ]
+      },
+      "score-great": {
+        "role": "score",
+        "displayName": "Score Great",
+        "canonical": "#4dabf7",
+        "tonalRamp": [
+          "oklch(15% 0.070 246)",
+          "oklch(26% 0.090 246)",
+          "oklch(37% 0.110 246)",
+          "oklch(48% 0.129 246)",
+          "oklch(60% 0.133 246)",
+          "oklch(71% 0.113 246)",
+          "oklch(83% 0.091 246)",
+          "oklch(95% 0.070 246)"
+        ]
+      },
+      "score-good": {
+        "role": "score",
+        "displayName": "Score Good",
+        "canonical": "#fcc419",
+        "tonalRamp": [
+          "oklch(15% 0.083 87)",
+          "oklch(26% 0.107 87)",
+          "oklch(37% 0.131 87)",
+          "oklch(48% 0.154 87)",
+          "oklch(60% 0.159 87)",
+          "oklch(71% 0.135 87)",
+          "oklch(83% 0.109 87)",
+          "oklch(95% 0.083 87)"
+        ]
+      },
+      "score-bad": {
+        "role": "score",
+        "displayName": "Score Bad",
+        "canonical": "#ff6b6b",
+        "tonalRamp": [
+          "oklch(15% 0.089 23)",
+          "oklch(26% 0.114 23)",
+          "oklch(37% 0.140 23)",
+          "oklch(48% 0.165 23)",
+          "oklch(60% 0.170 23)",
+          "oklch(71% 0.144 23)",
+          "oklch(83% 0.117 23)",
+          "oklch(95% 0.089 23)"
+        ]
+      },
+      "phosphor-rule": {
+        "role": "primary",
+        "displayName": "Phosphor Rule"
+      },
+      "phosphor-wash": {
+        "role": "primary",
+        "displayName": "Phosphor Wash"
+      },
+      "phosphor-wash-hover": {
+        "role": "primary",
+        "displayName": "Phosphor Wash Hover"
+      },
+      "overlay-scrim": {
+        "role": "neutral",
+        "displayName": "Overlay Scrim"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Overlay title only; uppercase, glowing."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The bold population numeral."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "List rows, history, helper text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase section titles and units."
+      },
+      "tab": {
+        "displayName": "Tab",
+        "purpose": "Popup tab labels."
+      },
+      "city": {
+        "displayName": "City",
+        "purpose": "The ASCII grid; line-height 1, one ch per column."
+      }
+    },
+    "shadows": [
+      {
+        "name": "phosphor-halo",
+        "value": "0 0 2rem rgba(125, 251, 160, 0.25)",
+        "purpose": "Blocked-site overlay panel."
+      },
+      {
+        "name": "alarm-halo",
+        "value": "0 0 1.5rem rgba(255, 155, 155, 0.2)",
+        "purpose": "Popup error-boundary panel."
+      },
+      {
+        "name": "glow-text",
+        "value": "text-shadow: 0 0 4px currentColor",
+        "purpose": "Active, earned or alarming text."
+      },
+      {
+        "name": "glow-text-strong",
+        "value": "text-shadow: 0 0 6px currentColor",
+        "purpose": "Selected tab, overlay title and domain."
+      }
+    ],
+    "motion": [
+      {
+        "name": "city-glyph",
+        "value": "0.25s easeOut; opacity 0→1, scale 0.4→1 (reversed on removal)",
+        "purpose": "Each city character growing in or being removed; no animation on first paint."
+      },
+      {
+        "name": "hover-wash",
+        "value": "background 0.15s",
+        "purpose": "Wash fill on outline buttons."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Popup Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Uppercase terminal tabs on a phosphor rule; the selected tab is washed and glows.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Timer</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">City</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Blocklist</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Score</button></div>",
+      "css": ".ds-tabs{display:flex;gap:.25rem;border-bottom:1px solid rgba(125,251,160,.35);background:#050805;padding:.6rem .6rem 0;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace} .ds-tab{padding:.35rem .7rem;border:1px solid transparent;border-bottom:none;border-radius:4px 4px 0 0;background:transparent;color:#7dfba0;font:inherit;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;opacity:.65} .ds-tab:hover{opacity:1} .ds-tab[aria-selected='true']{border-color:rgba(125,251,160,.35);background:rgba(125,251,160,.12);opacity:1;text-shadow:0 0 6px currentColor} .ds-tab:focus-visible{outline:1px solid currentColor;outline-offset:1px}"
+    },
+    {
+      "name": "Outline Pill Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The canonical popup action: a phosphor outline pill with a glow.",
+      "html": "<button class=\"ds-btn-pill\">Export PNG</button>",
+      "css": ".ds-btn-pill{padding:.3rem .7rem;border:1px solid currentColor;border-radius:999px;background:transparent;color:#7dfba0;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;letter-spacing:.06em;text-shadow:0 0 4px currentColor;cursor:pointer;transition:background .15s} .ds-btn-pill:hover{background:rgba(125,251,160,.15)} .ds-btn-pill:focus-visible{outline:1px solid currentColor;outline-offset:2px}"
+    },
+    {
+      "name": "Duration Toggle",
+      "kind": "chip",
+      "refersTo": "button-outline",
+      "description": "A preset toggle; the pressed state turns phosphor green and glows.",
+      "html": "<div class=\"ds-toggles\"><button class=\"ds-toggle\" aria-pressed=\"false\">25 min</button><button class=\"ds-toggle\" aria-pressed=\"true\">30 min</button><button class=\"ds-toggle\" aria-pressed=\"false\">45 min</button></div>",
+      "css": ".ds-toggles{display:flex;gap:.35rem} .ds-toggle{padding:.2rem .6rem;border:1px solid rgba(230,230,230,.25);border-radius:999px;background:transparent;color:#e6e6e6;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.8rem;cursor:pointer} .ds-toggle:hover{border-color:rgba(125,251,160,.35)} .ds-toggle[aria-pressed='true']{border-color:#7dfba0;color:#7dfba0;text-shadow:0 0 4px currentColor} .ds-toggle:focus-visible{outline:1px solid #7dfba0;outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Domain/tag entry on an ink field with a 1px outline.",
+      "html": "<input class=\"ds-input\" placeholder=\"example.com\" />",
+      "css": ".ds-input{background:#0b0f14;border:1px solid rgba(125,251,160,.35);color:#e6e6e6;padding:.3rem .5rem;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.8rem} .ds-input::placeholder{color:rgba(230,230,230,.45)} .ds-input:focus-visible{outline:none;border-color:#7dfba0}"
+    },
+    {
+      "name": "Score Badge",
+      "kind": "chip",
+      "refersTo": "score-badge",
+      "description": "Tier-colored outline pill with a glow.",
+      "html": "<span class=\"ds-badge ds-badge--great\">Great</span> <span class=\"ds-badge ds-badge--bad\">Bad</span>",
+      "css": ".ds-badge{display:inline-block;padding:.15rem .6rem;border:1px solid currentColor;border-radius:999px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;text-shadow:0 0 4px currentColor} .ds-badge--great{color:#4dabf7} .ds-badge--bad{color:#ff6b6b}"
+    },
+    {
+      "name": "City Canvas",
+      "kind": "custom",
+      "refersTo": "city-canvas",
+      "description": "Signature: the ASCII skyline on a night-sky box with a moss frame.",
+      "html": "<pre class=\"ds-city\">        _|_\n  ##   |[]|   ___\n |[]|  |[]|  |::|\n_|[]|__|[]|__|::|_</pre>",
+      "css": ".ds-city{margin:0;padding:.3rem;background:#000;border:1px solid #1f3d2b;border-radius:4px;color:#7dfba0;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.85rem;line-height:1;text-shadow:0 0 4px currentColor}"
+    },
+    {
+      "name": "Blocked-Site Overlay Panel",
+      "kind": "card",
+      "refersTo": "overlay-panel",
+      "description": "Signature: the phosphor-haloed panel shown on a blocked domain.",
+      "html": "<div class=\"ds-ov\"><h2 class=\"ds-ov__t\">Stay focused</h2><p class=\"ds-ov__m\">You put <span class=\"ds-ov__d\">example.com</span> on your blocklist. Are you sure you want to access it?</p><div class=\"ds-ov__a\"><button class=\"ds-ov__b ds-ov__b--danger\">Yes</button><button class=\"ds-ov__b\">No</button></div></div>",
+      "css": ".ds-ov{max-width:30rem;padding:1.5rem;border:1px solid #2f6b45;border-radius:.5rem;background:#0b1410;box-shadow:0 0 2rem rgba(125,251,160,.25);text-align:center;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;color:#7dfba0} .ds-ov__t{margin:0 0 .75rem;font-size:1.25rem;font-weight:400;letter-spacing:.05em;text-transform:uppercase;text-shadow:0 0 6px currentColor} .ds-ov__m{margin:0 0 1.25rem;font-size:.95rem;line-height:1.5;color:#cfe9d8} .ds-ov__d{color:#ffd479;text-shadow:0 0 6px currentColor} .ds-ov__a{display:flex;gap:.75rem;justify-content:center} .ds-ov__b{all:unset;cursor:pointer;padding:.5rem 1.25rem;border:1px solid #2f6b45;border-radius:.25rem;font:inherit;color:#7dfba0} .ds-ov__b:hover{background:rgba(125,251,160,.12)} .ds-ov__b:focus-visible{outline:2px solid #7dfba0;outline-offset:2px} .ds-ov__b--danger{border-color:#8c3b3b;color:#ff9b9b}"
+    },
+    {
+      "name": "Lock Notice",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Amber-framed notice while a running session locks the blocklist.",
+      "html": "<p class=\"ds-lock\">The blocklist is locked while a session is running.</p>",
+      "css": ".ds-lock{margin:0;padding:.35rem .5rem;border:1px solid rgba(255,212,59,.6);color:#ffd43b;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:.75rem}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Phosphor Skyline",
+    "overview": "The CRT glow and the city are one image. The popup is a dark night sky (`crt-black`), and the ASCII skyline lights it up one character at a time, drawn in phosphor green with a faint glow. Every other part of the interface (tabs, timer, controls, score) belongs to that same sky. It is dim, monospace and flat, so the skyline stays the brightest thing on screen.\n\nThe popup is dense and small. Users open it for a few seconds, read the state and close it. Hierarchy comes from brightness and glow, not size. Uppercase, letter-spaced labels name the sections, body text sits at a quiet 0.8rem, and the phosphor glow (`text-shadow: 0 0 4px currentColor`) appears only on text that is active, earned or alarming. The tone follows PRODUCT.md: neutral and minimal. The skyline shows progress and loss, and the interface stays out of its way.\n\nThe blocked-site overlay carries the same world onto a page that isn't the extension's. It uses a scrim (a translucent dark layer over the page), one glowing panel, and plain wording.",
+    "keyCharacteristics": [
+      "Dark CRT ground (`#050805`). No light theme exists or is planned.",
+      "One monospace stack for everything, including text the popup gets from its browser defaults.",
+      "Phosphor green (`#7dfba0`) is the one interface accent. Glow marks emphasis.",
+      "Thin 1px rules and outlines carry structure. Nothing is filled or raised.",
+      "Pills (999px) for actions and status, 4px corners for frames and tabs.",
+      "The city fades and scales each character in and out over 0.25s, with an ease-out."
+    ],
+    "rules": [
+      {
+        "name": "The One Beam Rule",
+        "body": "Phosphor green is the only accent color the interface uses. Blue, amber and red appear only as signals (score tier, lock, alarm), never as decoration for an area of the interface.",
+        "section": "colors"
+      },
+      {
+        "name": "The Earned Glow Rule",
+        "body": "Glow (`text-shadow: 0 0 4px currentColor`, or 6px for a selected tab or a title) is reserved for text that is active, selected, earned or alarming. Resting body text never glows.",
+        "section": "colors"
+      },
+      {
+        "name": "The Explicit Mono Rule",
+        "body": "Every component declares the monospace stack itself. Chrome injects its own stylesheet into extension pages and resets `body` to the system sans (Cantarell on Linux) at 12px, so the `:root` declaration in `style.css` doesn't reach text that relies on inheritance.",
+        "section": "typography"
+      },
+      {
+        "name": "The Light-Not-Lift Rule",
+        "body": "Never use offset drop shadows. Depth is a glow centered on the element (no x/y offset) or a change in layer opacity.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** declare the monospace stack on every component root (see The Explicit Mono Rule).",
+      "**Do** use phosphor green (`#7dfba0`) for every interactive accent, and the phosphor wash (12–15%) as the only interactive fill.",
+      "**Do** make a new action an outline pill (1px `currentColor`, 999px radius, transparent) unless it lives in the overlay.",
+      "**Do** keep the city the brightest, most saturated thing on screen. The interface around it stays dim.",
+      "**Do** keep the city font's line height at 1 and the canvas content box at exactly 60ch × 20 rows."
+    ],
+    "donts": [
+      "**Don't** add a second interface accent. The blue (`#4dabf7`) on blocklist presets, tag chips, inputs and the domain preview is a known deviation to move to phosphor green. Score-tier blue stays.",
+      "**Don't** leave native buttons unstyled. Start/Pause/Reset and the duration presets currently render as browser-default grey sans buttons, a known deviation to restyle as outline pills and toggles.",
+      "**Don't** rely on inherited font settings in the popup. The timer readout and controls currently render in Chrome's injected sans at 12px, a known deviation. The countdown should also become the Timer tab's prominent numeral rather than body-sized text.",
+      "**Don't** use offset drop shadows, gradients or solid-filled buttons.",
+      "**Don't** glow resting text. Glow marks active, selected, earned or alarming state only."
+    ]
+  }
+}
