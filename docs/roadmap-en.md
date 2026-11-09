@@ -1280,7 +1280,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T4 — Preset mutation messages and background handler
 * **Objective**: replace `BLOCKLIST_APPLY_PRESET` and `TAG_*` with the preset message set; the background stays the single writer.
-* **Files to create/modify**: `lib/messaging/messages.types.ts`, `lib/messaging/apply-mutation.ts`, `lib/messaging/mutation-sender.ts`, `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`.
+* **Files to create/modify**: `lib/messaging/blocklist-payload.ts` (new, runtime shape check), `lib/messaging/apply-mutation.ts`, `lib/messaging/mutation-sender.ts` (comment only), `tests/unit/lib/messaging/blocklist-payload.test.ts` (new), `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`. The message types themselves landed in CR4.T3.
 * **Dependencies**: CR4.T3
 * **Acceptance criteria**:
   - Discriminated-union messages, validated at the boundary; unknown or malformed payloads are dropped and logged at `debug` without the payload.

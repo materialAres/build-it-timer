@@ -13,44 +13,34 @@ import {
 } from '@/lib/blocking/saved-presets';
 import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
 import { isBlocklistEditable, type BlocklistState } from '@/store';
+import {
+  isWellFormedBlocklistMutation,
+  type BlocklistMutation,
+} from './blocklist-payload';
 import type { MutationMessage } from './messages.types';
 import { createLogger, type Logger } from '@/utils/logger';
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
-
 /**
- * Apply one blocklist/preset mutation to the blocklist state. Returns the *same*
- * reference when the payload is malformed or unknown, so an invalid message
- * neither mutates the store nor triggers a persist (forward-compatible with
- * M5.T1 hardening).
+ * Apply one blocklist/preset mutation to the blocklist state. The payload has
+ * already passed `isWellFormedBlocklistMutation`, so only the domain decisions
+ * are left: normalization (M2.T4/M2.T21), dedup, preset resolution and name
+ * rules live in the pure helpers, which return the *same* reference for a
+ * request they refuse, so nothing is persisted (M1.T10).
  *
  * The handler addresses the single blocklist (CR1.T2/CR1.T5a); an extra `list`
  * field in a received payload has no effect.
- *
- * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
- * dedup, preset expansion (M2.T5) and the DNR side-effect (M2.T7) are owned by
- * those tasks.
  */
 function applyBlocklistMutation(
   state: BlocklistState,
-  message: MutationMessage,
+  message: BlocklistMutation,
 ): BlocklistState {
   switch (message.type) {
-    case 'BLOCKLIST_ADD_SITE': {
-      const { site } = message.payload;
-      if (typeof site !== 'string' || site.length === 0) return state;
-      return addBlocklistSite(state, site);
-    }
-    case 'BLOCKLIST_REMOVE_SITE': {
-      const { site } = message.payload;
-      if (typeof site !== 'string' || site.length === 0) return state;
-      return removeBlocklistSite(state, site);
-    }
+    case 'BLOCKLIST_ADD_SITE':
+      return addBlocklistSite(state, message.payload.site);
+    case 'BLOCKLIST_REMOVE_SITE':
+      return removeBlocklistSite(state, message.payload.site);
     case 'PRESET_TOGGLE': {
       const { presetId, applied } = message.payload;
-      if (!isNonEmptyString(presetId) || typeof applied !== 'boolean')
-        return state;
       const preset = findPreset(state, presetId);
       // The whole preset is applied in a single state update (M3.T1), so the
       // mutation persists once no matter how many domains it contains.
@@ -58,23 +48,22 @@ function applyBlocklistMutation(
         ? state
         : togglePreset(state, preset, applied);
     }
-    case 'PRESET_SAVE': {
-      const { id, name } = message.payload;
-      if (!isNonEmptyString(id) || typeof name !== 'string') return state;
-      return saveUserPreset(state, id, name, PRESETS);
-    }
-    case 'PRESET_RENAME': {
-      const { presetId, name } = message.payload;
-      if (!isNonEmptyString(presetId) || typeof name !== 'string') return state;
-      return renameUserPreset(state, presetId, name, PRESETS);
-    }
-    case 'PRESET_DELETE': {
-      const { presetId } = message.payload;
-      if (!isNonEmptyString(presetId)) return state;
-      return deleteUserPreset(state, presetId);
-    }
-    default:
-      return state;
+    case 'PRESET_SAVE':
+      return saveUserPreset(
+        state,
+        message.payload.id,
+        message.payload.name,
+        PRESETS,
+      );
+    case 'PRESET_RENAME':
+      return renameUserPreset(
+        state,
+        message.payload.presetId,
+        message.payload.name,
+        PRESETS,
+      );
+    case 'PRESET_DELETE':
+      return deleteUserPreset(state, message.payload.presetId);
   }
 }
 
@@ -97,7 +86,7 @@ function hasEmptyPayload(payload: unknown): boolean {
  * store (M1.T9) and the change propagates back to the popup through the M1.T8
  * sync bridge.
  *
- * Two families share the path. Blocklist/tag mutations are pure state
+ * Two families share the path. Blocklist/preset mutations are pure state
  * transformations applied here. Timer mutations are *commands*: they invoke the
  * background's own timer slice (M2.T1), which is what schedules/clears the
  * session alarm on the background's provider — the popup's copy is read-only
@@ -143,6 +132,14 @@ export function createMutationHandler(
             'blocklist mutation ignored while the timer is not idle',
             { type: message.type },
           );
+          return;
+        }
+        // CR4.T4: a payload that does not match its type is dropped at the
+        // boundary, again logging the type only.
+        if (!isWellFormedBlocklistMutation(message)) {
+          logger.debug('blocklist mutation dropped: malformed payload', {
+            type: message.type,
+          });
           return;
         }
         const current = store.getState().blocklist;

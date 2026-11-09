@@ -7,6 +7,7 @@ import type {
   RuntimeMessage,
   MutationMessage,
 } from '@/lib/messaging/messages.types';
+import { createLogger, type LogRecord } from '@/utils/logger';
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
 const flushAsync = (): Promise<void> =>
@@ -149,14 +150,24 @@ describe('cross-context mutation path (M1.T10)', () => {
     { type: 'PRESET_SAVE', payload: { id: '', name: 'Focus' } },
     { type: 'PRESET_RENAME', payload: { presetId: 'user:focus', name: 7 } },
     { type: 'PRESET_DELETE', payload: {} },
-  ])('ignores a malformed %j without persisting (CR4.T3)', async (forged) => {
+    { type: 'BLOCKLIST_ADD_SITE', payload: { site: 42 } },
+    { type: 'BLOCKLIST_REMOVE_SITE', payload: null },
+  ])('drops a malformed %j and logs only its type (CR4.T4)', async (forged) => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('bus-test', {
+      sink: (record) => records.push(record),
+      minLevel: 'debug',
+    });
     const store = createAppStore();
     await store.persist.rehydrate();
-    const handle = startBackground({ store });
+    const handle = startBackground({ store, logger });
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
       payload: { site: 'x.com' },
     });
+    // Let the seeding write land before spying, so only the forged message is
+    // observed.
+    await flushAsync();
 
     const before = store.getState().blocklist;
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
@@ -164,6 +175,13 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     expect(store.getState().blocklist).toBe(before);
     expect(setSpy).not.toHaveBeenCalled();
+    const dropped = records.find(
+      (record) => record.message === 'blocklist mutation dropped: malformed payload',
+    );
+    expect(dropped?.level).toBe('debug');
+    expect(dropped?.details).toEqual([{ type: forged.type }]);
+    // The diagnostic carries the type only, never a payload field.
+    expect(JSON.stringify(records)).not.toContain('user:focus');
 
     setSpy.mockRestore();
     handle.dispose();

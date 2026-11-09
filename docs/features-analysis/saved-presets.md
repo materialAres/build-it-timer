@@ -3,7 +3,7 @@
 > Change request: **presets become toggles over the single blocklist, and custom
 > tags become saved presets** (CR4; origin: UI critique UI.T2/UI.T3 in
 > `docs/ui/ui-review-tasks.md`).
-> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic) and CR4.T3 (store, v3 migration) are implemented; CR4.T4–CR4.T6 remain. Names
+> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic), CR4.T3 (store, v3 migration) and CR4.T4 (message boundary) are implemented; CR4.T5–CR4.T6 remain. Names
 > below refer to the code *before* CR4 unless stated otherwise; references use
 > symbols, not line numbers, because the files change under the following tasks.
 
@@ -315,3 +315,11 @@ table for the four preset messages (CR4.T4).
 - Known edge of the migration: a v2 custom tag named like a built-in preset
   (`Social`) becomes a second preset with the same name; names are only
   validated on save/rename, so the migration keeps the user's label verbatim.
+- CR4.T4 (**implemented**): `lib/messaging/blocklist-payload.ts`
+  (`isWellFormedBlocklistMutation`) checks every site/preset payload's shape at
+  runtime; the background handler checks the lock first, then the shape, and
+  logs either rejection at `debug` with `{ type }` only. A well-formed request
+  the pure helpers refuse (unknown preset, taken name, invalid site) stays a
+  silent no-op. The CR5 predicate is not wired yet: every row of §3.6 is still
+  `idle`-only, and `PRESET_TOGGLE.applied` is what CR5.T2 will read.
+

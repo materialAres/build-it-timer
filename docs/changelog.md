@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR4.T3** (change request CR4 **in progress** — the analysis `docs/features-analysis/saved-presets.md` is written, the pure preset logic is in place and the store, persistence v3 and migration are wired to it; the messages' boundary hardening and the full UI remain; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR4.T4** (change request CR4 **in progress** — analysis, pure preset logic, store with persistence v3 and the hardened message boundary are done; the full UI (CR4.T5) and the final docs (CR4.T6) remain; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -19,9 +19,9 @@ description: Rules for updating the changelog
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
-- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis), CR4.T2 (pure logic) and CR4.T3 (store model, persistence v3) done; CR4.T4 … CR4.T6 remaining. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
+- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis), CR4.T2 (pure logic), CR4.T3 (store model, persistence v3) and CR4.T4 (message boundary) done; CR4.T5 … CR4.T6 remaining. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **909 passing tests** across 81 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests).
+- Tests: `bun run test` → **936 passing tests** across 82 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -126,6 +126,7 @@ description: Rules for updating the changelog
 | CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | completed | `1096924` |
 | CR4.T2 | Pure preset-toggle and source logic in `lib/blocking/` | completed | `23a8649` |
 | CR4.T3 | Store model, slice actions and persistence v3 migration | completed | `52192e1` |
+| CR4.T4 | Preset mutation messages and background handler | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1323,6 +1324,17 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: deviations from the card are listed above (messages, `TagEditor` deletion and the minimal `PresetPicker` change moved into T3 because the tree cannot compile without them; CR4.T4 keeps the hardening, the CR5 predicate and the lock matrix tests, CR4.T5 the applied count, saved-preset management and the copy). A v2 custom tag named like a built-in preset migrates as a second preset with the same name (names are validated only on save/rename).
 - Acceptance criteria: verified — new actions replace the old ones with granular selectors, CR2 lock preserved, `version: 3` with the v1/v2 migration and fixtures, snapshot validation returns a `Result`. Gate: `bun run compile` clean, project lint clean, 909 tests across 81 files green, `bun run build` and `bun run build:firefox` succeed, `bun run e2e` → 1 passing test.
 - Commit: `52192e1 feat(CR4.T3): store presets as toggles, persist v3`.
+
+### CR4.T4 — Preset mutation messages and background handler
+- `lib/messaging/blocklist-payload.ts`: `BlocklistMutation` (the site and preset variants of `MutationMessage`) and `isWellFormedBlocklistMutation`, a total runtime check that each payload has the shape its type declares (non-empty `site`/`presetId`/`id`, boolean `applied`, string `name`, payload an object). It checks shape only: whether a site normalizes, a preset exists or a name is free stays with the pure helpers, and a well-formed request they refuse is a silent no-op.
+- `lib/messaging/apply-mutation.ts`: the background handler checks the CR2 lock first, then the payload shape; a malformed payload is dropped, not persisted, and logged at `debug` as `blocklist mutation dropped: malformed payload` with `{ type }` only. `applyBlocklistMutation` now takes a validated `BlocklistMutation`, so its inline type checks are gone. Unknown message types never reach it (only `MUTATION_TYPES` are registered).
+- `lib/messaging/mutation-sender.ts`: comment updated (presets instead of tags); the sender contract is unchanged.
+- Files created/modified: the three above, `tests/unit/lib/messaging/blocklist-payload.test.ts` (new), `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`, docs.
+- Dependencies added: none.
+- Tests: `blocklist-payload.test.ts` (19 tests: 7 well-formed, 12 malformed incl. `null`/string payloads); `mutation-bus.test.ts` — the malformed-payload cases now also assert the `debug` record carries only the type, plus two site cases (`site: 42`, `payload: null`), and the seeding write is flushed before spying on storage; `blocklist-lock.test.ts` — the CR2.T2 background lock re-expressed for `PRESET_TOGGLE` on/off, `PRESET_SAVE`, `PRESET_RENAME`, `PRESET_DELETE` (no change, no write, type-only log, no preset name leaked), and DNR rules following a preset toggled on and then off while idle across two sessions (`syncRules`).
+- Relevant notes/decisions: the message types themselves landed in CR4.T3 (needed to compile), so `messages.types.ts` is untouched here. The CR5 add-only predicate is not wired: every preset message is still `idle`-only, and `PRESET_TOGGLE.applied` is the field CR5.T2 will read.
+- Acceptance criteria: verified — discriminated-union messages validated at the boundary, malformed payloads dropped and logged at `debug` without the payload, CR2.T2 lock cases re-expressed for the new types, DNR rules follow the blocklist through `syncRules`. Gate: `bun run compile` clean, project lint clean, 936 tests across 82 files green, both builds succeed, `bun run e2e` → 1 passing test.
+- Commit: — (to be committed).
 
 ---
 

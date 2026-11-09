@@ -7,6 +7,8 @@ import { timerAlarmName } from '@/lib/timer/session';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createLogger, type LogRecord } from '@/utils/logger';
 import type { TimerState } from '@/store/store.types';
+import type { MutationMessage } from '@/lib/messaging/messages.types';
+import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 
 const T0 = 1_700_000_000_000;
 const SESSION_ID = 'session-1';
@@ -131,6 +133,86 @@ describe('blocklist lock in the background (CR2.T2)', () => {
 
     expect(background.getState().blocklist.blocklist).toEqual([]);
     expect(popup.getState().blocklist.blocklist).toEqual([]);
+
+    handle.dispose();
+  });
+});
+
+/**
+ * CR4.T4 — the CR2.T2 lock re-expressed for the preset messages: a restored
+ * running session rejects every preset mutation in the background, persists
+ * nothing and logs only the message type.
+ */
+describe('preset mutations under the background lock (CR4.T4)', () => {
+  const PRESET_MUTATIONS: ReadonlyArray<MutationMessage> = [
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: true } },
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'user:secret', applied: false } },
+    { type: 'PRESET_SAVE', payload: { id: 'user:new', name: 'Secret name' } },
+    { type: 'PRESET_RENAME', payload: { presetId: 'user:secret', name: 'Renamed' } },
+    { type: 'PRESET_DELETE', payload: { presetId: 'user:secret' } },
+  ];
+
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it.each(PRESET_MUTATIONS)('rejects %j while running and logs only the type', async (mutation) => {
+    const records: LogRecord[] = [];
+    const logger = createLogger('lock-test', {
+      sink: (record) => records.push(record),
+      minLevel: 'debug',
+    });
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    store.setState({
+      blocklist: {
+        blocklist: [{ domain: { value: 'x.com' }, manual: false, presetIds: ['user:secret'] }],
+        appliedPresetIds: ['user:secret'],
+        userPresets: [{ id: 'user:secret', name: 'Secret', domains: [{ value: 'x.com' }] }],
+      },
+    });
+    const handle = startBackground({ store, logger });
+    await handle.ready;
+    store.setState({ timer: { ...store.getState().timer, status: 'running' } });
+
+    const before = store.getState().blocklist;
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    await sendMessage(mutation);
+
+    expect(store.getState().blocklist).toBe(before);
+    expect(setSpy).not.toHaveBeenCalled();
+    const rejection = records.find(
+      (record) => record.message === 'blocklist mutation ignored while the timer is not idle',
+    );
+    expect(rejection?.details).toEqual([{ type: mutation.type }]);
+    expect(JSON.stringify(records)).not.toContain('Secret');
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+
+  it('DNR rules follow a preset toggled while idle once the session runs', async () => {
+    const dnr = installFakeDynamicRules();
+    const handle = startBackground({ alarmProvider: new FakeAlarmProvider(T0) });
+    await handle.ready;
+
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'x.com' } });
+    await sendMessage({ type: 'PRESET_TOGGLE', payload: { presetId: 'video', applied: true } });
+    await handle.store.getState().startTimer();
+    await flushAsync();
+
+    const filters = dnr.liveRules().map((rule) => rule.condition.urlFilter).sort();
+    expect(filters).toEqual(
+      ['||netflix.com^', '||twitch.tv^', '||vimeo.com^', '||x.com^', '||youtube.com^'],
+    );
+
+    // Back to idle, switch the preset off: the next session blocks only x.com.
+    await handle.store.getState().resetTimer();
+    await sendMessage({ type: 'PRESET_TOGGLE', payload: { presetId: 'video', applied: false } });
+    await handle.store.getState().startTimer();
+    await flushAsync();
+
+    expect(dnr.liveRules().map((rule) => rule.condition.urlFilter)).toEqual(['||x.com^']);
 
     handle.dispose();
   });
