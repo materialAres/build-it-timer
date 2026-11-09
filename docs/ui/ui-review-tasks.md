@@ -1,10 +1,10 @@
 # UI review — task list
 
 Source: `/impeccable critique entrypoints/popup` (Blocklist focus), run 2026-11-09, score **17/40 (Poor)**.
-Full report: `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md`.
+Full report: `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md` (local only: `.impeccable/critique/` is gitignored because snapshots hold machine-specific absolute paths; this file is the committed backlog).
 Design authority: `PRODUCT.md`, `DESIGN.md` ("The Phosphor Skyline").
 
-Tasks are meant to be tackled one at a time, in order. Each card follows the roadmap card shape (`#### <ID> — <Title>`, one-line **Dependencies**).
+Tasks are meant to be tackled one at a time, following **Execution order** below, not the numeric order of the IDs. Each card follows the roadmap card shape (`#### <ID> — <Title>`, one-line **Dependencies**).
 
 ## Decisions taken (2026-11-09)
 
@@ -18,6 +18,30 @@ Tasks are meant to be tackled one at a time, in order. Each card follows the roa
 ## Open decisions
 
 - None.
+
+## Execution order
+
+The IDs reflect the order findings were recorded, not the order of work. Follow this sequence; it is derived from the **Dependencies** fields here and in the roadmap cards for CR4 (§2.7) and CR5 (§2.8).
+
+| Step | Task | Why here |
+|---|---|---|
+| 1 | **UI.T1**: one blocklist, shown once | No dependencies. CR4.T5, CR5.T3, UI.T4 and UI.T6 all build on its layout. |
+| 2 | **CR4.T1 → CR4.T2 → CR4.T3 → CR4.T4**: analysis, toggle logic, store + v3 migration, messages | The logic behind UI.T2/UI.T3. CR4.T1 is analysis only and may run alongside step 1. |
+| 3 | **CR4.T5**: preset toggles + saved-preset UI | Needs CR4.T4 and UI.T1. **Completing it also completes UI.T2 and UI.T3**; they are not separate work. |
+| 4 | **CR4.T6**: docs, changelog, gate | Closes CR4. |
+| 5 | **CR5.T1 → CR5.T2 → CR5.T3 → CR5.T4**: adding sites during a session | CR5.T1 needs CR4.T3, so "toggle a preset on" is opened mid-session in one pass. |
+| 6 | **UI.T4**: "Blocks N sites" line + add-only notice | Needs CR5's notice behavior and copy. |
+| 7 | **UI.T5**: visual coherence pass | After the structure settles (UI.T1–UI.T4), so nothing gets polished and then rewritten. |
+| 8 | **UI.T9**: Duration Drum | Reuses UI.T5's pill and focus styles. |
+| 9 | **UI.T6**: edge cases and feedback | Needs the final list and presets; running it late also covers the Timer tab and the drum. |
+| 10 | **UI.T7**: minor items | Copy and small polish, last. |
+| 11 | **UI.T8**: re-run the critique | Compare against 17/40. |
+
+Notes:
+- **Gap between steps 1 and 3.** UI.T1 removes the tag checkbox grid before CR4 replaces tags, so tags can't be assigned from the popup in between. This is harmless: tags don't affect blocking, persisted tag data is untouched, and CR4.T3 migrates it.
+- **UI.T9 may move earlier.** Its dependency on UI.T5 is soft (shared styles only) and it doesn't touch the blocklist. It can run any time after step 1; UI.T5 then restyles its focus ring and pills.
+- **Roadmap tasks (CR4.\*, CR5.\*)** are done only with a changelog entry via the `changelog` skill (CLAUDE.md §4). UI.T\* cards are not roadmap tasks.
+- **One task per session**: start with "do <ID> from `docs/ui/ui-review-tasks.md`" (or the roadmap for CR tasks) and read only that card and the cards it depends on.
 
 ---
 
