@@ -1359,7 +1359,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR5.T3 — Popup: add field enabled mid-session, removals locked, new notice copy
 * **Objective**: reflect the add-only window in the blocklist UI.
-* **Files to create/modify**: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/integration/popup/app-composition.test.tsx` (component tests updated alongside).
+* **Files to create/modify**: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `components/blocklist/PresetToggle.tsx` (per-toggle disabled rule), `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/integration/popup/app-composition.test.tsx`, `tests/unit/i18n/i18n.test.tsx` (component tests updated alongside).
 * **Dependencies**: CR5.T2, UI.T1
 * **Acceptance criteria**:
   - In `running`/`paused` the add field, Add button (and unapplied presets after CR4) are enabled; × buttons and applied-preset toggles are disabled; in `completed` everything is disabled.

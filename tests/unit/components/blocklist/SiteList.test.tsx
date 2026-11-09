@@ -145,8 +145,8 @@ describe('SiteList (M3.T3)', () => {
   });
 });
 
-describe.each(['running', 'paused', 'completed'] as const)(
-  'SiteList while the timer is %s (CR2.T3a)',
+describe.each(['running', 'paused'] as const)(
+  'SiteList while the timer is %s (CR5.T3)',
   (status) => {
     beforeEach(() => {
       resetBlocklist([entry('a.com')]);
@@ -157,57 +157,107 @@ describe.each(['running', 'paused', 'completed'] as const)(
       cleanup();
     });
 
-    it('disables the add form and the remove buttons', () => {
+    it('keeps the add form enabled and the remove buttons disabled', () => {
       render(<SiteList />);
 
-      expect(screen.getByLabelText('Add to Blocked sites')).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+      expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
       expect(
         screen.getByRole('button', { name: 'Remove a.com' }),
       ).toBeDisabled();
     });
 
-    it('keeps the entries readable', () => {
-      render(<SiteList />);
-
-      expect(screen.getByText('a.com')).toBeInTheDocument();
-    });
-
-    it('hides the preview and the add feedback', () => {
+    it('adds a site with its preview and feedback', () => {
       const { container } = render(<SiteList />);
       const input = screen.getByLabelText('Add to Blocked sites');
 
       fireEvent.change(input, {
         target: { value: 'https://m.facebook.com/x' },
       });
-      expect(screen.queryByText('→ facebook.com')).not.toBeInTheDocument();
+      expect(screen.getByText('→ facebook.com')).toBeInTheDocument();
 
       fireEvent.submit(container.querySelector('form') as HTMLFormElement);
 
-      expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
-      // CR5.T1: the store now accepts an add in running/paused, so only the
-      // completed session still refuses it here; the UI is switched over in
-      // CR5.T3, which replaces this block.
-      if (status === 'completed') {
-        expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
-      }
+      expect(screen.getByText('Added facebook.com.')).toBeInTheDocument();
+      expect(values(currentBlocklist().blocklist)).toEqual([
+        'a.com',
+        'facebook.com',
+      ]);
     });
 
-    it('re-enables the controls when the timer returns to idle', () => {
+    it('never removes a site, even when the disabled button is clicked', () => {
+      render(<SiteList />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove a.com' }));
+
+      expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+    });
+
+    it('re-enables the remove buttons when the timer returns to idle', () => {
       render(<SiteList />);
 
       act(() => {
         setStatus('idle');
       });
 
-      expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
-      expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
       expect(
         screen.getByRole('button', { name: 'Remove a.com' }),
       ).toBeEnabled();
     });
   },
 );
+
+describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
+  beforeEach(() => {
+    resetBlocklist([entry('a.com')]);
+    setStatus('completed');
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('disables the add form and the remove buttons', () => {
+    render(<SiteList />);
+
+    expect(screen.getByLabelText('Add to Blocked sites')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove a.com' })).toBeDisabled();
+  });
+
+  it('keeps the entries readable', () => {
+    render(<SiteList />);
+
+    expect(screen.getByText('a.com')).toBeInTheDocument();
+  });
+
+  it('hides the preview and the add feedback and never mutates the list', () => {
+    const { container } = render(<SiteList />);
+    const input = screen.getByLabelText('Add to Blocked sites');
+
+    fireEvent.change(input, {
+      target: { value: 'https://m.facebook.com/x' },
+    });
+    expect(screen.queryByText('→ facebook.com')).not.toBeInTheDocument();
+
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+
+    expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
+    expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+  });
+
+  it('re-enables the controls when the timer returns to idle', () => {
+    render(<SiteList />);
+
+    act(() => {
+      setStatus('idle');
+    });
+
+    expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Remove a.com' })).toBeEnabled();
+  });
+});
 
 describe('SiteList layout (UI.T1)', () => {
   beforeEach(() => {

@@ -8,7 +8,10 @@ import type { Preset } from '@/store/store.types';
 
 interface PresetToggleProps {
   readonly preset: Preset;
+  /** Whether the list may be reshaped (`idle`): needed to switch a preset off. */
   readonly editable: boolean;
+  /** Whether the list may grow (`idle`, `running`, `paused`): switching on. */
+  readonly addAllowed: boolean;
 }
 
 /**
@@ -17,8 +20,15 @@ interface PresetToggleProps {
  * removed by hand, the plain total while it is off, so the user knows what it
  * would add). Its domains are listed in the tooltip, inspectable before the
  * click. The component only invokes `togglePreset` with the target state.
+ *
+ * Mid-session (CR5.T3) a preset can still be switched on but not off, so the
+ * disabled state depends on which way the click would go.
  */
-export function PresetToggle({ preset, editable }: PresetToggleProps) {
+export function PresetToggle({
+  preset,
+  editable,
+  addAllowed,
+}: PresetToggleProps) {
   const applied = useAppStore(selectIsPresetApplied(preset.id));
   const covered = useAppStore(selectPresetCoveredCount(preset));
   const total = preset.domains.length;
@@ -34,7 +44,7 @@ export function PresetToggle({ preset, editable }: PresetToggleProps) {
       className="preset-picker__button"
       data-preset-id={preset.id}
       aria-pressed={applied}
-      disabled={!editable}
+      disabled={applied ? !editable : !addAllowed}
       aria-label={i18n.t('blocklist.presetToggle', [
         preset.name,
         String(covered),

@@ -144,10 +144,19 @@ describe('PresetPicker (M3.T1, toggles CR4.T3/T5)', () => {
   });
 });
 
-describe.each(['running', 'paused', 'completed'] as const)(
-  'PresetPicker while the timer is %s (CR2.T3a)',
+const APPLIED_SOCIAL = {
+  blocklist: PRESETS.find((preset) => preset.id === 'social')?.domains.map(
+    (domain) => ({ domain, manual: false, presetIds: ['social'] }),
+  ) ?? [],
+  appliedPresetIds: ['social'],
+  userPresets: [],
+};
+
+describe.each(['running', 'paused'] as const)(
+  'PresetPicker while the timer is %s (CR5.T3)',
   (status) => {
     beforeEach(() => {
+      useAppStore.setState({ blocklist: APPLIED_SOCIAL });
       setStatus(status);
     });
 
@@ -155,38 +164,92 @@ describe.each(['running', 'paused', 'completed'] as const)(
       cleanup();
     });
 
-    it('disables every preset button', () => {
+    it('keeps the presets that are off enabled and the applied one disabled', () => {
       render(<PresetPicker />);
 
-      for (const preset of PRESETS) {
-        expect(
-          toggle(preset.name),
-        ).toBeDisabled();
-      }
+      expect(toggle('Social')).toBeDisabled();
+      expect(toggle('Video')).toBeEnabled();
     });
 
-    it('does not change the blocklist when a disabled button is clicked', () => {
+    it('switches an unapplied preset on', async () => {
       render(<PresetPicker />);
 
-      fireEvent.click(
-        toggle('Social'),
-      );
+      await userEvent.click(toggle('Video'));
 
-      expect(domainValues()).toEqual([]);
+      expect(useAppStore.getState().blocklist.appliedPresetIds).toEqual([
+        'social',
+        'video',
+      ]);
     });
 
-    it('re-enables the buttons when the timer returns to idle', () => {
+    it('does not switch an applied preset off', () => {
+      render(<PresetPicker />);
+
+      fireEvent.click(toggle('Social'));
+
+      expect(useAppStore.getState().blocklist.appliedPresetIds).toEqual([
+        'social',
+      ]);
+      expect(domainValues()).toHaveLength(4);
+    });
+
+    it('disables saving, since it reshapes the list', () => {
+      render(<PresetPicker />);
+
+      expect(
+        screen.getByRole('button', { name: 'Save list as preset' }),
+      ).toBeDisabled();
+    });
+
+    it('re-enables the applied preset when the timer returns to idle', () => {
       render(<PresetPicker />);
 
       act(() => {
         setStatus('idle');
       });
 
-      for (const preset of PRESETS) {
-        expect(
-          toggle(preset.name),
-        ).toBeEnabled();
-      }
+      expect(toggle('Social')).toBeEnabled();
     });
   },
 );
+
+describe('PresetPicker once the session is completed (CR2.T3a, CR5.T3)', () => {
+  beforeEach(() => {
+    useAppStore.setState({ blocklist: APPLIED_SOCIAL });
+    setStatus('completed');
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('disables every preset button', () => {
+    render(<PresetPicker />);
+
+    for (const preset of PRESETS) {
+      expect(toggle(preset.name)).toBeDisabled();
+    }
+  });
+
+  it('does not change the blocklist when a disabled button is clicked', () => {
+    render(<PresetPicker />);
+
+    fireEvent.click(toggle('Video'));
+
+    expect(useAppStore.getState().blocklist.appliedPresetIds).toEqual([
+      'social',
+    ]);
+  });
+
+  it('re-enables the buttons when the timer returns to idle', () => {
+    render(<PresetPicker />);
+
+    act(() => {
+      setStatus('idle');
+    });
+
+    for (const preset of PRESETS) {
+      expect(toggle(preset.name)).toBeEnabled();
+    }
+  });
+});

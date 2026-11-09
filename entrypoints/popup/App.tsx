@@ -1,6 +1,7 @@
 import {
   useAppStore,
   selectActiveTab,
+  selectBlocklistAddAllowed,
   selectBlocklistEditable,
   selectTimerStatus,
   type PopupTab,
@@ -69,12 +70,18 @@ function ScoreSection() {
 
 function BlocklistSection() {
   const editable = useAppStore(selectBlocklistEditable);
+  const addAllowed = useAppStore(selectBlocklistAddAllowed);
+  // CR5.T3: idle shows nothing; a running or paused session says what is still
+  // possible; a completed one keeps the Reset wording.
+  const notice = editable
+    ? null
+    : i18n.t(addAllowed ? 'blocklist.addOnly' : 'blocklist.locked');
 
   return (
     <div className="popup-section popup-section--blocklist">
-      {!editable ? (
+      {notice !== null ? (
         <p className="popup-section__lock" role="status" aria-live="polite">
-          {i18n.t('blocklist.locked')}
+          {notice}
         </p>
       ) : null}
       {/* UI.T1: one list, shown once. CR4: presets (built-in and saved) are

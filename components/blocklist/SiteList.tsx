@@ -5,6 +5,7 @@ import { computeEntrySourceLabels } from '@/lib/blocking/entry-sources';
 import { PRESETS } from '@/lib/blocking/presets';
 import {
   selectBlocklist,
+  selectBlocklistAddAllowed,
   selectBlocklistEditable,
   selectUserPresets,
   useAppStore,
@@ -30,12 +31,17 @@ interface SiteListProps {
  * validate, and duplicates are detected only for the visible feedback — the
  * authoritative dedup stays in the store's pure helpers (M2.T4). Each domain is
  * rendered exactly once (UI.T1), labelled with the presets/tags it came from.
+ *
+ * Two windows (CR5.T3): adding is allowed from `idle` through `paused`, while
+ * removing stays `idle`-only, so the form and the × buttons follow different
+ * predicates.
  */
 export function SiteList({ quickAdd }: SiteListProps) {
   const entries = useAppStore(selectBlocklist);
   const userPresets = useAppStore(selectUserPresets);
   const presets = useMemo(() => [...PRESETS, ...userPresets], [userPresets]);
   const editable = useAppStore(selectBlocklistEditable);
+  const addAllowed = useAppStore(selectBlocklistAddAllowed);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
@@ -82,7 +88,7 @@ export function SiteList({ quickAdd }: SiteListProps) {
             className="site-list__input"
             type="text"
             value={value}
-            disabled={!editable}
+            disabled={!addAllowed}
             aria-label={i18n.t('blocklist.addTo', [title])}
             placeholder={i18n.t('blocklist.exampleDomain')}
             onChange={(event) => {
@@ -90,12 +96,12 @@ export function SiteList({ quickAdd }: SiteListProps) {
               setFeedback(null);
             }}
           />
-          <button type="submit" disabled={!editable}>
+          <button type="submit" disabled={!addAllowed}>
             {i18n.t('common.add')}
           </button>
         </form>
 
-        {editable &&
+        {addAllowed &&
         previewDomain !== null &&
         previewDomain !== value.trim() ? (
           <p className="site-list__preview" aria-live="polite">
@@ -103,7 +109,7 @@ export function SiteList({ quickAdd }: SiteListProps) {
           </p>
         ) : null}
 
-        {editable && feedback !== null ? (
+        {addAllowed && feedback !== null ? (
           <p
             className={`site-list__feedback site-list__feedback--${feedback.kind}`}
             role={feedback.kind === 'error' ? 'alert' : 'status'}

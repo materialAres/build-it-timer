@@ -2,6 +2,7 @@ import { i18n } from '#i18n';
 import { useMemo } from 'react';
 import { PRESETS } from '@/lib/blocking/presets';
 import {
+  selectBlocklistAddAllowed,
   selectBlocklistEditable,
   selectUserPresets,
   useAppStore,
@@ -22,6 +23,7 @@ const PRESET_PICKER_LABEL_ID = 'preset-picker-label';
  */
 export function PresetPicker() {
   const editable = useAppStore(selectBlocklistEditable);
+  const addAllowed = useAppStore(selectBlocklistAddAllowed);
   const userPresets = useAppStore(selectUserPresets);
   const presets = useMemo(() => [...PRESETS, ...userPresets], [userPresets]);
 
@@ -37,7 +39,12 @@ export function PresetPicker() {
           {i18n.t('blocklist.presets')}
         </span>
         {presets.map((preset) => (
-          <PresetToggle key={preset.id} preset={preset} editable={editable} />
+          <PresetToggle
+            key={preset.id}
+            preset={preset}
+            editable={editable}
+            addAllowed={addAllowed}
+          />
         ))}
       </div>
       <SavedPresetControls

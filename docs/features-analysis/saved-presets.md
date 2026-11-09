@@ -341,3 +341,9 @@ table for the four preset messages (CR4.T4).
   handler picks `isBlocklistAddAllowed` or `isBlocklistEditable` from it. The
   background wiring credits the elapsed stretch before an add and re-reads the
   open tabs after it, so no distraction is charged retroactively.
+- CR5.T3 (**implemented**): the popup follows both windows. `SiteList` gates its
+  form and feedback on `selectBlocklistAddAllowed` and its × buttons on
+  `selectBlocklistEditable`; `PresetToggle` is disabled by direction (a preset
+  that is off needs the add window, one that is on needs the idle window);
+  save/rename/delete stay idle-only. The notice is `blocklist.addOnly` while
+  running or paused and `blocklist.locked` once completed.

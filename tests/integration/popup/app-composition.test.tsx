@@ -86,14 +86,18 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 
-  it('locks the blocklist while a session is in progress and unlocks it on reset', async () => {
+  it('allows adding but not removing during a session and unlocks it on reset', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
-    expect(
-      screen.queryByText(/locked while a session is in progress/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocked sites'),
+      'facebook.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -101,22 +105,38 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('status')).toHaveTextContent(
-      /locked while a session is in progress/i,
+      /added during a session.*timer reset/i,
     );
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Remove facebook.com' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeEnabled();
+
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocked sites'),
+      'instagram.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getByRole('button', { name: 'Remove instagram.com' }),
+    ).toBeDisabled();
+    expect(
+      useAppStore.getState().blocklist.blocklist.map((e) => e.domain.value),
+    ).toEqual(['facebook.com', 'instagram.com']);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
     await flushAsync();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/locked while a session is in progress/i),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+      screen.getByRole('button', { name: 'Remove facebook.com' }),
+    ).toBeEnabled();
   });
 
-  it('keeps the blocklist locked when the session completes', async () => {
+  it('keeps the blocklist fully locked when the session completes', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -129,6 +149,7 @@ describe('popup App composition (M3.T4)', () => {
       /locked while a session is in progress/i,
     );
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeDisabled();
   });
 
   it('counts the displayed timer down while the session runs (I001)', async () => {

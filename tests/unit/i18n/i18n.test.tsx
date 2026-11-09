@@ -38,6 +38,9 @@ describe('i18n shared instance (M3.T9)', () => {
     expect(i18n.t('blocklist.locked')).toBe(
       'The blocklist is locked while a session is in progress. Reset the timer to edit it.',
     );
+    expect(i18n.t('blocklist.addOnly')).toBe(
+      'Sites can be added during a session. Removing sites or turning presets off needs a timer reset.',
+    );
   });
 
   it('renders a component\u2019s visible strings through i18n.t', () => {
@@ -91,6 +94,9 @@ describe('IT locale rendering (M3.T10)', () => {
     );
     expect(i18n.t('blocklist.locked')).toBe(
       'La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.',
+    );
+    expect(i18n.t('blocklist.addOnly')).toBe(
+      'Durante una sessione puoi aggiungere siti. Per rimuovere siti o disattivare i preset reimposta il timer.',
     );
   });
 

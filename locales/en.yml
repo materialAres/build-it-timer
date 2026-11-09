@@ -73,6 +73,7 @@ blocklist:
   alreadyInList: '$1 is already in the $2.'
   added: 'Added $1.'
   locked: The blocklist is locked while a session is in progress. Reset the timer to edit it.
+  addOnly: Sites can be added during a session. Removing sites or turning presets off needs a timer reset.
 
 overlay:
   title: Stay focused
