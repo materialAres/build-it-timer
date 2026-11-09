@@ -330,3 +330,8 @@ table for the four preset messages (CR4.T4).
   the row; delete asks first and says the sites stay blocked. The save note says
   switching the preset off removes its sites (§3.4 decision 2).
 
+- CR5.T1 (**implemented**): the two add-direction rows of §3.6 are live in the
+  store only. The predicates moved to `store/blocklist-lock.ts`
+  (`isBlocklistEditable`, `isBlocklistAddAllowed`); `addSite` and
+  `togglePreset(id, true)` use the wider window. The background still applies
+  the idle-only check to every message until CR5.T2.

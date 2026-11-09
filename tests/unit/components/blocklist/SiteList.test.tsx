@@ -173,7 +173,7 @@ describe.each(['running', 'paused', 'completed'] as const)(
       expect(screen.getByText('a.com')).toBeInTheDocument();
     });
 
-    it('hides the preview and the add feedback and never mutates the list', () => {
+    it('hides the preview and the add feedback', () => {
       const { container } = render(<SiteList />);
       const input = screen.getByLabelText('Add to Blocked sites');
 
@@ -185,7 +185,12 @@ describe.each(['running', 'paused', 'completed'] as const)(
       fireEvent.submit(container.querySelector('form') as HTMLFormElement);
 
       expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
-      expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+      // CR5.T1: the store now accepts an add in running/paused, so only the
+      // completed session still refuses it here; the UI is switched over in
+      // CR5.T3, which replaces this block.
+      if (status === 'completed') {
+        expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+      }
     });
 
     it('re-enables the controls when the timer returns to idle', () => {

@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
   createAppStore,
+  isBlocklistAddAllowed,
   isBlocklistEditable,
+  selectBlocklistAddAllowed,
   selectBlocklistEditable,
   type AppStore,
   type BlocklistState,
@@ -37,6 +39,9 @@ const LOCKED_STATUSES: ReadonlyArray<TimerStatus> = [
   'paused',
   'completed',
 ];
+
+/** Statuses where CR5 lets the list grow but never shrink. */
+const ADD_ONLY_STATUSES: ReadonlyArray<TimerStatus> = ['running', 'paused'];
 
 /** A store at `status` with the given blocklist already seeded. */
 function createStoreAt(
@@ -93,26 +98,48 @@ describe('isBlocklistEditable (CR2.T1)', () => {
   });
 });
 
+describe('isBlocklistAddAllowed (CR5.T1)', () => {
+  it('allows adding in idle, running and paused, not once completed', () => {
+    expect(isBlocklistAddAllowed('idle')).toBe(true);
+    expect(isBlocklistAddAllowed('running')).toBe(true);
+    expect(isBlocklistAddAllowed('paused')).toBe(true);
+    expect(isBlocklistAddAllowed('completed')).toBe(false);
+  });
+
+  it('is never stricter than the idle-only editing rule', () => {
+    const statuses: ReadonlyArray<TimerStatus> = [
+      'idle',
+      'running',
+      'paused',
+      'completed',
+    ];
+    for (const status of statuses) {
+      if (isBlocklistEditable(status)) {
+        expect(isBlocklistAddAllowed(status)).toBe(true);
+      }
+    }
+  });
+
+  it('reads the decision through the selector', () => {
+    const { store } = createStoreAt('running', empty);
+    expect(selectBlocklistAddAllowed(store.getState())).toBe(true);
+    expect(selectBlocklistEditable(store.getState())).toBe(false);
+
+    store.setState({
+      timer: { ...store.getState().timer, status: 'completed' },
+    });
+    expect(selectBlocklistAddAllowed(store.getState())).toBe(false);
+  });
+});
+
 describe.each(LOCKED_STATUSES)('blocklist lock while %s', (status) => {
   beforeEach(() => {
     fakeBrowser.reset();
   });
 
-  it('ignores addSite', () => {
-    expectLocked(status, empty, (store) => {
-      store.getState().addSite('facebook.com');
-    });
-  });
-
   it('ignores removeSite', () => {
     expectLocked(status, withSite, (store) => {
       store.getState().removeSite('x.com');
-    });
-  });
-
-  it('ignores togglePreset on', () => {
-    expectLocked(status, empty, (store) => {
-      store.getState().togglePreset('social', true);
     });
   });
 
@@ -137,6 +164,64 @@ describe.each(LOCKED_STATUSES)('blocklist lock while %s', (status) => {
   it('ignores deletePreset', () => {
     expectLocked(status, withSavedPreset, (store) => {
       store.getState().deletePreset('user:focus');
+    });
+  });
+});
+
+describe.each(ADD_ONLY_STATUSES)(
+  'add-direction editing while %s (CR5.T1)',
+  (status) => {
+    beforeEach(() => {
+      fakeBrowser.reset();
+    });
+
+    it('addSite applies and sends exactly one mutation', () => {
+      const { store, sendMutation } = createStoreAt(status, empty);
+
+      store.getState().addSite('facebook.com');
+
+      expect(
+        store.getState().blocklist.blocklist.map((e) => e.domain.value),
+      ).toEqual(['facebook.com']);
+      expect(sendMutation).toHaveBeenCalledTimes(1);
+    });
+
+    it('addSite on a preset-only site marks it manual', () => {
+      const { store } = createStoreAt(status, {
+        ...withSavedPreset,
+      });
+
+      store.getState().addSite('x.com');
+
+      expect(store.getState().blocklist.blocklist[0]?.manual).toBe(true);
+    });
+
+    it('togglePreset on applies the whole preset with one mutation', () => {
+      const { store, sendMutation } = createStoreAt(status, empty);
+
+      store.getState().togglePreset('social', true);
+
+      expect(store.getState().blocklist.blocklist).toHaveLength(4);
+      expect(store.getState().blocklist.appliedPresetIds).toEqual(['social']);
+      expect(sendMutation).toHaveBeenCalledTimes(1);
+    });
+  },
+);
+
+describe('add-direction editing once completed (CR5.T1)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it('ignores addSite', () => {
+    expectLocked('completed', empty, (store) => {
+      store.getState().addSite('facebook.com');
+    });
+  });
+
+  it('ignores togglePreset on', () => {
+    expectLocked('completed', empty, (store) => {
+      store.getState().togglePreset('social', true);
     });
   });
 });

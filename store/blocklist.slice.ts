@@ -19,12 +19,8 @@ import {
 } from '@/lib/blocking/saved-presets';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { MessagingDependencies } from '@/lib/messaging/mutation-sender';
-import type {
-  BlocklistEntry,
-  BlocklistState,
-  Preset,
-  TimerStatus,
-} from './store.types';
+import type { BlocklistEntry, BlocklistState, Preset } from './store.types';
+import { isBlocklistAddAllowed, isBlocklistEditable } from './blocklist-lock';
 import type { AppState } from '.';
 
 export type { BlocklistState } from './store.types';
@@ -58,28 +54,6 @@ export interface BlocklistSlice {
 }
 
 /**
- * Whether the blocklist may be mutated (CR2.T1). Editing is configuration for
- * the *next* session: once the timer leaves `idle` — running, paused or even
- * completed — changing the list would let the user escape the block they asked
- * for. The rule is a single predicate so the store, the background and the UI
- * cannot drift apart.
- */
-export function isBlocklistEditable(status: TimerStatus): boolean {
-  return status === 'idle';
-}
-
-/**
- * The part of the app state the lock decision reads, declared structurally so
- * the selector does not depend on the concrete store shape.
- */
-export interface BlocklistLockSource {
-  readonly timer: { readonly status: TimerStatus };
-}
-
-export const selectBlocklistEditable = (state: BlocklistLockSource): boolean =>
-  isBlocklistEditable(state.timer.status);
-
-/**
  * Collaborators required to change the blocklist from a non-owner context
  * (M1.T10). Injectable (principle D) so the slice stays unit-testable without
  * the message bus; the store barrel supplies the real `sendMessage`.
@@ -96,18 +70,23 @@ export const createBlocklistSlice =
     dependencies: BlocklistDependencies = {},
   ): StateCreator<AppState, [], [], BlocklistSlice> =>
   (set, get) => {
+    // `adds` marks a mutation that can only tighten the list (CR5.T1), the
+    // one kind still allowed while a session runs.
     const mutate = (
       message: MutationMessage,
       transform: (state: BlocklistState) => BlocklistState,
+      adds = false,
     ): void => {
-      applyBlocklistMutation(set, get, dependencies, message, transform);
+      applyBlocklistMutation(set, get, dependencies, message, transform, adds);
     };
 
     return {
       blocklist: EMPTY_BLOCKLIST_STATE,
       addSite(site) {
-        mutate({ type: 'BLOCKLIST_ADD_SITE', payload: { site } }, (current) =>
-          addBlocklistSite(current, site),
+        mutate(
+          { type: 'BLOCKLIST_ADD_SITE', payload: { site } },
+          (current) => addBlocklistSite(current, site),
+          true,
         );
       },
       removeSite(site) {
@@ -125,6 +104,7 @@ export const createBlocklistSlice =
               ? current
               : togglePreset(current, preset, applied);
           },
+          applied,
         );
       },
       savePreset(name) {
@@ -162,10 +142,15 @@ function applyBlocklistMutation(
   dependencies: BlocklistDependencies,
   message: MutationMessage,
   transform: (state: BlocklistState) => BlocklistState,
+  adds: boolean,
 ): void {
   // CR2.T1: the lock is checked before anything else, so a locked mutation is a
-  // no-op even for an input that would otherwise be valid.
-  if (!isBlocklistEditable(get().timer.status)) return;
+  // no-op even for an input that would otherwise be valid. CR5.T1: a mutation
+  // that only adds sites has the wider window.
+  const status = get().timer.status;
+  if (!(adds ? isBlocklistAddAllowed(status) : isBlocklistEditable(status))) {
+    return;
+  }
   const current = get().blocklist;
   const next = transform(current);
   if (next === current) return;

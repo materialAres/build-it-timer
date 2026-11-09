@@ -1341,7 +1341,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR5.T1 — `isBlocklistAddAllowed` and the add-only window in the store
 * **Objective**: let add-direction actions through in `running`/`paused` while keeping every other mutation `idle`-only.
-* **Files to create/modify**: `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts`.
+* **Files to create/modify**: `store/blocklist-lock.ts` (new: both predicates, so the slice stays under 200 lines), `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts`.
 * **Dependencies**: — (preset-on part: CR4.T3)
 * **Acceptance criteria**:
   - `isBlocklistAddAllowed(status: TimerStatus): boolean` is pure, `true` for `idle`, `running`, `paused`; `selectBlocklistAddAllowed` is exported.

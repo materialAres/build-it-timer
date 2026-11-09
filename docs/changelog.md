@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR4.T6** (change request CR4 **completed** — presets are toggles over the single blocklist and saved presets replace custom tags: analysis, pure logic, store with persistence v3, the hardened message boundary, the popup and the final docs and gate (CR4.T1–T6); Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR5.T1** (change request CR5 **in progress** — the store accepts add-direction mutations in `running`/`paused`; the background, popup and docs (CR5.T2–T4) remain; change request CR4 **completed** — presets are toggles over the single blocklist and saved presets replace custom tags: analysis, pure logic, store with persistence v3, the hardened message boundary, the popup and the final docs and gate (CR4.T1–T6); Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -20,8 +20,9 @@ description: Rules for updating the changelog
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
 - Change request CR4 (presets as toggles, saved custom presets) — **completed**: CR4.T1 (analysis), CR4.T2 (pure logic), CR4.T3 (store model, persistence v3), CR4.T4 (message boundary), CR4.T5 (popup) and CR4.T6 (documentation and final verification) done. CR4.T5 also completes UI.T2 and UI.T3 of `docs/ui/ui-review-tasks.md`. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
+- Change request CR5 (add sites during a session) — **in progress**: CR5.T1 (`isBlocklistAddAllowed` and the add-only window in the store) done; CR5.T2–CR5.T4 remaining.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **960 passing tests** across 83 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file, CR4.T6 is documentation only).
+- Tests: `bun run test` → **965 passing tests** across 83 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file, CR4.T6 is documentation only, CR5.T1 added 11 tests and replaced 6).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -128,7 +129,8 @@ description: Rules for updating the changelog
 | CR4.T3 | Store model, slice actions and persistence v3 migration | completed | `52192e1` |
 | CR4.T4 | Preset mutation messages and background handler | completed | `502f7f7` |
 | CR4.T5 | Popup: preset toggles, saved-preset management, tag editor removed | completed | `0706f87` |
-| CR4.T6 | Documentation, changelog and final verification | completed | — (to be committed) |
+| CR4.T6 | Documentation, changelog and final verification | completed | `03ab64c` |
+| CR5.T1 | `isBlocklistAddAllowed` and the add-only window in the store | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1358,6 +1360,16 @@ description: Rules for updating the changelog
 - Tests: none added; the gate below was re-run on the committed CR4.T5 tree.
 - Relevant notes/decisions: the preset messages stay `idle`-only; CR5 (planned) adds the add-direction window. The UI critique items that remain (UI.T4 onward) are tracked in `docs/ui/ui-review-tasks.md`, outside CR4.
 - Acceptance criteria: verified — `bun run compile` clean; `bun run lint` shows no project-file finding (5 parsing errors remain in `.claude/skills/impeccable/scripts/*.js`, Open issues #21); `bun run test` → 960 passing tests across 83 files; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → 1 passing test.
+- Commit: `03ab64c docs(CR4.T6): document presets and close CR4`.
+
+### CR5.T1 — `isBlocklistAddAllowed` and the add-only window in the store
+- New `store/blocklist-lock.ts` holds the lock rules: `isBlocklistEditable(status)` (`idle` only, moved here from the slice, unchanged) and the new pure `isBlocklistAddAllowed(status)` (`idle`, `running`, `paused`; `false` for `completed`), with `selectBlocklistEditable`, the new `selectBlocklistAddAllowed` and `BlocklistLockSource`. `store/index.ts` exports them from there.
+- In `store/blocklist.slice.ts` the shared `applyBlocklistMutation` takes an `adds` flag: `addSite` and `togglePreset(id, true)` use the wider window, everything else (`removeSite`, preset off, save, rename, delete) stays `idle`-only. A no-op is still the same reference, with no notification and no message.
+- Files created/modified: `store/blocklist-lock.ts` (new: the slice was at 198 of 200 lines), `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts`, `tests/unit/components/blocklist/SiteList.test.tsx` (one assertion, see below), docs.
+- Dependencies added: none.
+- Tests: `tests/unit/store/blocklist-lock.test.ts` (+11 added, 6 replaced: the truth table of `isBlocklistAddAllowed`, its selector, `addSite` and preset-on applying with exactly one message in `running` and `paused`, a preset-only site gaining `manual`, both refused in `completed`; removal, preset-off and preset management stay refused in all three locked statuses; the `idle` tests are untouched). Written first and seen failing.
+- Relevant notes/decisions: deviations from the card — the predicates live in a new file (the 200-line rule) rather than the slice. The old "locked" cases for `addSite` and preset-on in `running`/`paused` encoded the CR2 rule this task amends, so they moved to the new add-only block. One `SiteList` test (`running`/`paused`) no longer asserts that a submitted form leaves the list unchanged, because the store now accepts the add; the field is still disabled until CR5.T3. Until CR5.T2 the background still drops add-direction messages outside `idle`, so a mid-session add from the popup would be undone by the sync bridge; nothing triggers it yet because the popup controls stay disabled.
+- Acceptance criteria: verified — the predicate is pure and exported with its selector, the truth tables pass per action and status, the existing `idle` tests are green unmodified. Gate: `bun run compile` clean, project lint clean (only the 5 known impeccable parsing errors, Open issues #21), 965 tests across 83 files green, both builds succeed.
 - Commit: — (to be committed).
 
 ---

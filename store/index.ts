@@ -317,19 +317,23 @@ export type {
 } from './city.slice';
 export {
   createBlocklistSlice,
-  isBlocklistEditable,
   selectAppliedPresetIds,
   selectBlocklist,
-  selectBlocklistEditable,
   selectIsPresetApplied,
   selectPresetCoveredCount,
   selectUserPresets,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,
-  BlocklistLockSource,
   BlocklistState,
 } from './blocklist.slice';
+export {
+  isBlocklistAddAllowed,
+  isBlocklistEditable,
+  selectBlocklistAddAllowed,
+  selectBlocklistEditable,
+} from './blocklist-lock';
+export type { BlocklistLockSource } from './blocklist-lock';
 export {
   createSessionHistorySlice,
   appendSessionSummary,
