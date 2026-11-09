@@ -172,13 +172,15 @@ Notes:
 #### UI.T9 — Duration Drum: terminal scroll-wheel duration picker
 **Priority**: P1 · **Command**: `/impeccable animate` (motion) after building the component; `/impeccable polish` to finish · **Dependencies**: UI.T5 (shared button/focus styles)
 
+**Status**: done (2026-11-09). Implemented directly, without running the impeccable commands. Pure math in `lib/timer/duration-drum.ts` (index, step, clamp, snap, rubber-band, row opacity/scale/colour/glow, wheel accumulation, key targets; 30 tests written first); `components/timer/DurationDrum.tsx` composes `DrumRow`, `DrumRuler` and the existing `TimerDisplay`; input in `use-drum-gesture.ts` (pointer, keys) and `use-drum-wheel.ts`; the single settle-time request in `use-drum-commit.ts`; `framer-motion` only. `DurationPicker.tsx` is removed. Idle it is a `spinbutton` (5–120 min, `aria-valuetext` `30 min`); in a session the wheel fades out over 200ms and the countdown shows in the same 8.5rem frame, and Reset reverses it. Reduced motion: no animation or rubber-band, 80ms opacity crossfade. Layout: the drum comes first on the Timer tab, then Start/Pause/Reset and the blocklist summary. Checked in the built extension at 420px (idle, a step, the end row, mid-drag, after a drag, running, Reset, reduced motion); the Timer tab is 256px tall.
+
 **Spec (normative):** `DESIGN.md` → Components → **Duration Drum (signature)**, plus the `duration-drum*` and `numeral*` tokens in its frontmatter and the `Duration Drum` snippet and `drum-*` motion tokens in `.impeccable/design.json`.
 **References:**
 - `docs/ui/references/duration-drum-reference.png`: what the user asked for. Copy its **motion and composition only** (centered selected value, faded neighbors, ruler ticks on both edges, snapping vertical wheel). Don't copy its look (white card, grey shading, 3D, hours:minutes).
 - `docs/ui/references/duration-drum-target.png`: the static target in the Phosphor Skyline style.
 
 **Problem**
-- `components/timer/DurationPicker.tsx` renders 8 grey browser-default buttons below Start: low contrast (4.1:1), too many options at once (8 > 4), and the wrong order (start before choose). The countdown is body-sized text in Chrome's sans.
+- (Resolved by UI.T9.) `components/timer/DurationPicker.tsx` rendered 8 grey browser-default buttons below Start: low contrast (4.1:1), too many options at once (8 > 4), and the wrong order (start before choose). The countdown is body-sized text in Chrome's sans.
 
 **Acceptance criteria**
 - Values come from `FOCUS_PRESETS` (`lib/timer/focus-presets.ts`); no hard-coded list. A finite list that doesn't loop.

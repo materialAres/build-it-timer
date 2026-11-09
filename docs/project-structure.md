@@ -24,7 +24,11 @@ timer-focus/
 │   │   └── city.types.ts
 │   ├── timer/
 │   │   ├── TimerControls.tsx
-│   │   └── TimerDisplay.tsx     # hh:mm:ss format
+│   │   ├── TimerDisplay.tsx     # hh:mm:ss format (the clock inside the drum)
+│   │   ├── DurationDrum.tsx     # duration picker while idle, the clock in a session (UI.T9)
+│   │   ├── DrumRow.tsx / DrumRuler.tsx
+│   │   ├── use-drum-gesture.ts / use-drum-wheel.ts / use-drum-commit.ts
+│   │   └── duration-drum.styles.ts
 │   ├── blocklist/
 │   │   ├── PresetPicker.tsx     # built-in and saved presets as toggles (CR4)
 │   │   ├── SiteList.tsx         # the single blocked-sites list
@@ -62,7 +66,8 @@ timer-focus/
 │   │   ├── calculate-population.ts # tiered rate per character by completion band + 7% completion bonus (CR3)
 │   │   └── apply-malus.ts       # character-by-character deletion of the affected building
 │   └── timer/
-│       └── alarm-adapter.ts     # interface + implementation for browser.alarms
+│       ├── alarm-adapter.ts     # interface + implementation for browser.alarms
+│       └── duration-drum.ts     # pure index/motion math of the Duration Drum (UI.T9)
 ├── assets/
 │   └── ascii/                   # static ASCII frames/modules (bases, floors, tops, decorations)
 ├── locales/                     # @wxt-dev/i18n translation files (en.yml default, it.yml), see M3.T9

@@ -298,8 +298,8 @@ A 1px 60% amber frame, amber text, 0.75rem, 0.35rem 0.5rem padding. Shown in the
 
 ### Don't:
 - **Don't** add a second interface accent. The blocklist input and the domain preview are phosphor green now; only the score tier's blue (`#4dabf7`) remains, and that is data, not interface.
-- **Don't** leave native buttons unstyled. Every popup button is the outline pill by default (`:where(.popup) button` in `entrypoints/popup/App.css`, zero specificity so a component's own class overrides it). The duration presets are pills too until the Duration Drum replaces them.
-- **Don't** rely on inherited font settings in the popup. Buttons and inputs inherit the monospace stack from `entrypoints/popup/style.css`, which Chrome would otherwise replace with its sans. The countdown is still body-sized text, a known deviation: it becomes the Numeral in the Duration Drum's slot.
+- **Don't** leave native buttons unstyled. Every popup button is the outline pill by default (`:where(.popup) button` in `entrypoints/popup/App.css`, zero specificity so a component's own class overrides it).
+- **Don't** rely on inherited font settings in the popup. Buttons and inputs inherit the monospace stack from `entrypoints/popup/style.css`, which Chrome would otherwise replace with its sans. The countdown is the Numeral in the Duration Drum's slot.
 - **Don't** use offset drop shadows, gradients or solid-filled buttons. The Duration Drum's edge fade is a `mask-image`, not a painted gradient, and is the only exception.
 - **Don't** copy the drum reference's look. No 3D cylinder, white card, grey shading or hour/minute pair, and no "cyberpunk" clichés either: no glitch, scanline, chromatic-aberration or neon-magenta effects. Terminal character comes from the monospace grid, the ruler ticks and the single green beam.
 - **Don't** glow resting text. Glow marks active, selected, earned or alarming state only.

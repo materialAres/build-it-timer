@@ -274,26 +274,37 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
 
-  it('changes the session length from the picker before starting', async () => {
+  it('changes the session length from the drum before starting (UI.T9)', async () => {
     render(<App />);
+    const drum = screen.getByRole('spinbutton', { name: 'Focus duration' });
+    expect(drum).toHaveAttribute('aria-valuenow', '30');
 
-    await userEvent.click(screen.getByRole('button', { name: '10 min' }));
+    drum.focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(drum).toHaveAttribute('aria-valuenow', '10');
     await flushAsync();
 
     // The command reached the background (read-only popup) and came back via sync.
     await waitFor(() => {
       expect(useAppStore.getState().timer.durationSeconds).toBe(10 * 60);
     });
-    expect(screen.getByText('00:10:00')).toBeInTheDocument();
+    expect(drum).toHaveAttribute('aria-valuenow', '10');
   });
 
-  it('disables the duration picker while a session is running', async () => {
+  it('turns the drum into the clock while a session runs and back on reset (UI.T9)', async () => {
     render(<App />);
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-valuenow', '30');
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
     await flushAsync();
 
-    expect(screen.getByRole('button', { name: '10 min' })).toBeDisabled();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Time remaining')).toHaveTextContent('00:30:00');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await flushAsync();
+
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-valuenow', '30');
   });
 
   it('grows the city after a simulated tick while the session runs', async () => {

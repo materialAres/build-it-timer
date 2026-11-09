@@ -12,9 +12,8 @@ import {
   tabButtonId,
   tabPanelId,
 } from '@/components/common/PopupTabs';
-import { TimerDisplay } from '@/components/timer/TimerDisplay';
 import { TimerControls } from '@/components/timer/TimerControls';
-import { DurationPicker } from '@/components/timer/DurationPicker';
+import { DurationDrum } from '@/components/timer/DurationDrum';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
 import { CityCanvas } from '@/components/city/CityCanvas';
@@ -35,10 +34,11 @@ import './App.css';
 function TimerSection() {
   return (
     <div className="popup-section popup-section--timer">
-      <TimerDisplay />
+      {/* UI.T9: the drum is the duration picker while idle and the clock in a
+          session, so it comes first and Start/Pause/Reset follow it. */}
+      <DurationDrum />
       <TimerControls />
       <BlocklistSummary />
-      <DurationPicker />
     </div>
   );
 }
