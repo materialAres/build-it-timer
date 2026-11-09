@@ -335,3 +335,9 @@ table for the four preset messages (CR4.T4).
   (`isBlocklistEditable`, `isBlocklistAddAllowed`); `addSite` and
   `togglePreset(id, true)` use the wider window. The background still applies
   the idle-only check to every message until CR5.T2.
+- CR5.T2 (**implemented**): the background applies the same window.
+  `isAddDirectionMutation` (`blocklist-payload.ts`) reads the raw `applied`
+  target, so only a toggle with `applied === true` counts as add-direction; the
+  handler picks `isBlocklistAddAllowed` or `isBlocklistEditable` from it. The
+  background wiring credits the elapsed stretch before an add and re-reads the
+  open tabs after it, so no distraction is charged retroactively.

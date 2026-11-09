@@ -1350,7 +1350,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR5.T2 — Background accepts add-direction mutations mid-session
 * **Objective**: the background, as single writer, applies the same window so a forged remove is still rejected.
-* **Files to create/modify**: `lib/messaging/apply-mutation.ts`, `tests/integration/background/blocklist-lock.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/malus.test.ts`.
+* **Files to create/modify**: `lib/messaging/apply-mutation.ts`, `lib/messaging/blocklist-payload.ts` (`isAddDirectionMutation`), `entrypoints/background.ts` (credit the stretch and re-read the tabs around a mid-session add), `tests/unit/lib/messaging/blocklist-payload.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/malus.test.ts`.
 * **Dependencies**: CR5.T1
 * **Acceptance criteria**:
   - `BLOCKLIST_ADD_SITE` (and preset-on after CR4) is accepted in `running`/`paused` and persisted once; removals and preset management are still dropped with the `debug` log of CR2.T2.

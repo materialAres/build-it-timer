@@ -378,11 +378,10 @@ describe('cross-context mutation path (M1.T10)', () => {
  * enforced here too: a message that bypasses the UI/store guard (stale tab,
  * forged sender) must not change or persist anything.
  */
-describe('blocklist lock in the mutation handler (CR2.T2)', () => {
-  const MUTATIONS: ReadonlyArray<MutationMessage> = [
-    { type: 'BLOCKLIST_ADD_SITE', payload: { site: 'facebook.com' } },
+describe('blocklist lock in the mutation handler (CR2.T2, CR5.T2)', () => {
+  /** Everything that loosens or reshapes the list: idle-only (CR2.T2). */
+  const LOOSENING: ReadonlyArray<MutationMessage> = [
     { type: 'BLOCKLIST_REMOVE_SITE', payload: { site: 'x.com' } },
-    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: true } },
     { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: false } },
     { type: 'PRESET_SAVE', payload: { id: 'user:focus', name: 'Focus' } },
     {
@@ -392,23 +391,42 @@ describe('blocklist lock in the mutation handler (CR2.T2)', () => {
     { type: 'PRESET_DELETE', payload: { presetId: 'user:focus' } },
   ];
 
+  /** Adding is allowed mid-session (CR5.T2) but never once completed. */
+  const ADDING: ReadonlyArray<MutationMessage> = [
+    { type: 'BLOCKLIST_ADD_SITE', payload: { site: 'facebook.com' } },
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: true } },
+  ];
+
   beforeEach(() => {
     fakeBrowser.reset();
   });
 
-  it.each(['running', 'paused', 'completed'] as const)(
-    'drops every blocklist/preset mutation while %s',
-    async (status) => {
-      const store = createAppStore();
-      await store.persist.rehydrate();
-      const handle = startBackground({ store });
-      await handle.ready;
+  /** A background whose timer is at `status`, with that write already settled. */
+  async function backgroundAt(status: 'running' | 'paused' | 'completed') {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+    await handle.ready;
+    store.setState({ timer: { ...store.getState().timer, status } });
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+        state: { timer: { status: string } };
+      };
+      expect(parsed.state.timer.status).toBe(status);
+    });
+    await flushAsync();
+    return { store, handle };
+  }
 
-      store.setState({ timer: { ...store.getState().timer, status } });
+  it.each(['running', 'paused', 'completed'] as const)(
+    'drops every loosening or reshaping mutation while %s',
+    async (status) => {
+      const { store, handle } = await backgroundAt(status);
       const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
       const before = store.getState().blocklist;
 
-      for (const mutation of MUTATIONS) {
+      for (const mutation of LOOSENING) {
         await sendMessage(mutation);
       }
 
@@ -420,30 +438,38 @@ describe('blocklist lock in the mutation handler (CR2.T2)', () => {
     },
   );
 
-  it('accepts the same mutations again after a reset', async () => {
-    const store = createAppStore();
-    await store.persist.rehydrate();
-    const handle = startBackground({ store });
-    await handle.ready;
+  it('drops the add-direction mutations once the session is completed', async () => {
+    const { store, handle } = await backgroundAt('completed');
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    const before = store.getState().blocklist;
 
-    store.setState({ timer: { ...store.getState().timer, status: 'running' } });
-    await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
-      payload: { site: 'facebook.com' },
-    });
-    expect(store.getState().blocklist.blocklist).toEqual([]);
+    for (const mutation of ADDING) {
+      await sendMessage(mutation);
+    }
+
+    expect(store.getState().blocklist).toBe(before);
+    expect(setSpy).not.toHaveBeenCalled();
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+
+  it('accepts the add-direction mutations while running, then everything after a reset', async () => {
+    const { store, handle } = await backgroundAt('running');
+    await sendMessage(ADDING[0] as MutationMessage);
+    expect(
+      store.getState().blocklist.blocklist.map((entry) => entry.domain.value),
+    ).toEqual(['facebook.com']);
 
     await sendMessage({ type: 'TIMER_RESET', payload: {} });
     await flushAsync();
     expect(store.getState().timer.status).toBe('idle');
 
     await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
+      type: 'BLOCKLIST_REMOVE_SITE',
       payload: { site: 'facebook.com' },
     });
-    expect(store.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'facebook.com' }, manual: true, presetIds: [] },
-    ]);
+    expect(store.getState().blocklist.blocklist).toEqual([]);
 
     handle.dispose();
   });

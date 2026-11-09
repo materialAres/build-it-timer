@@ -188,5 +188,29 @@ describe('malus linked to building destruction (M2.T16)', () => {
     unsubscribe();
     handle.dispose();
   });
+  it('counts time on a site as distraction only from the moment it was added (CR5.T2)', async () => {
+    // The tab is already open when the session starts, but the site is not
+    // blocked yet, so that time is focus.
+    tabEventSource.setInitialTabs([{ id: 1, url: 'https://facebook.com/' }]);
+    const { store, handle } = startWiredBackground();
+    await handle.ready;
+    await store.getState().startTimer();
+
+    now = T0 + 30_000;
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'facebook.com' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    now = T0 + 40_000;
+    await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 1_460 } });
+
+    // 30s before the add stay focus; only the 10s after it are distraction,
+    // with no retroactive malus for the time before.
+    expect(store.getState().timer.focusedMs).toBe(30_000);
+    expect(store.getState().timer.distractedMs).toBe(10_000);
+    handle.dispose();
+  });
 });
 

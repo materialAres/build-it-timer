@@ -17,6 +17,7 @@ import {
 } from '@/lib/messaging/messages.types';
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
+import { isAddDirectionMutation } from '@/lib/messaging/blocklist-payload';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { calculateBuiltCharacters } from '@/lib/score/calculate-built-characters';
 import {
@@ -634,7 +635,17 @@ export function startBackground(
           ) {
             growthTick.account();
           }
+          // CR5.T2: a site added mid-session distracts only from now on. The
+          // stretch so far is credited under the old blocklist first, then the
+          // open tabs are re-read under the new one.
+          const addsSites =
+            store.getState().timer.status === 'running' &&
+            (message.type === 'BLOCKLIST_ADD_SITE' ||
+              message.type === 'PRESET_TOGGLE') &&
+            isAddDirectionMutation(message);
+          if (addsSites) growthTick.account();
           handleMutation(message);
+          if (addsSites) void refreshDistractionTracker();
         },
         busLog,
       ),

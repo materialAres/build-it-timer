@@ -56,3 +56,19 @@ export function isWellFormedBlocklistMutation(
       return isNonEmptyString(payload.presetId);
   }
 }
+
+/**
+ * Whether a blocklist mutation can only *tighten* the list (CR5.T2): adding a
+ * site, or switching a preset on. These are the only requests the add-only
+ * window lets through mid-session; everything else loosens or reshapes the list
+ * and stays `idle`-only. Read from the raw payload and total, because the lock
+ * is decided *before* the payload is trusted: a toggle whose `applied` is not
+ * exactly `true` is never add-direction, so a forged target cannot widen the
+ * window.
+ */
+export function isAddDirectionMutation(message: BlocklistMutation): boolean {
+  if (message.type === 'BLOCKLIST_ADD_SITE') return true;
+  if (message.type !== 'PRESET_TOGGLE') return false;
+  const payload: unknown = message.payload;
+  return isRecord(payload) && payload.applied === true;
+}

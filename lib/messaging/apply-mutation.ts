@@ -12,8 +12,13 @@ import {
   saveUserPreset,
 } from '@/lib/blocking/saved-presets';
 import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
-import { isBlocklistEditable, type BlocklistState } from '@/store';
 import {
+  isBlocklistAddAllowed,
+  isBlocklistEditable,
+  type BlocklistState,
+} from '@/store';
+import {
+  isAddDirectionMutation,
   isWellFormedBlocklistMutation,
   type BlocklistMutation,
 } from './blocklist-payload';
@@ -126,8 +131,13 @@ export function createMutationHandler(
       default: {
         // CR2.T2: the background is the single writer, so the lock must hold
         // here too — a stale or forged message would otherwise bypass the
-        // store/UI guard. Only the message type is logged, never the payload.
-        if (!isBlocklistEditable(store.getState().timer.status)) {
+        // store/UI guard. CR5.T2: a message that only adds sites has the wider
+        // window. Only the message type is logged, never the payload.
+        const { status } = store.getState().timer;
+        const allowed = isAddDirectionMutation(message)
+          ? isBlocklistAddAllowed(status)
+          : isBlocklistEditable(status);
+        if (!allowed) {
           logger.debug(
             'blocklist mutation ignored while the timer is not idle',
             { type: message.type },

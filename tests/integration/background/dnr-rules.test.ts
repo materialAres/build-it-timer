@@ -113,7 +113,7 @@ describe('background DNR rule application (M2.T7)', () => {
     handle.dispose();
   });
 
-  it('keeps the rules stable when a blocklist change is attempted while running (CR2.T2)', async () => {
+  it('keeps the rules stable when a removal is attempted while running (CR2.T2)', async () => {
     const dnr = installDynamicRulesFake();
     const handle = startBackground({ alarmProvider: new FakeAlarmProvider(0) });
     await handle.ready;
@@ -125,11 +125,11 @@ describe('background DNR rule application (M2.T7)', () => {
     await handle.store.getState().startTimer();
     await flush();
 
-    // The session is running: the mutation is rejected, so neither the store
+    // The session is running: a removal is rejected, so neither the store
     // nor the live ruleset changes.
     await sendMessage({
-      type: 'BLOCKLIST_ADD_SITE',
-      payload: { site: 'instagram.com' },
+      type: 'BLOCKLIST_REMOVE_SITE',
+      payload: { site: BLOCKED_DOMAIN },
     });
     await flush();
 
@@ -139,6 +139,38 @@ describe('background DNR rule application (M2.T7)', () => {
     expect(dnr.liveRules().map((rule) => rule.condition.urlFilter)).toEqual([
       `||${BLOCKED_DOMAIN}^`,
     ]);
+
+    handle.dispose();
+  });
+
+  it('blocks a site added while running at once and clears it on Reset (CR5.T2)', async () => {
+    const dnr = installDynamicRulesFake();
+    const handle = startBackground({ alarmProvider: new FakeAlarmProvider(0) });
+    await handle.ready;
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: BLOCKED_DOMAIN },
+    });
+    await handle.store.getState().startTimer();
+    await flush();
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'instagram.com' },
+    });
+    await flush();
+
+    expect(
+      dnr.liveRules().map((rule) => rule.condition.urlFilter).sort(),
+    ).toEqual([`||${BLOCKED_DOMAIN}^`, '||instagram.com^']);
+
+    await handle.store.getState().resetTimer();
+    await flush();
+
+    expect(dnr.liveRules()).toEqual([]);
+    // The list itself keeps both sites for the next session.
+    expect(handle.store.getState().blocklist.blocklist).toHaveLength(2);
 
     handle.dispose();
   });
