@@ -61,8 +61,8 @@ function isTimerStatus(value: unknown): value is TimerStatus {
  *
  * Every blocklist shape is accepted (CR1.T4, CR4.T3): version 3
  * (`{ blocklist, appliedPresetIds, userPresets }`), version 2 (`customTags`,
- * tagged entries) and the legacy version 1, which also has a second list. The content script reads the raw value and does not run
- * zustand's migration, so the legacy shape is delegated to
+ * tagged entries) and the legacy version 1, which also has a second list. The
+ * content script reads the raw value and does not run zustand's migration, so the legacy shape is delegated to
  * `migrateBlocklistState` here — the only module allowed to interpret it. A
  * blocklist field that is present but malformed is still rejected rather than
  * silently treated as empty.

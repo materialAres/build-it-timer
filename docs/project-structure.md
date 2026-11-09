@@ -26,9 +26,10 @@ timer-focus/
 │   │   ├── TimerControls.tsx
 │   │   └── TimerDisplay.tsx     # hh:mm:ss format
 │   ├── blocklist/
-│   │   ├── PresetPicker.tsx
-│   │   ├── TagEditor.tsx
-│   │   └── SiteList.tsx
+│   │   ├── PresetPicker.tsx     # built-in and saved presets as toggles (CR4)
+│   │   ├── SiteList.tsx         # the single blocked-sites list
+│   │   ├── SiteEntry.tsx        # one row: domain, source chips, remove
+│   │   └── site-list.styles.ts
 │   ├── score/
 │   │   ├── ScoreBadge.tsx
 │   │   ├── PopulationCounter.tsx
