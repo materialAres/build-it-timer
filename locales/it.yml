@@ -59,6 +59,7 @@ blocklist:
   addTo: 'Aggiungi a $1'
   entriesAriaLabel: '$1 voci'
   exampleDomain: example.com
+  empty: Nessun sito bloccato.
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
   added: 'Aggiunto $1.'

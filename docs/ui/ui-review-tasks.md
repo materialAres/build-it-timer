@@ -48,6 +48,8 @@ Notes:
 #### UI.T1 — Blocklist: one list, shown once, owning the tab
 **Priority**: P0 · **Command**: `/impeccable layout` · **Dependencies**: none
 
+**Status**: done (2026-11-09, uncommitted). One list in `SiteList` with a heading count, empty state and source chips (`SiteEntry`, `lib/blocking/entry-sources.ts`); presets passed in as the `quickAdd` slot with a visible label; the list scrolls inside a 17rem cap (fullest locked state: 455px). `TagEditor` is no longer rendered; the file and its tests stay until CR4.T5 deletes them. Visual drift (blue, grey buttons) is left to UI.T5.
+
 **Problem**
 - `TagEditor.tsx:198-207` renders every blocked domain with tag checkboxes; `SiteList.tsx:159-176` renders the same domains again under "Blocked sites".
 - `App.tsx:71-86` orders the tab Presets → tag editor (no heading) → Blocked sites, so the core list comes last and the only heading sits mid-tab.

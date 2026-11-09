@@ -10,8 +10,17 @@ const PRESET_PICKER_STYLES = `
   .preset-picker {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 0.4rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .preset-picker__label {
+    margin-right: 0.2rem;
+    color: #e6e6e6;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.8;
   }
   .preset-picker__button {
     padding: 0.3rem 0.7rem;
@@ -36,6 +45,10 @@ const PRESET_PICKER_STYLES = `
  * expansion (reusing the M2.T4/M2.T20 logic) and forwards one mutation to the
  * background (M1.T10).
  */
+// A visible label (UI.T1): the pills sit under the add field, so the row has to
+// say what it is instead of relying on an invisible group name.
+const PRESET_PICKER_LABEL_ID = 'preset-picker-label';
+
 export function PresetPicker() {
   const editable = useAppStore(selectBlocklistEditable);
 
@@ -43,9 +56,12 @@ export function PresetPicker() {
     <div
       className="preset-picker"
       role="group"
-      aria-label={i18n.t('blocklist.presets')}
+      aria-labelledby={PRESET_PICKER_LABEL_ID}
     >
       <style>{PRESET_PICKER_STYLES}</style>
+      <span id={PRESET_PICKER_LABEL_ID} className="preset-picker__label">
+        {i18n.t('blocklist.presets')}
+      </span>
       {PRESETS.map((preset) => (
         <button
           key={preset.id}

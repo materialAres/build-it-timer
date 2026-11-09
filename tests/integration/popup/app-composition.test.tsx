@@ -186,6 +186,31 @@ describe('popup App composition (M3.T4)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows each blocked site once, after the add form and the presets (UI.T1)', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Apply Social preset' }),
+    );
+    await flushAsync();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('instagram.com')).toHaveLength(1);
+    });
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+
+    const input = screen.getByLabelText('Add to Blocked sites');
+    const presets = screen.getByRole('group', { name: 'Presets' });
+    const list = screen.getByRole('list', { name: 'Blocked sites entries' });
+    expect(
+      input.compareDocumentPosition(presets) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      presets.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('starts the session from the UI and updates the display through the background', async () => {
     render(<App />);
 

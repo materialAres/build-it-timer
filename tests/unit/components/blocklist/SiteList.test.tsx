@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SiteList } from '@/components/blocklist/SiteList';
 import { useAppStore } from '@/store';
@@ -175,9 +181,7 @@ describe.each(['running', 'paused', 'completed'] as const)(
 
       fireEvent.submit(container.querySelector('form') as HTMLFormElement);
 
-      expect(
-        screen.queryByText('Added facebook.com.'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
       expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
     });
 
@@ -196,3 +200,73 @@ describe.each(['running', 'paused', 'completed'] as const)(
     });
   },
 );
+
+describe('SiteList layout (UI.T1)', () => {
+  beforeEach(() => {
+    resetBlocklist();
+    setStatus('idle');
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows the number of blocked sites next to the heading', () => {
+    resetBlocklist([entry('a.com'), entry('b.com'), entry('c.com')]);
+    render(<SiteList />);
+
+    const heading = screen.getByRole('heading', { name: /Blocked sites/ });
+    expect(heading).toHaveTextContent('3');
+  });
+
+  it('shows an empty state only when the list has no sites', () => {
+    const { rerender } = render(<SiteList />);
+    expect(screen.getByText('No sites blocked yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+
+    act(() => {
+      resetBlocklist([entry('a.com')]);
+    });
+    rerender(<SiteList />);
+
+    expect(screen.queryByText('No sites blocked yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('list')).toBeInTheDocument();
+  });
+
+  it('labels each row with the presets and tags it came from', () => {
+    useAppStore.setState({
+      blocklist: {
+        blocklist: [
+          { domain: { value: 'x.com' }, tagIds: ['social', 'work'] },
+          entry('mine.com'),
+        ],
+        customTags: [{ id: 'work', label: 'Work' }],
+      },
+    });
+    render(<SiteList />);
+
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('x.com');
+    expect(rows[0]).toHaveTextContent('Social');
+    expect(rows[0]).toHaveTextContent('Work');
+    expect(rows[1]).toHaveTextContent('mine.com');
+    expect(rows[1]?.querySelectorAll('.site-entry__source')).toHaveLength(0);
+  });
+
+  it('renders the quick-add slot between the add form and the list', () => {
+    resetBlocklist([entry('a.com')]);
+    render(<SiteList quickAdd={<div data-testid="quick-add" />} />);
+
+    const input = screen.getByLabelText('Add to Blocked sites');
+    const quickAdd = screen.getByTestId('quick-add');
+    const list = screen.getByRole('list');
+
+    expect(
+      input.compareDocumentPosition(quickAdd) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      quickAdd.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});

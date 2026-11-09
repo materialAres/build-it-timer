@@ -22,7 +22,6 @@ import { ScoreBadge } from '@/components/score/ScoreBadge';
 import { PopulationCounter } from '@/components/score/PopulationCounter';
 import { SessionHistory } from '@/components/score/SessionHistory';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
-import { TagEditor } from '@/components/blocklist/TagEditor';
 import { SiteList } from '@/components/blocklist/SiteList';
 import './App.css';
 
@@ -78,9 +77,10 @@ function BlocklistSection() {
           {i18n.t('blocklist.locked')}
         </p>
       ) : null}
-      <PresetPicker />
-      <TagEditor />
-      <SiteList />
+      {/* UI.T1: one list, shown once. The tag editor's per-site checkbox grid
+          duplicated every domain and changed nothing about blocking; custom
+          tags are reworked into saved presets by CR4. */}
+      <SiteList quickAdd={<PresetPicker />} />
     </div>
   );
 }

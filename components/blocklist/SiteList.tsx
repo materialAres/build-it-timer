@@ -1,94 +1,39 @@
 import { i18n } from '#i18n';
-import { useState, type SyntheticEvent } from 'react';
+import { useState, type ReactNode, type SyntheticEvent } from 'react';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
-import { selectBlocklist, selectBlocklistEditable, useAppStore } from '@/store';
-
-/**
- * The list's own stylesheet, consistent with the CRT/monospace look used by the
- * rest of the popup (M2.T14/M2.T17/M2.T18/M3.T1/M3.T2).
- */
-const SITE_LIST_STYLES = `
-  .site-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #e9ecef;
-  }
-  .site-list__title {
-    margin: 0;
-    font-size: 0.75rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.85;
-  }
-  .site-list__form {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .site-list__input {
-    flex: 1;
-    background: #0b0f14;
-    border: 1px solid #4dabf7;
-    color: inherit;
-    padding: 0.3rem 0.5rem;
-  }
-  .site-list__preview {
-    margin: 0;
-    font-size: 0.7rem;
-    color: #4dabf7;
-    opacity: 0.9;
-  }
-  .site-list__feedback {
-    margin: 0;
-    font-size: 0.75rem;
-  }
-  .site-list__feedback--error {
-    color: #ff6b6b;
-  }
-  .site-list__feedback--info {
-    color: #51cf66;
-  }
-  .site-list__entries {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .site-list__entry {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .site-list__domain {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`;
+import { computeEntrySourceLabels } from '@/lib/blocking/entry-sources';
+import { PRESETS } from '@/lib/blocking/presets';
+import {
+  selectBlocklist,
+  selectBlocklistEditable,
+  selectCustomTags,
+  useAppStore,
+} from '@/store';
+import { SiteEntry } from './SiteEntry';
+import { SITE_LIST_STYLES } from './site-list.styles';
 
 interface Feedback {
   readonly kind: 'error' | 'info';
   readonly text: string;
 }
 
+interface SiteListProps {
+  /** Rendered between the add form and the list (the preset quick-add row). */
+  readonly quickAdd?: ReactNode;
+}
+
 /**
- * Site CRUD UI for the blocklist (M3.T3, revised by CR1.T1).
+ * The Blocklist tab's single list (M3.T3, revised by CR1.T1 and UI.T1).
  *
- * Presentational: it reads the entries through the granular selector and never
- * computes list state itself. The input is canonicalized live with
- * `normalizeEntry` (M1.T2/M2.T21) both to preview the registrable domain and to
- * validate: an unparseable input or a "bare" public suffix is rejected with the
- * localized `blocklist.invalidUrl` message ("Enter a valid URL" in the EN
- * default) and is never dispatched. Duplicates are detected here only to produce
- * the visible feedback; the authoritative dedup stays in the store's pure
- * helpers (M2.T4).
+ * Presentational: entries come from the granular selector, the input is
+ * canonicalized live with `normalizeEntry` (M1.T2/M2.T21) to preview and
+ * validate, and duplicates are detected only for the visible feedback — the
+ * authoritative dedup stays in the store's pure helpers (M2.T4). Each domain is
+ * rendered exactly once (UI.T1), labelled with the presets/tags it came from.
  */
-export function SiteList() {
+export function SiteList({ quickAdd }: SiteListProps) {
   const entries = useAppStore(selectBlocklist);
+  const customTags = useAppStore(selectCustomTags);
   const editable = useAppStore(selectBlocklistEditable);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -121,61 +66,71 @@ export function SiteList() {
   return (
     <section className="site-list" aria-label={title}>
       <style>{SITE_LIST_STYLES}</style>
-      <h3 className="site-list__title">{title}</h3>
+      <div className="site-list__compose">
+        <h3 className="site-list__title">
+          <span className="site-list__title-text">{title}</span>
+          <span className="site-list__count">{entries.length}</span>
+        </h3>
 
-      <form className="site-list__form" onSubmit={handleSubmit}>
-        <input
-          className="site-list__input"
-          type="text"
-          value={value}
-          disabled={!editable}
-          aria-label={i18n.t('blocklist.addTo', [title])}
-          placeholder={i18n.t('blocklist.exampleDomain')}
-          onChange={(event) => {
-            setValue(event.target.value);
-            setFeedback(null);
-          }}
-        />
-        <button type="submit" disabled={!editable}>
-          {i18n.t('common.add')}
-        </button>
-      </form>
+        <form className="site-list__form" onSubmit={handleSubmit}>
+          <input
+            className="site-list__input"
+            type="text"
+            value={value}
+            disabled={!editable}
+            aria-label={i18n.t('blocklist.addTo', [title])}
+            placeholder={i18n.t('blocklist.exampleDomain')}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setFeedback(null);
+            }}
+          />
+          <button type="submit" disabled={!editable}>
+            {i18n.t('common.add')}
+          </button>
+        </form>
 
-      {editable && previewDomain !== null && previewDomain !== value.trim() ? (
-        <p className="site-list__preview" aria-live="polite">
-          → {previewDomain}
-        </p>
-      ) : null}
+        {editable &&
+        previewDomain !== null &&
+        previewDomain !== value.trim() ? (
+          <p className="site-list__preview" aria-live="polite">
+            → {previewDomain}
+          </p>
+        ) : null}
 
-      {editable && feedback !== null ? (
-        <p
-          className={`site-list__feedback site-list__feedback--${feedback.kind}`}
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
+        {editable && feedback !== null ? (
+          <p
+            className={`site-list__feedback site-list__feedback--${feedback.kind}`}
+            role={feedback.kind === 'error' ? 'alert' : 'status'}
+          >
+            {feedback.text}
+          </p>
+        ) : null}
+
+        {quickAdd}
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="site-list__empty">{i18n.t('blocklist.empty')}</p>
+      ) : (
+        <ul
+          className="site-list__entries"
+          aria-label={i18n.t('blocklist.entriesAriaLabel', [title])}
         >
-          {feedback.text}
-        </p>
-      ) : null}
-
-      <ul
-        className="site-list__entries"
-        aria-label={i18n.t('blocklist.entriesAriaLabel', [title])}
-      >
-        {entries.map((entry) => (
-          <li key={entry.domain.value} className="site-list__entry">
-            <span className="site-list__domain">{entry.domain.value}</span>
-            <button
-              type="button"
-              disabled={!editable}
-              aria-label={i18n.t('common.remove', [entry.domain.value])}
-              onClick={() => {
-                useAppStore.getState().removeSite(entry.domain.value);
-              }}
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+          {entries.map((entry) => (
+            <SiteEntry
+              key={entry.domain.value}
+              domain={entry.domain.value}
+              sources={computeEntrySourceLabels(
+                entry.tagIds,
+                PRESETS,
+                customTags,
+              )}
+              editable={editable}
+            />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
