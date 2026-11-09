@@ -231,7 +231,7 @@ The system is flat. Surfaces don't lift. Depth comes from light: the glow on tex
 
 ## Shapes
 
-Lines are thin and corners are small. Frames, inputs and tabs use 1px borders with 4px corners. Tabs round only their top corners and sit on the green rule below them. Actions and status markers (presets, export, tags, the score badge) are 999px pills drawn as 1px `currentColor` outlines. The overlay panel is the one larger radius (0.5rem). Nothing is filled solid.
+Lines are thin and corners are small. Frames, inputs and tabs use 1px borders with 4px corners. Tabs round only their top corners and sit on the green rule below them. Actions and status markers (presets, export, source chips, the score badge) are 999px pills drawn as 1px `currentColor` outlines. The overlay panel is the one larger radius (0.5rem). Nothing is filled solid.
 
 ## Components
 
@@ -245,10 +245,10 @@ Quiet, labeled like a terminal.
 ### Buttons
 - **Outline pill (canonical):** a 1px `currentColor` border, 999px radius, transparent background, phosphor green, 0.06em spacing, a 4px glow, and a phosphor-wash fill on hover. Used for export, and it's the intended style for every popup action.
 - **Overlay button:** 4px corners, 0.5rem 1.25rem padding, an `overlay-frame` border. The danger variant uses `alarm-red-frame` with `alarm-red-soft` text. Focus is a 2px phosphor outline offset by 2px.
-- **Toggle:** the pressed state turns the border and text phosphor green and adds a glow. It's not used for the duration presets; they use the Duration Drum below.
+- **Toggle:** the pressed state turns the border and text phosphor green and adds a glow. The blocklist preset row uses it (`aria-pressed`, a count inside, 0.4 opacity and no glow when the list is locked). It's not used for the duration presets; they use the Duration Drum below.
 
 ### Chips
-- **Tag chip:** an outline pill with 0.1rem 0.5rem padding. When it's the active filter, it adds a glow and a wash fill.
+- **Source chip:** on each blocklist row, a read-only outline pill (1px phosphor border at 35% opacity, phosphor text at 80% opacity, 0.65rem uppercase, 0.08em spacing, 0 0.4rem padding) naming the preset that put the site on the list. It has no hover, focus or active state because it isn't interactive.
 
 ### Inputs / Fields
 - **Style:** an `ink-field` background, a 1px border, inherited text color, 0.3rem 0.5rem padding.
@@ -296,7 +296,7 @@ A 1px 60% amber frame, amber text, 0.75rem, 0.35rem 0.5rem padding. Shown in the
 - **Do** keep the city font's line height at 1 and the canvas content box at exactly 60ch × 20 rows.
 
 ### Don't:
-- **Don't** add a second interface accent. The blue (`#4dabf7`) on blocklist presets, tag chips, inputs and the domain preview is a known deviation to move to phosphor green. Score-tier blue stays.
+- **Don't** add a second interface accent. The blue (`#4dabf7`) on the blocklist input and the domain preview is a known deviation to move to phosphor green. Score-tier blue stays.
 - **Don't** leave native buttons unstyled. Start/Pause/Reset currently render as browser-default grey sans buttons, a known deviation to restyle as outline pills. The duration presets are a row of grey buttons, a known deviation to replace with the Duration Drum.
 - **Don't** rely on inherited font settings in the popup. The timer readout and controls currently render in Chrome's injected sans at 12px, a known deviation. The countdown becomes the Numeral in the Duration Drum's slot.
 - **Don't** use offset drop shadows, gradients or solid-filled buttons. The Duration Drum's edge fade is a `mask-image`, not a painted gradient, and is the only exception.

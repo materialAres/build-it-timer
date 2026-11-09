@@ -8,6 +8,7 @@ Start a focus session and every 2 seconds of undistracted work grows your city b
 
 * **Timer** — start / pause / reset a countdown session. Remaining time is persisted and reconciled with the browser alarm clock, so it survives a service-worker restart.
 * **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session. The list can only be edited while no session is in progress (before Start or after Reset).
+* **Presets** — each built-in preset (Social, Video, …) is a toggle over the one list: switching it on adds its sites, switching it off removes only the sites nothing else asked for (a site you added by hand, or one from another active preset, stays). The current list can be saved as a named preset (up to 24 characters), renamed or deleted; deleting a preset never unblocks its sites.
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
 * **Score** — based on the percentage of the city built (focus characters minus distraction characters, never below 0): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
 * **Population** — each character earns a rate by completion band (5 below 30%, 10 from 30%, 20 from 70%), and finishing the whole city adds a bonus of 7% of the population reached.
@@ -99,6 +100,8 @@ The project is developed task-by-task from `docs/roadmap-en.md`. As of the last 
 * **Milestone 4 — polish:** in progress (proportional malus and logging done; TexturePacker skipped; accessibility and end-to-end tests remaining).
 * **Change request CR1 — single blocklist:** completed (the blocklist is the only site list across the UI, protocol, persisted data, enforcement and tests; version-1 payloads are migrated on read).
 * **Change request CR2 — blocklist lock:** completed (the blocklist is editable only while the timer is `idle`; enforced in the store and the background handler, reflected by the disabled editors and the lock notice).
+
+* **Change request CR4 — preset toggles:** completed (presets are toggles over the single list, saved presets replace custom tags, the persisted blocklist is migrated to version 3 on read).
 
 Run `bun run test`, `bun run compile`, `bun run lint` and **both** builds (`bun run build` and `bun run build:firefox`) before considering a task complete. See `docs/changelog.md` for the detailed, per-task status.
 

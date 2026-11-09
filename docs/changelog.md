@@ -6,7 +6,7 @@ description: Rules for updating the changelog
 # Changelog — Timer Focus (BuildIt)
 
 > Log of completed activities, by task from `docs/roadmap-en.md`.
-> Updated to: **CR4.T5** (change request CR4 **in progress** — analysis, pure preset logic, store with persistence v3, the hardened message boundary and the popup (toggles, saved presets) are done; the final docs and gate (CR4.T6) remain; Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
+> Updated to: **CR4.T6** (change request CR4 **completed** — presets are toggles over the single blocklist and saved presets replace custom tags: analysis, pure logic, store with persistence v3, the hardened message boundary, the popup and the final docs and gate (CR4.T1–T6); Milestone 3 completed, Milestone 4 in progress; change request CR1 **completed**; change request CR3 **completed** — score and population derive from the percentage of city characters built (CR3.T1–T11); change request CR2 **completed** — the blocklist is editable only while the timer is `idle`, enforced in the store (CR2.T1), in the background (CR2.T2) and reflected by the whole blocklist tab (CR2.T3a–c), with documentation and final verification done (CR2.T4); ten post-roadmap interventions; M4.T2 skipped; M4.T3 split into a–e and now complete).
 > Sources of truth: `docs/roadmap-en.md`, `package.json`, `git log`.
 
 ## Current status
@@ -19,9 +19,9 @@ description: Rules for updating the changelog
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
-- Change request CR4 (presets as toggles, saved custom presets) — **in progress**: CR4.T1 (analysis), CR4.T2 (pure logic), CR4.T3 (store model, persistence v3), CR4.T4 (message boundary) and CR4.T5 (popup) done; CR4.T6 remaining. CR4.T5 also completes UI.T2 and UI.T3 of `docs/ui/ui-review-tasks.md`. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
+- Change request CR4 (presets as toggles, saved custom presets) — **completed**: CR4.T1 (analysis), CR4.T2 (pure logic), CR4.T3 (store model, persistence v3), CR4.T4 (message boundary), CR4.T5 (popup) and CR4.T6 (documentation and final verification) done. CR4.T5 also completes UI.T2 and UI.T3 of `docs/ui/ui-review-tasks.md`. The UI side of the plan is tracked in `docs/ui/ui-review-tasks.md`, where UI.T1 (single blocklist list) is already done outside the roadmap.
 - Post-roadmap bug fixes — **I001 done** (countdown never decremented); **I002 open** (scattered city draw, see `docs/issue/I002-scattered-city-draw.md`); **I003 done** (popup city area enlarged to 60 × 20 + growth engine floor ceiling raised); **I004 done** (population counter frozen at 0 during a running session); **I005 done** (user-selectable focus duration with duration-neutral growth/malus); **I006 done** (city and population froze when the popup was closed); **I007 done** (Start stayed clickable after the session completed); **I008 done** (blocked-site overlay reappeared after "Yes"); **I009 done** (malus not applied to a blocked site already open at session start); **I010 done** (focus time lost before the first checkpoint: a perfect session ended at 599 characters).
-- Tests: `bun run test` → **960 passing tests** across 83 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file).
+- Tests: `bun run test` → **960 passing tests** across 83 files (green; UI.T1, which has no roadmap card, added 11 tests/1 file, CR4.T2 added 30 tests/2 files, CR4.T3 is neutral: the tag tests were replaced by preset, sanitizer and migration tests, CR4.T4 added 27 tests/1 file, CR4.T5 added 24 tests/1 file, CR4.T6 is documentation only).
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → project files **clean**; the command exits non-zero because of 5 parsing errors in `.claude/skills/impeccable/scripts/*.js` (installed skill scripts, commit `1895c37`), tracked in Open issues #21.
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
@@ -127,7 +127,8 @@ description: Rules for updating the changelog
 | CR4.T2 | Pure preset-toggle and source logic in `lib/blocking/` | completed | `23a8649` |
 | CR4.T3 | Store model, slice actions and persistence v3 migration | completed | `52192e1` |
 | CR4.T4 | Preset mutation messages and background handler | completed | `502f7f7` |
-| CR4.T5 | Popup: preset toggles, saved-preset management, tag editor removed | completed | — (to be committed) |
+| CR4.T5 | Popup: preset toggles, saved-preset management, tag editor removed | completed | `0706f87` |
+| CR4.T6 | Documentation, changelog and final verification | completed | — (to be committed) |
 | PR6.T2 | `calculateScore` treats a non-finite count as `'bad'` | completed | `6a86fd5` |
 | PR6.T3 | Remove the unused `calculateCompletion` helper | completed | `14384b6` |
 | PR6.T4 | Update the PR #6 description (commit list, unrelated changes, review outcome) | completed | — (to be committed) |
@@ -1347,6 +1348,16 @@ description: Rules for updating the changelog
 - Tests: `tests/unit/lib/blocking/saved-presets.test.ts` (+5, `validatePresetName`, written first); `tests/unit/components/blocklist/PresetPicker.test.tsx` (queries by the new accessible name; count, tooltip, saved presets next to built-ins); new `tests/unit/components/blocklist/SavedPresets.test.tsx` (save, refused names with their reason, empty list, cancel, rename, delete with confirmation keeping the sites, Keep, locked in `running`/`paused`/`completed` and re-enabled at `idle`); `tests/unit/i18n/i18n.test.tsx` and `tests/integration/popup/app-composition.test.tsx` updated for the new label.
 - Relevant notes/decisions: checked in the built extension at 420px with Playwright (empty, preset on, refused name, delete confirmation, locked): the tab stays well under the 600px cap; the confirmation first wrapped its Keep button, so the prompt now takes its own line, in the lock-notice amber. "Edit saved presets" stays clickable while locked so the user can still see the list; every action inside is disabled.
 - Acceptance criteria: verified — `aria-pressed`, applied state and count, dimmed when locked, domains inspectable before applying; saved presets next to built-ins with save, rename and delete (confirmation); rows show source chips and no tag editor remains; all strings in EN and IT with the drift test green. Gate: `bun run compile` clean, project lint clean, 960 tests across 83 files green, both builds succeed, `bun run e2e` → 1 passing test.
+- Commit: `0706f87 feat(CR4.T5): add preset toggles and saved presets`.
+
+### CR4.T6 — Documentation, changelog and final verification
+- CR4 is closed: `docs/features-analysis/saved-presets.md` is marked implemented; the README describes the preset toggles, saved presets and the v3 migration (Blocklist bullet, Status entry); `DESIGN.md` documents the read-only source chip (replacing the tag chip), the preset toggle's use and its locked state, and narrows the blue deviation to the blocklist input and the domain preview; the Serena `core` memory records CR4 as complete.
+- Changelog: one entry per CR4 task (T1–T6); the v3 migration (v1/v2/v3 payloads, `migratePersistedBlocklist`) is recorded in the CR4.T3 entry; the CR4.T5 hash is filled in.
+- Files created/modified: `docs/features-analysis/saved-presets.md`, `README.md`, `DESIGN.md`, `.serena/memories/core.md`, `docs/changelog.md`. No production code or test changed, so the counts are unchanged.
+- Dependencies added: none.
+- Tests: none added; the gate below was re-run on the committed CR4.T5 tree.
+- Relevant notes/decisions: the preset messages stay `idle`-only; CR5 (planned) adds the add-direction window. The UI critique items that remain (UI.T4 onward) are tracked in `docs/ui/ui-review-tasks.md`, outside CR4.
+- Acceptance criteria: verified — `bun run compile` clean; `bun run lint` shows no project-file finding (5 parsing errors remain in `.claude/skills/impeccable/scripts/*.js`, Open issues #21); `bun run test` → 960 passing tests across 83 files; `bun run build` and `bun run build:firefox` succeed; `bun run e2e` → 1 passing test.
 - Commit: — (to be committed).
 
 ---

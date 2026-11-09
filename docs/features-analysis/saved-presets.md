@@ -3,7 +3,7 @@
 > Change request: **presets become toggles over the single blocklist, and custom
 > tags become saved presets** (CR4; origin: UI critique UI.T2/UI.T3 in
 > `docs/ui/ui-review-tasks.md`).
-> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic), CR4.T3 (store, v3 migration), CR4.T4 (message boundary) and CR4.T5 (popup) are implemented; CR4.T6 (docs and final gate) remains. Names
+> Status: **implemented** — written by CR4.T1; CR4.T2 (pure logic), CR4.T3 (store, v3 migration), CR4.T4 (message boundary), CR4.T5 (popup) and CR4.T6 (docs and final gate) are done. Names
 > below refer to the code *before* CR4 unless stated otherwise; references use
 > symbols, not line numbers, because the files change under the following tasks.
 
