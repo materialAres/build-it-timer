@@ -1,29 +1,26 @@
 import type { AppStore } from '@/store';
-import { getPresetById } from '@/lib/blocking/presets';
-import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
 import {
   addBlocklistSite,
-  addPresetToBlocklist,
-  assignTagToSite,
-  unassignTagFromSite,
   removeBlocklistSite,
-  upsertTag,
-  removeTag,
-  isBlocklistEditable,
-  type BlocklistState,
-} from '@/store';
+} from '@/lib/blocking/blocklist-sites';
+import { togglePreset } from '@/lib/blocking/preset-toggle';
+import { PRESETS } from '@/lib/blocking/presets';
+import {
+  deleteUserPreset,
+  findPreset,
+  renameUserPreset,
+  saveUserPreset,
+} from '@/lib/blocking/saved-presets';
+import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
+import { isBlocklistEditable, type BlocklistState } from '@/store';
 import type { MutationMessage } from './messages.types';
-import type { Tag } from '@/store/store.types';
 import { createLogger, type Logger } from '@/utils/logger';
 
-function isTag(value: unknown): value is Tag {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as { id?: unknown; label?: unknown };
-  return typeof candidate.id === 'string' && typeof candidate.label === 'string';
-}
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
 
 /**
- * Apply one blocklist/tag mutation to the blocklist state. Returns the *same*
+ * Apply one blocklist/preset mutation to the blocklist state. Returns the *same*
  * reference when the payload is malformed or unknown, so an invalid message
  * neither mutates the store nor triggers a persist (forward-compatible with
  * M5.T1 hardening).
@@ -50,37 +47,31 @@ function applyBlocklistMutation(
       if (typeof site !== 'string' || site.length === 0) return state;
       return removeBlocklistSite(state, site);
     }
-    case 'BLOCKLIST_APPLY_PRESET': {
-      const { presetId } = message.payload;
-      if (typeof presetId !== 'string' || presetId.length === 0) return state;
-      const preset = getPresetById(presetId);
-      if (preset === undefined) return state;
-      // The whole preset is expanded in a single state update (M3.T1), so the
+    case 'PRESET_TOGGLE': {
+      const { presetId, applied } = message.payload;
+      if (!isNonEmptyString(presetId) || typeof applied !== 'boolean')
+        return state;
+      const preset = findPreset(state, presetId);
+      // The whole preset is applied in a single state update (M3.T1), so the
       // mutation persists once no matter how many domains it contains.
-      return addPresetToBlocklist(state, preset);
+      return preset === undefined
+        ? state
+        : togglePreset(state, preset, applied);
     }
-    case 'TAG_UPSERT': {
-      if (!isTag(message.payload)) return state;
-      return upsertTag(state, message.payload);
+    case 'PRESET_SAVE': {
+      const { id, name } = message.payload;
+      if (!isNonEmptyString(id) || typeof name !== 'string') return state;
+      return saveUserPreset(state, id, name, PRESETS);
     }
-    case 'TAG_REMOVE': {
-      const { tagId } = message.payload;
-      if (typeof tagId !== 'string' || tagId.length === 0) return state;
-      return removeTag(state, tagId);
+    case 'PRESET_RENAME': {
+      const { presetId, name } = message.payload;
+      if (!isNonEmptyString(presetId) || typeof name !== 'string') return state;
+      return renameUserPreset(state, presetId, name, PRESETS);
     }
-    case 'TAG_ASSIGN': {
-      const { site, tagId } = message.payload;
-      if (typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return assignTagToSite(state, site, tagId);
-    }
-    case 'TAG_UNASSIGN': {
-      const { site, tagId } = message.payload;
-      if (typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return unassignTagFromSite(state, site, tagId);
+    case 'PRESET_DELETE': {
+      const { presetId } = message.payload;
+      if (!isNonEmptyString(presetId)) return state;
+      return deleteUserPreset(state, presetId);
     }
     default:
       return state;

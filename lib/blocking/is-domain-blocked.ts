@@ -1,8 +1,14 @@
 import type { BlocklistEntry } from '@/store/store.types';
 
+/**
+ * What enforcement reads of an entry: the domain only (CR4). Sources
+ * (`manual`, `presetIds`) are presentation and never change what is blocked.
+ */
+export type BlockedEntry = Pick<BlocklistEntry, 'domain'>;
+
 /** The blocklist as a context needs it to decide whether a domain is blocked. */
 export interface BlockDecisionInput {
-  readonly blocklist: ReadonlyArray<BlocklistEntry>;
+  readonly blocklist: ReadonlyArray<BlockedEntry>;
 }
 
 /**

@@ -1,10 +1,9 @@
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import type {
-  PresetBlocklistState,
-  PresetCoverage,
-  PresetShape,
-  SourcedEntry,
-} from '@/lib/blocking/preset-toggle.types';
+  BlocklistEntry,
+  BlocklistState,
+  Preset,
+} from '@/store/store.types';
 
 // Pure preset toggle logic (CR4.T2, decisions in docs/features-analysis/saved-presets.md).
 // Every function returns the *same* state reference when nothing changes, so the
@@ -12,16 +11,22 @@ import type {
 // never reads the clock or entropy. Saved-preset operations live in
 // `saved-presets.ts`.
 
+/** How many of a preset's domains the list currently carries as its own. */
+export interface PresetCoverage {
+  readonly covered: number;
+  readonly total: number;
+}
+
 export function isPresetApplied(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   presetId: string,
 ): boolean {
   return state.appliedPresetIds.includes(presetId);
 }
 
 export function computePresetCoverage(
-  state: PresetBlocklistState,
-  preset: PresetShape,
+  state: BlocklistState,
+  preset: Preset,
 ): PresetCoverage {
   const carried = new Set(
     state.blocklist
@@ -49,18 +54,15 @@ export function computePresetCoverage(
  * source — a manual entry, or one another applied preset covers, survives.
  */
 export function togglePreset(
-  state: PresetBlocklistState,
-  preset: PresetShape,
+  state: BlocklistState,
+  preset: Preset,
   applied: boolean,
-): PresetBlocklistState {
+): BlocklistState {
   return applied ? applyPreset(state, preset) : unapplyPreset(state, preset.id);
 }
 
-function applyPreset(
-  state: PresetBlocklistState,
-  preset: PresetShape,
-): PresetBlocklistState {
-  const entries: SourcedEntry[] = [...state.blocklist];
+function applyPreset(state: BlocklistState, preset: Preset): BlocklistState {
+  const entries: BlocklistEntry[] = [...state.blocklist];
   const indexByDomain = new Map(
     entries.map((entry, index) => [entry.domain.value, index]),
   );
@@ -101,10 +103,10 @@ function applyPreset(
 }
 
 function withoutSource(
-  entry: SourcedEntry,
+  entry: BlocklistEntry,
   presetId: string,
   orphanBecomesManual: boolean,
-): SourcedEntry | null {
+): BlocklistEntry | null {
   if (!entry.presetIds.includes(presetId)) return entry;
   const presetIds = entry.presetIds.filter((id) => id !== presetId);
   if (entry.manual || presetIds.length > 0) return { ...entry, presetIds };
@@ -112,10 +114,10 @@ function withoutSource(
 }
 
 export function dropSource(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   presetId: string,
   orphanBecomesManual: boolean,
-): ReadonlyArray<SourcedEntry> {
+): ReadonlyArray<BlocklistEntry> {
   return state.blocklist.flatMap((entry) => {
     const next = withoutSource(entry, presetId, orphanBecomesManual);
     return next === null ? [] : [next];
@@ -123,9 +125,9 @@ export function dropSource(
 }
 
 function unapplyPreset(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   presetId: string,
-): PresetBlocklistState {
+): BlocklistState {
   const carried = state.blocklist.some((entry) =>
     entry.presetIds.includes(presetId),
   );

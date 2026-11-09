@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createDistractionPredicate } from '@/entrypoints/background';
-import { addBlocklistSite, createAppStore, type AppStore } from '@/store';
+import { addBlocklistSite } from '@/lib/blocking/blocklist-sites';
+import { createAppStore, type AppStore } from '@/store';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 

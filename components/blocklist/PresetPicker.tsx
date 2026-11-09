@@ -1,6 +1,11 @@
 import { i18n } from '#i18n';
 import { PRESETS } from '@/lib/blocking/presets';
-import { selectBlocklistEditable, useAppStore } from '@/store';
+import {
+  selectBlocklistEditable,
+  selectIsPresetApplied,
+  useAppStore,
+} from '@/store';
+import type { Preset } from '@/store/store.types';
 
 /**
  * The picker's own stylesheet, consistent with the CRT/monospace look used by
@@ -38,12 +43,12 @@ const PRESET_PICKER_STYLES = `
 `;
 
 /**
- * Preset selection UI (M3.T1): lists the ready-made presets (M2.T5) and applies
- * one to the blocklist with a **single** store action. The component is
- * presentational — it holds no expansion logic and never normalizes or expands
- * domains itself; it only invokes `applyPreset`, which owns the single-update
- * expansion (reusing the M2.T4/M2.T20 logic) and forwards one mutation to the
- * background (M1.T10).
+ * Preset selection UI (M3.T1, toggles since CR4.T3): each ready-made preset
+ * (M2.T5) is a toggle over the blocklist, switched with a **single** store
+ * action. The component is presentational — it holds no expansion logic; it
+ * only invokes `togglePreset` with the target state, and the action owns the
+ * single-update change and forwards one mutation to the background (M1.T10).
+ * Saved-preset management and the applied count arrive with CR4.T5.
  */
 // A visible label (UI.T1): the pills sit under the add field, so the row has to
 // say what it is instead of relying on an invisible group name.
@@ -63,20 +68,32 @@ export function PresetPicker() {
         {i18n.t('blocklist.presets')}
       </span>
       {PRESETS.map((preset) => (
-        <button
-          key={preset.id}
-          type="button"
-          className="preset-picker__button"
-          data-preset-id={preset.id}
-          disabled={!editable}
-          aria-label={i18n.t('blocklist.applyPreset', [preset.name])}
-          onClick={() => {
-            useAppStore.getState().applyPreset(preset.id);
-          }}
-        >
-          {preset.name}
-        </button>
+        <PresetToggle key={preset.id} preset={preset} editable={editable} />
       ))}
     </div>
+  );
+}
+
+interface PresetToggleProps {
+  readonly preset: Preset;
+  readonly editable: boolean;
+}
+
+function PresetToggle({ preset, editable }: PresetToggleProps) {
+  const applied = useAppStore(selectIsPresetApplied(preset.id));
+  return (
+    <button
+      type="button"
+      className="preset-picker__button"
+      data-preset-id={preset.id}
+      aria-pressed={applied}
+      disabled={!editable}
+      aria-label={i18n.t('blocklist.applyPreset', [preset.name])}
+      onClick={() => {
+        useAppStore.getState().togglePreset(preset.id, !applied);
+      }}
+    >
+      {preset.name}
+    </button>
   );
 }

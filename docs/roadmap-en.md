@@ -1270,7 +1270,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T3 — Store model, slice actions and persistence v3 migration
 * **Objective**: move `BlocklistState` to entry sources, applied presets and user presets; migrate persisted v2 data.
-* **Files to create/modify**: `store/store.types.ts` (`BlocklistEntry`/`Preset` become the CR4.T2 shapes), `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
+* **Files to create/modify**: `store/store.types.ts` (`BlocklistEntry`, `Preset` without `tag`, `BlocklistState`), `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-state.ts` (new, v3 sanitizer), `lib/messaging/messages.types.ts` and `lib/messaging/apply-mutation.ts` (message types and the four preset cases, needed for the tree to compile; boundary hardening and lock tests stay in CR4.T4), `components/blocklist/PresetPicker.tsx`, `SiteList.tsx`, `entry-sources.ts` and the deletion of `TagEditor.tsx` (the minimum for the tree to compile: toggle with `aria-pressed`, chips from `presetIds`; the rest of the UI stays in CR4.T5), the tag keys in the locales, `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
 * **Dependencies**: CR4.T2
 * **Acceptance criteria**:
   - Actions `togglePreset`, `savePreset`, `renamePreset`, `deletePreset` replace `applyPreset` and the tag actions; granular selectors expose applied state and per-preset counts.
@@ -1288,7 +1288,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T5 — Popup: preset toggles, saved-preset management, tag editor removed
 * **Objective**: the UI side of UI.T2/UI.T3 on top of UI.T1's single list.
-* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `components/blocklist/SiteList.tsx`, `components/blocklist/TagEditor.tsx` (deleted), `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml` (component tests updated alongside).
+* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `components/blocklist/SiteList.tsx`, `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml` (component tests updated alongside).
 * **Dependencies**: CR4.T4, UI.T1
 * **Acceptance criteria**:
   - Preset buttons expose `aria-pressed`, show applied state and count, and are dimmed when locked; their domains are inspectable before applying.
@@ -1310,7 +1310,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 |---|---|---|
 | M2.T5 | a preset expands into entries tagged with its tag | a preset is toggled; entries record it as a source (CR4.T2/T3) |
 | M3.T1 | `PresetPicker` applies a preset once | presets toggle and show applied state and count (CR4.T5) |
-| M3.T2 | `TagEditor` creates, assigns, filters and deletes custom tags | removed; replaced by saved user presets (CR4.T5) |
+| M3.T2 | `TagEditor` creates, assigns, filters and deletes custom tags | removed in CR4.T3; replaced by saved user presets (management UI in CR4.T5) |
 | CR2.T1/T2/T3b | lock covers `createTag`/`deleteTag`/`assignTag`/`unassignTag` | lock covers the preset actions/messages instead (CR4.T3/T4) |
 
 ### 2.8 Change request CR5 — Allow adding sites during a session

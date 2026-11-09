@@ -1,4 +1,4 @@
-import type { SessionSummary, Tag } from '@/store/store.types';
+import type { SessionSummary } from '@/store/store.types';
 
 interface TimerTickMessage {
   readonly type: 'TIMER_TICK';
@@ -65,7 +65,7 @@ interface SessionEndedMessage {
 // transport is defined here: the CRUD semantics (normalization, dedup, "Enter a
 // valid URL") belong to M2.T4/M2.T21.
 //
-// CR1.T2: there is no `list` discriminator — every site/tag mutation addresses
+// CR1.T2: there is no `list` discriminator — every site mutation addresses
 // the single blocklist. A legacy sender still putting a `list` field in the
 // payload is ignored, never used to select a collection.
 
@@ -79,38 +79,30 @@ interface BlocklistRemoveSiteMessage {
   readonly payload: { readonly site: string };
 }
 
-interface BlocklistApplyPresetMessage {
-  readonly type: 'BLOCKLIST_APPLY_PRESET';
+// Preset mutations (CR4.T3, decisions in docs/features-analysis/saved-presets.md).
+// `PRESET_TOGGLE` carries the explicit target state, never a flip, so a
+// redelivered message cannot invert the result and the background can tell an
+// add-direction request (`applied: true`) from a loosening one (CR5). For
+// `PRESET_SAVE` the id is minted by the sender but the domains are not sent: the
+// background snapshots its own blocklist, which stays authoritative.
+interface PresetToggleMessage {
+  readonly type: 'PRESET_TOGGLE';
+  readonly payload: { readonly presetId: string; readonly applied: boolean };
+}
+
+interface PresetSaveMessage {
+  readonly type: 'PRESET_SAVE';
+  readonly payload: { readonly id: string; readonly name: string };
+}
+
+interface PresetRenameMessage {
+  readonly type: 'PRESET_RENAME';
+  readonly payload: { readonly presetId: string; readonly name: string };
+}
+
+interface PresetDeleteMessage {
+  readonly type: 'PRESET_DELETE';
   readonly payload: { readonly presetId: string };
-}
-
-interface TagUpsertMessage {
-  readonly type: 'TAG_UPSERT';
-  readonly payload: Tag;
-}
-
-interface TagRemoveMessage {
-  readonly type: 'TAG_REMOVE';
-  readonly payload: { readonly tagId: string };
-}
-
-// Tag assignment (M3.T2): attach/detach a custom tag to a single site. `site`
-// is untrusted (it may be a full URL) and goes through `normalizeEntry` on the
-// background side, exactly like every other entry mutation (M2.T4/M2.T21).
-interface TagAssignMessage {
-  readonly type: 'TAG_ASSIGN';
-  readonly payload: {
-    readonly site: string;
-    readonly tagId: string;
-  };
-}
-
-interface TagUnassignMessage {
-  readonly type: 'TAG_UNASSIGN';
-  readonly payload: {
-    readonly site: string;
-    readonly tagId: string;
-  };
 }
 
 export type RuntimeMessage =
@@ -124,11 +116,10 @@ export type RuntimeMessage =
   | SessionEndedMessage
   | BlocklistAddSiteMessage
   | BlocklistRemoveSiteMessage
-  | BlocklistApplyPresetMessage
-  | TagUpsertMessage
-  | TagRemoveMessage
-  | TagAssignMessage
-  | TagUnassignMessage;
+  | PresetToggleMessage
+  | PresetSaveMessage
+  | PresetRenameMessage
+  | PresetDeleteMessage;
 
 /**
  * The `type` values of `MutationMessage`, usable as a runtime list. Declared
@@ -143,11 +134,10 @@ export type RuntimeMessage =
 export const MUTATION_TYPES = [
   'BLOCKLIST_ADD_SITE',
   'BLOCKLIST_REMOVE_SITE',
-  'BLOCKLIST_APPLY_PRESET',
-  'TAG_UPSERT',
-  'TAG_REMOVE',
-  'TAG_ASSIGN',
-  'TAG_UNASSIGN',
+  'PRESET_TOGGLE',
+  'PRESET_SAVE',
+  'PRESET_RENAME',
+  'PRESET_DELETE',
   'TIMER_STARTED',
   'TIMER_PAUSED',
   'TIMER_RESET',

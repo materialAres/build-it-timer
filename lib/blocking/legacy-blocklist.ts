@@ -1,4 +1,16 @@
-import type { BlocklistEntry, Tag } from '@/store/store.types';
+import type { Domain } from '@/store/store.types';
+
+/** An entry as persisted before version 3: tagged, with no source tracking. */
+export interface LegacyEntry {
+  readonly domain: Domain;
+  readonly tagIds: ReadonlyArray<string>;
+}
+
+/** A custom tag as persisted before version 3 (CR4 turns it into a preset). */
+export interface Tag {
+  readonly id: string;
+  readonly label: string;
+}
 
 /**
  * The legacy two-list blocklist shape (persist version 1). It is declared here
@@ -6,14 +18,17 @@ import type { BlocklistEntry, Tag } from '@/store/store.types';
  * outside this module reads `allowlist` anymore.
  */
 export interface LegacyBlocklistState {
-  readonly allowlist?: ReadonlyArray<BlocklistEntry>;
-  readonly blocklist?: ReadonlyArray<BlocklistEntry>;
+  readonly allowlist?: ReadonlyArray<LegacyEntry>;
+  readonly blocklist?: ReadonlyArray<LegacyEntry>;
   readonly customTags?: ReadonlyArray<Tag>;
 }
 
-/** The single-list blocklist shape persisted from version 2 onward (CR1.T3). */
+/**
+ * The single-list blocklist shape persisted in version 2 (CR1.T3), the input of
+ * the version 3 migration (`migrate-presets.ts`, CR4.T3).
+ */
 export interface EffectiveBlocklist {
-  readonly blocklist: ReadonlyArray<BlocklistEntry>;
+  readonly blocklist: ReadonlyArray<LegacyEntry>;
   readonly customTags: ReadonlyArray<Tag>;
 }
 
@@ -26,7 +41,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * values are already canonical (M1.T2), and re-parsing them here could change
  * what the user currently experiences as blocked.
  */
-function toEntry(value: unknown): BlocklistEntry | null {
+function toEntry(value: unknown): LegacyEntry | null {
   if (!isRecord(value) || !isRecord(value.domain)) return null;
   const domain = value.domain.value;
   if (typeof domain !== 'string' || domain.length === 0) return null;
@@ -41,11 +56,11 @@ function toEntry(value: unknown): BlocklistEntry | null {
  * Valid entries only, first occurrence wins, so a corrupted payload that repeats
  * a domain can never introduce a duplicate entry.
  */
-function toEntries(value: unknown): ReadonlyArray<BlocklistEntry> {
+function toEntries(value: unknown): ReadonlyArray<LegacyEntry> {
   if (!Array.isArray(value)) return [];
 
   const seen = new Set<string>();
-  const entries: BlocklistEntry[] = [];
+  const entries: LegacyEntry[] = [];
   for (const candidate of value) {
     const entry = toEntry(candidate);
     if (entry === null || seen.has(entry.domain.value)) continue;
@@ -77,7 +92,7 @@ function toTags(value: unknown): ReadonlyArray<Tag> {
 }
 
 /**
- * Normalizes a persisted blocklist payload to the single-list shape.
+ * Normalizes a persisted version 1/2 blocklist payload to the single-list shape.
  *
  * Total by construction (§1.4): a missing or malformed field degrades to an
  * empty array instead of throwing. A legacy `allowlist` field is *ignored* here
@@ -85,7 +100,7 @@ function toTags(value: unknown): ReadonlyArray<Tag> {
  * one-time subtraction, so a forged version-2 payload cannot resurrect the
  * obsolete "allowlist wins" rule (CR1.T3).
  */
-export function sanitizeBlocklistState(value: unknown): EffectiveBlocklist {
+export function sanitizeV2Blocklist(value: unknown): EffectiveBlocklist {
   if (!isRecord(value)) return { blocklist: [], customTags: [] };
   return {
     blocklist: toEntries(value.blocklist),
@@ -105,7 +120,7 @@ export function sanitizeBlocklistState(value: unknown): EffectiveBlocklist {
  * This is the only runtime path allowed to read a legacy `allowlist`.
  */
 export function migrateBlocklistState(legacy: unknown): EffectiveBlocklist {
-  const sanitized = sanitizeBlocklistState(legacy);
+  const sanitized = sanitizeV2Blocklist(legacy);
   if (!isRecord(legacy)) return sanitized;
 
   const allowed = new Set(

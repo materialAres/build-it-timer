@@ -3,8 +3,10 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
-import type { RuntimeMessage, MutationMessage } from '@/lib/messaging/messages.types';
-import type { Tag } from '@/store/store.types';
+import type {
+  RuntimeMessage,
+  MutationMessage,
+} from '@/lib/messaging/messages.types';
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
 const flushAsync = (): Promise<void> =>
@@ -34,7 +36,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'facebook.com' }, tagIds: [] },
+      { domain: { value: 'facebook.com' }, manual: true, presetIds: [] },
     ]);
     expect(setSpy).toHaveBeenCalledTimes(1);
 
@@ -42,7 +44,9 @@ describe('cross-context mutation path (M1.T10)', () => {
     const parsed = JSON.parse(raw[STORE_NAME] as string) as {
       state: { blocklist: { blocklist: Array<{ domain: { value: string } }> } };
     };
-    expect(parsed.state.blocklist.blocklist[0]?.domain.value).toBe('facebook.com');
+    expect(parsed.state.blocklist.blocklist[0]?.domain.value).toBe(
+      'facebook.com',
+    );
 
     setSpy.mockRestore();
     handle.dispose();
@@ -67,69 +71,98 @@ describe('cross-context mutation path (M1.T10)', () => {
     // `onChanged` → rehydrate chain is asynchronous, so let it settle.
     await flushAsync();
     expect(popupStore.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'x.com' }, tagIds: [] },
+      { domain: { value: 'x.com' }, manual: true, presetIds: [] },
     ]);
 
     handle.dispose();
   });
 
-  it('applies a TAG_UPSERT and a TAG_REMOVE', async () => {
-    const store = createAppStore();
-    await store.persist.rehydrate();
-    const handle = startBackground({ store });
-
-    const tag: Tag = { id: 'focus', label: 'Focus' };
-    await sendMessage({ type: 'TAG_UPSERT', payload: tag });
-    expect(store.getState().blocklist.customTags).toEqual([tag]);
-
-    await sendMessage({ type: 'TAG_REMOVE', payload: { tagId: 'focus' } });
-    expect(store.getState().blocklist.customTags).toEqual([]);
-
-    handle.dispose();
-  });
-
-  it('applies TAG_ASSIGN and TAG_UNASSIGN to a site (M3.T2)', async () => {
+  it('applies PRESET_TOGGLE on and off (CR4.T3)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
     await sendMessage({
       type: 'BLOCKLIST_ADD_SITE',
-      payload: { site: 'facebook.com' },
+      payload: { site: 'x.com' },
     });
-    await sendMessage({ type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } });
     await sendMessage({
-      type: 'TAG_ASSIGN',
-      payload: { site: 'https://m.facebook.com/x', tagId: 'focus' },
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'social', applied: true },
     });
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
+    expect(store.getState().blocklist.appliedPresetIds).toEqual(['social']);
+    expect(store.getState().blocklist.blocklist).toHaveLength(4);
 
     await sendMessage({
-      type: 'TAG_UNASSIGN',
-      payload: { site: 'facebook.com', tagId: 'focus' },
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'social', applied: false },
     });
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
+    expect(store.getState().blocklist.appliedPresetIds).toEqual([]);
+    // The manually added site survives the preset being switched off.
+    expect(store.getState().blocklist.blocklist).toEqual([
+      { domain: { value: 'x.com' }, manual: true, presetIds: [] },
+    ]);
 
     handle.dispose();
   });
 
-  it('ignores a TAG_ASSIGN with an invalid payload without persisting (M3.T2)', async () => {
+  it('applies PRESET_SAVE, PRESET_RENAME and PRESET_DELETE (CR4.T3)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
-    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
-    const forged = {
-      type: 'TAG_ASSIGN',
-      payload: { site: 'facebook.com', tagId: 42 },
-    } as unknown as RuntimeMessage;
-
-    await sendMessage(forged);
-
-    expect(store.getState().blocklist).toEqual({
-      blocklist: [],
-      customTags: [],
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'x.com' },
     });
+    await sendMessage({
+      type: 'PRESET_SAVE',
+      payload: { id: 'user:focus', name: 'Focus' },
+    });
+    // The background snapshots its own list: the message carries no domains.
+    expect(store.getState().blocklist.userPresets).toEqual([
+      { id: 'user:focus', name: 'Focus', domains: [{ value: 'x.com' }] },
+    ]);
+    expect(store.getState().blocklist.appliedPresetIds).toEqual(['user:focus']);
+
+    await sendMessage({
+      type: 'PRESET_RENAME',
+      payload: { presetId: 'user:focus', name: 'Deep work' },
+    });
+    expect(store.getState().blocklist.userPresets[0]?.name).toBe('Deep work');
+
+    await sendMessage({
+      type: 'PRESET_DELETE',
+      payload: { presetId: 'user:focus' },
+    });
+    expect(store.getState().blocklist.userPresets).toEqual([]);
+    expect(store.getState().blocklist.blocklist).toEqual([
+      { domain: { value: 'x.com' }, manual: true, presetIds: [] },
+    ]);
+
+    handle.dispose();
+  });
+
+  it.each([
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: 'yes' } },
+    { type: 'PRESET_TOGGLE', payload: { presetId: 42, applied: true } },
+    { type: 'PRESET_SAVE', payload: { id: '', name: 'Focus' } },
+    { type: 'PRESET_RENAME', payload: { presetId: 'user:focus', name: 7 } },
+    { type: 'PRESET_DELETE', payload: {} },
+  ])('ignores a malformed %j without persisting (CR4.T3)', async (forged) => {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'x.com' },
+    });
+
+    const before = store.getState().blocklist;
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+    await sendMessage(forged as unknown as RuntimeMessage);
+
+    expect(store.getState().blocklist).toBe(before);
     expect(setSpy).not.toHaveBeenCalled();
 
     setSpy.mockRestore();
@@ -166,10 +199,14 @@ describe('cross-context mutation path (M1.T10)', () => {
       payload: { site: '' },
     } as unknown as RuntimeMessage;
 
-    await expect(sendMessage(forged)).resolves.toEqual({ ok: true, value: undefined });
+    await expect(sendMessage(forged)).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
     expect(store.getState().blocklist).toEqual({
       blocklist: [],
-      customTags: [],
+      appliedPresetIds: [],
+      userPresets: [],
     });
     expect(setSpy).not.toHaveBeenCalled();
 
@@ -184,7 +221,10 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     const forged = { type: 'NOPE', payload: {} } as unknown as RuntimeMessage;
 
-    await expect(sendMessage(forged)).resolves.toEqual({ ok: true, value: undefined });
+    await expect(sendMessage(forged)).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
     expect(store.getState().blocklist.blocklist).toEqual([]);
 
     handle.dispose();
@@ -197,17 +237,14 @@ describe('cross-context mutation path (M1.T10)', () => {
 
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     await sendMessage({
-      type: 'BLOCKLIST_APPLY_PRESET',
-      payload: { presetId: 'social' },
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'social', applied: true },
     });
 
     // The whole preset is expanded in a single store action...
-    expect(store.getState().blocklist.blocklist.map((entry) => entry.domain.value)).toEqual([
-      'instagram.com',
-      'facebook.com',
-      'x.com',
-      'tiktok.com',
-    ]);
+    expect(
+      store.getState().blocklist.blocklist.map((entry) => entry.domain.value),
+    ).toEqual(['instagram.com', 'facebook.com', 'x.com', 'tiktok.com']);
     // ...so the background persists exactly once, not once per domain.
     expect(setSpy).toHaveBeenCalledTimes(1);
 
@@ -221,8 +258,8 @@ describe('cross-context mutation path (M1.T10)', () => {
     const handle = startBackground({ store });
 
     await sendMessage({
-      type: 'BLOCKLIST_APPLY_PRESET',
-      payload: { presetId: 'does-not-exist' },
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'does-not-exist', applied: true },
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([]);
@@ -258,7 +295,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     });
 
     expect(store.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'facebook.com' }, tagIds: [] },
+      { domain: { value: 'facebook.com' }, manual: true, presetIds: [] },
     ]);
 
     handle.dispose();
@@ -284,38 +321,34 @@ describe('cross-context mutation path (M1.T10)', () => {
 
   // CR1.T2/CR1.T5a: the protocol has no `list` discriminator anymore and the
   // store has no second collection. A legacy sender that still includes the
-  // field must not be able to select one: the four site/tag mutations always
-  // land on the single blocklist.
+  // field must not be able to select one: the site mutations always land on the
+  // single blocklist.
   it('ignores a legacy `list` field and always mutates the blocklist (CR1.T2)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
     const legacy = (
-      type: 'BLOCKLIST_ADD_SITE' | 'BLOCKLIST_REMOVE_SITE' | 'TAG_ASSIGN' | 'TAG_UNASSIGN',
+      type: 'BLOCKLIST_ADD_SITE' | 'BLOCKLIST_REMOVE_SITE',
       payload: Record<string, unknown>,
     ): RuntimeMessage =>
-      ({ type, payload: { list: 'allowlist', ...payload } }) as unknown as RuntimeMessage;
+      ({
+        type,
+        payload: { list: 'allowlist', ...payload },
+      }) as unknown as RuntimeMessage;
 
-    await sendMessage(legacy('BLOCKLIST_ADD_SITE', { site: 'https://www.facebook.com' }));
+    await sendMessage(
+      legacy('BLOCKLIST_ADD_SITE', { site: 'https://www.facebook.com' }),
+    );
     expect(store.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'facebook.com' }, tagIds: [] },
+      { domain: { value: 'facebook.com' }, manual: true, presetIds: [] },
     ]);
 
-    await sendMessage({ type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } });
-    await sendMessage(legacy('TAG_ASSIGN', { site: 'facebook.com', tagId: 'focus' }));
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
-
-    await sendMessage(legacy('TAG_UNASSIGN', { site: 'facebook.com', tagId: 'focus' }));
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
-
-    await sendMessage(legacy('BLOCKLIST_REMOVE_SITE', { site: 'facebook.com' }));
+    await sendMessage(
+      legacy('BLOCKLIST_REMOVE_SITE', { site: 'facebook.com' }),
+    );
     expect(store.getState().blocklist.blocklist).toEqual([]);
 
-    expect(store.getState().blocklist).toEqual({
-      blocklist: [],
-      customTags: [{ id: 'focus', label: 'Focus' }],
-    });
     expect('allowlist' in store.getState().blocklist).toBe(false);
 
     handle.dispose();
@@ -331,11 +364,14 @@ describe('blocklist lock in the mutation handler (CR2.T2)', () => {
   const MUTATIONS: ReadonlyArray<MutationMessage> = [
     { type: 'BLOCKLIST_ADD_SITE', payload: { site: 'facebook.com' } },
     { type: 'BLOCKLIST_REMOVE_SITE', payload: { site: 'x.com' } },
-    { type: 'BLOCKLIST_APPLY_PRESET', payload: { presetId: 'social' } },
-    { type: 'TAG_UPSERT', payload: { id: 'focus', label: 'Focus' } },
-    { type: 'TAG_REMOVE', payload: { tagId: 'focus' } },
-    { type: 'TAG_ASSIGN', payload: { site: 'x.com', tagId: 'focus' } },
-    { type: 'TAG_UNASSIGN', payload: { site: 'x.com', tagId: 'focus' } },
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: true } },
+    { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: false } },
+    { type: 'PRESET_SAVE', payload: { id: 'user:focus', name: 'Focus' } },
+    {
+      type: 'PRESET_RENAME',
+      payload: { presetId: 'user:focus', name: 'Work' },
+    },
+    { type: 'PRESET_DELETE', payload: { presetId: 'user:focus' } },
   ];
 
   beforeEach(() => {
@@ -343,7 +379,7 @@ describe('blocklist lock in the mutation handler (CR2.T2)', () => {
   });
 
   it.each(['running', 'paused', 'completed'] as const)(
-    'drops every blocklist/tag mutation while %s',
+    'drops every blocklist/preset mutation while %s',
     async (status) => {
       const store = createAppStore();
       await store.persist.rehydrate();
@@ -388,7 +424,7 @@ describe('blocklist lock in the mutation handler (CR2.T2)', () => {
       payload: { site: 'facebook.com' },
     });
     expect(store.getState().blocklist.blocklist).toEqual([
-      { domain: { value: 'facebook.com' }, tagIds: [] },
+      { domain: { value: 'facebook.com' }, manual: true, presetIds: [] },
     ]);
 
     handle.dispose();

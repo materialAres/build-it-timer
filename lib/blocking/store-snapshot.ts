@@ -1,6 +1,6 @@
 import { ok, err, type Result } from '@/utils/result';
-import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
-import type { BlockDecisionInput } from './is-domain-blocked';
+import type { TimerStatus } from '@/store/store.types';
+import type { BlockDecisionInput, BlockedEntry } from './is-domain-blocked';
 import { migrateBlocklistState } from './legacy-blocklist';
 
 /** The persisted key the store writes to (`store/index.ts`, `STORE_NAME`). */
@@ -15,13 +15,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isBlocklistEntry(value: unknown): value is BlocklistEntry {
+/**
+ * An entry is valid when it names a domain; the sources a version 3 entry adds
+ * (`manual`, `presetIds`) are checked only when present, and a version 2 entry
+ * (`tagIds`) is accepted as is, because enforcement reads the domain alone
+ * (CR4.T3) and storage still holds version 2 until the background rewrites it.
+ */
+function isBlocklistEntry(value: unknown): value is BlockedEntry {
   if (!isRecord(value) || !isRecord(value.domain)) return false;
   if (typeof value.domain.value !== 'string') return false;
-  return Array.isArray(value.tagIds) && value.tagIds.every((id) => typeof id === 'string');
+  if (value.manual !== undefined && typeof value.manual !== 'boolean')
+    return false;
+  const { presetIds } = value;
+  return (
+    presetIds === undefined ||
+    (Array.isArray(presetIds) &&
+      presetIds.every((id) => typeof id === 'string'))
+  );
 }
 
-function isBlocklistEntryList(value: unknown): value is ReadonlyArray<BlocklistEntry> {
+function isBlocklistEntryList(
+  value: unknown,
+): value is ReadonlyArray<BlockedEntry> {
   return Array.isArray(value) && value.every(isBlocklistEntry);
 }
 
@@ -44,9 +59,9 @@ function isTimerStatus(value: unknown): value is TimerStatus {
  * validated with a guard and a malformed shape yields `{ ok: false }` instead
  * of a throw (no `as` casts).
  *
- * Two blocklist shapes are accepted (CR1.T4): the current one (version 2,
- * `{ blocklist, customTags }`) and the legacy one (version 1, which also has a
- * second list). The content script reads the raw value and does not run
+ * Every blocklist shape is accepted (CR1.T4, CR4.T3): version 3
+ * (`{ blocklist, appliedPresetIds, userPresets }`), version 2 (`customTags`,
+ * tagged entries) and the legacy version 1, which also has a second list. The content script reads the raw value and does not run
  * zustand's migration, so the legacy shape is delegated to
  * `migrateBlocklistState` here — the only module allowed to interpret it. A
  * blocklist field that is present but malformed is still rejected rather than
@@ -69,7 +84,8 @@ export function parseStoreSnapshot(raw: unknown): Result<StoreSnapshot> {
   }
 
   const { blocklist, timer } = envelope.state;
-  if (!isRecord(blocklist)) return err(new Error('Persisted store has no blocklist'));
+  if (!isRecord(blocklist))
+    return err(new Error('Persisted store has no blocklist'));
 
   if (!isBlocklistEntryList(blocklist.blocklist)) {
     return err(new Error('Persisted blocklist is malformed'));

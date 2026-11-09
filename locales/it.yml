@@ -45,14 +45,6 @@ score:
 blocklist:
   presets: Preset
   applyPreset: 'Applica preset $1'
-  tags: Tag
-  newTagName: Nome del nuovo tag
-  newTag: Nuovo tag
-  createTag: Crea tag
-  customTags: Tag personalizzati
-  assignTag: 'Assegna $1 a $2'
-  filterByTag: 'Filtra per $1'
-  deleteTag: 'Elimina $1'
   sites: Siti
   blockedSites: Siti bloccati
   blocklistName: lista dei bloccati

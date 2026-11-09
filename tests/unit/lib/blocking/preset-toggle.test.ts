@@ -5,16 +5,16 @@ import {
   togglePreset,
 } from '@/lib/blocking/preset-toggle';
 import type {
-  PresetBlocklistState,
-  PresetShape,
-  SourcedEntry,
-} from '@/lib/blocking/preset-toggle.types';
+  BlocklistEntry,
+  BlocklistState,
+  Preset,
+} from '@/store/store.types';
 
 const preset = (
   id: string,
   name: string,
   domains: ReadonlyArray<string>,
-): PresetShape => ({ id, name, domains: domains.map((value) => ({ value })) });
+): Preset => ({ id, name, domains: domains.map((value) => ({ value })) });
 
 const SOCIAL = preset('social', 'Social', ['x.com', 'facebook.com']);
 const VIDEO = preset('video', 'Video', ['youtube.com', 'x.com']);
@@ -23,18 +23,16 @@ const entry = (
   domain: string,
   manual: boolean,
   presetIds: ReadonlyArray<string> = [],
-): SourcedEntry => ({ domain: { value: domain }, manual, presetIds });
+): BlocklistEntry => ({ domain: { value: domain }, manual, presetIds });
 
-const state = (
-  over: Partial<PresetBlocklistState> = {},
-): PresetBlocklistState => ({
+const state = (over: Partial<BlocklistState> = {}): BlocklistState => ({
   blocklist: [],
   appliedPresetIds: [],
   userPresets: [],
   ...over,
 });
 
-const domainsOf = (s: PresetBlocklistState): string[] =>
+const domainsOf = (s: BlocklistState): string[] =>
   s.blocklist.map((e) => e.domain.value);
 
 describe('togglePreset — apply (CR4.T2)', () => {
@@ -61,7 +59,7 @@ describe('togglePreset — apply (CR4.T2)', () => {
 
   it('re-applying restores a domain removed from the list', () => {
     const once = togglePreset(state(), SOCIAL, true);
-    const removed: PresetBlocklistState = {
+    const removed: BlocklistState = {
       ...once,
       blocklist: once.blocklist.filter((e) => e.domain.value !== 'x.com'),
     };
@@ -156,7 +154,7 @@ describe('isPresetApplied and computePresetCoverage', () => {
       covered: 2,
       total: 2,
     });
-    const partial: PresetBlocklistState = {
+    const partial: BlocklistState = {
       ...applied,
       blocklist: applied.blocklist.filter((e) => e.domain.value !== 'x.com'),
     };

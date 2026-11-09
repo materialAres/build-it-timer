@@ -2,21 +2,26 @@ import { describe, it, expect } from 'vitest';
 import {
   addBlocklistSite,
   removeBlocklistSite,
-  upsertTag,
-  removeTag,
-  type BlocklistState,
-} from '@/store';
-import type { Tag } from '@/store/store.types';
+} from '@/lib/blocking/blocklist-sites';
+import type { BlocklistState } from '@/store/store.types';
 
-const empty: BlocklistState = { blocklist: [], customTags: [] };
+const empty: BlocklistState = {
+  blocklist: [],
+  appliedPresetIds: [],
+  userPresets: [],
+};
 
-const tag: Tag = { id: 'focus', label: 'Focus' };
+const manual = (domain: string) => ({
+  domain: { value: domain },
+  manual: true,
+  presetIds: [],
+});
 
-describe('blocklist mutation helpers (M1.T10)', () => {
+describe('blocklist site helpers (M1.T10)', () => {
   it('adds a site to the blocklist', () => {
     const next = addBlocklistSite(empty, 'facebook.com');
 
-    expect(next.blocklist).toEqual([{ domain: { value: 'facebook.com' }, tagIds: [] }]);
+    expect(next.blocklist).toEqual([manual('facebook.com')]);
   });
 
   it('does not duplicate an already present site', () => {
@@ -39,40 +44,9 @@ describe('blocklist mutation helpers (M1.T10)', () => {
     expect(next.blocklist).toEqual([]);
   });
 
-  it('upserts a new tag', () => {
-    const next = upsertTag(empty, tag);
-
-    expect(next.customTags).toEqual([tag]);
-  });
-
-  it('updates an existing tag in place', () => {
-    const created = upsertTag(empty, tag);
-    const renamed: Tag = { id: 'focus', label: 'Deep focus' };
-    const next = upsertTag(created, renamed);
-
-    expect(next.customTags).toEqual([renamed]);
-  });
-
-  it('removes a tag and detaches it from every blocklisted site', () => {
-    const withTag: BlocklistState = {
-      blocklist: [
-        { domain: { value: 'x.com' }, tagIds: ['focus', 'other'] },
-        { domain: { value: 'y.com' }, tagIds: ['focus'] },
-      ],
-      customTags: [tag, { id: 'other', label: 'Other' }],
-    };
-
-    const next = removeTag(withTag, 'focus');
-
-    expect(next.customTags).toEqual([{ id: 'other', label: 'Other' }]);
-    expect(next.blocklist[0]?.tagIds).toEqual(['other']);
-    expect(next.blocklist[1]?.tagIds).toEqual([]);
-  });
-
   it('does not mutate the input state (pure)', () => {
     const before = structuredClone(empty);
     addBlocklistSite(empty, 'facebook.com');
-    upsertTag(empty, tag);
 
     expect(empty).toEqual(before);
   });
@@ -82,7 +56,7 @@ describe('blocklist entry normalization (M2.T4)', () => {
   it('normalizes a full URL to its registrable domain', () => {
     const next = addBlocklistSite(empty, 'https://m.facebook.com/something');
 
-    expect(next.blocklist).toEqual([{ domain: { value: 'facebook.com' }, tagIds: [] }]);
+    expect(next.blocklist).toEqual([manual('facebook.com')]);
   });
 
   it('collapses subdomain variants to a single entry (no duplicates)', () => {
@@ -132,20 +106,58 @@ describe('blocklist entry normalization (M2.T4)', () => {
   });
 });
 
-describe('single blocklist (CR1.T5a)', () => {
+describe('single blocklist (CR1.T5a, CR4.T3)', () => {
   it('never adds a second list to the state', () => {
     const next = addBlocklistSite(empty, 'facebook.com');
 
-    expect(Object.keys(next).sort()).toEqual(['blocklist', 'customTags']);
+    expect(Object.keys(next).sort()).toEqual([
+      'appliedPresetIds',
+      'blocklist',
+      'userPresets',
+    ]);
     expect('allowlist' in next).toBe(false);
   });
 
-  it('keeps the tags of an entry that is added again', () => {
-    const tagged: BlocklistState = {
-      blocklist: [{ domain: { value: 'facebook.com' }, tagIds: ['focus'] }],
-      customTags: [tag],
+  it('adding an already manual entry again is a no-op', () => {
+    const listed: BlocklistState = {
+      ...empty,
+      blocklist: [{ ...manual('facebook.com'), presetIds: ['social'] }],
     };
 
-    expect(addBlocklistSite(tagged, 'facebook.com')).toBe(tagged);
+    expect(addBlocklistSite(listed, 'facebook.com')).toBe(listed);
+  });
+});
+
+describe('entries contributed by a preset (CR4.T3)', () => {
+  const presetOnly: BlocklistState = {
+    blocklist: [
+      {
+        domain: { value: 'facebook.com' },
+        manual: false,
+        presetIds: ['social'],
+      },
+    ],
+    appliedPresetIds: ['social'],
+    userPresets: [],
+  };
+
+  it('typing a preset-only domain makes it manual and keeps its preset source', () => {
+    const next = addBlocklistSite(presetOnly, 'https://www.facebook.com');
+
+    expect(next.blocklist).toEqual([
+      {
+        domain: { value: 'facebook.com' },
+        manual: true,
+        presetIds: ['social'],
+      },
+    ]);
+    expect(next.appliedPresetIds).toEqual(['social']);
+  });
+
+  it('removing a site removes it whatever its sources and keeps presets applied', () => {
+    const next = removeBlocklistSite(presetOnly, 'facebook.com');
+
+    expect(next.blocklist).toEqual([]);
+    expect(next.appliedPresetIds).toEqual(['social']);
   });
 });

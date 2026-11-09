@@ -10,26 +10,33 @@ import {
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { TimerStatus } from '@/store/store.types';
 
-const focus = { id: 'focus', label: 'Focus' };
+const empty: BlocklistState = {
+  blocklist: [],
+  appliedPresetIds: [],
+  userPresets: [],
+};
 
-const empty: BlocklistState = { blocklist: [], customTags: [] };
-
-const site = (value: string, tagIds: string[] = []) => ({
+const site = (value: string, presetIds: string[] = []) => ({
   domain: { value },
-  tagIds,
+  manual: presetIds.length === 0,
+  presetIds,
 });
 
-const withSite: BlocklistState = {
-  blocklist: [site('x.com')],
-  customTags: [],
+const withSite: BlocklistState = { ...empty, blocklist: [site('x.com')] };
+
+const withSavedPreset: BlocklistState = {
+  blocklist: [site('x.com', ['user:focus'])],
+  appliedPresetIds: ['user:focus'],
+  userPresets: [
+    { id: 'user:focus', name: 'Focus', domains: [{ value: 'x.com' }] },
+  ],
 };
 
-const withTaggedSite: BlocklistState = {
-  blocklist: [site('x.com', ['focus'])],
-  customTags: [focus],
-};
-
-const LOCKED_STATUSES: ReadonlyArray<TimerStatus> = ['running', 'paused', 'completed'];
+const LOCKED_STATUSES: ReadonlyArray<TimerStatus> = [
+  'running',
+  'paused',
+  'completed',
+];
 
 /** A store at `status` with the given blocklist already seeded. */
 function createStoreAt(
@@ -103,33 +110,33 @@ describe.each(LOCKED_STATUSES)('blocklist lock while %s', (status) => {
     });
   });
 
-  it('ignores applyPreset', () => {
+  it('ignores togglePreset on', () => {
     expectLocked(status, empty, (store) => {
-      store.getState().applyPreset('social');
+      store.getState().togglePreset('social', true);
     });
   });
 
-  it('ignores createTag', () => {
-    expectLocked(status, empty, (store) => {
-      store.getState().createTag('Focus');
+  it('ignores togglePreset off', () => {
+    expectLocked(status, withSavedPreset, (store) => {
+      store.getState().togglePreset('user:focus', false);
     });
   });
 
-  it('ignores deleteTag', () => {
-    expectLocked(status, withTaggedSite, (store) => {
-      store.getState().deleteTag('focus');
-    });
-  });
-
-  it('ignores assignTag', () => {
+  it('ignores savePreset', () => {
     expectLocked(status, withSite, (store) => {
-      store.getState().assignTag('x.com', 'focus');
+      store.getState().savePreset('Focus');
     });
   });
 
-  it('ignores unassignTag', () => {
-    expectLocked(status, withTaggedSite, (store) => {
-      store.getState().unassignTag('x.com', 'focus');
+  it('ignores renamePreset', () => {
+    expectLocked(status, withSavedPreset, (store) => {
+      store.getState().renamePreset('user:focus', 'Deep work');
+    });
+  });
+
+  it('ignores deletePreset', () => {
+    expectLocked(status, withSavedPreset, (store) => {
+      store.getState().deletePreset('user:focus');
     });
   });
 });
@@ -144,9 +151,9 @@ describe('blocklist editing while idle', () => {
 
     store.getState().addSite('facebook.com');
 
-    expect(store.getState().blocklist.blocklist.map((entry) => entry.domain.value)).toEqual([
-      'facebook.com',
-    ]);
+    expect(
+      store.getState().blocklist.blocklist.map((entry) => entry.domain.value),
+    ).toEqual(['facebook.com']);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
@@ -159,49 +166,41 @@ describe('blocklist editing while idle', () => {
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
-  it('applyPreset expands the whole preset with one mutation', () => {
+  it('togglePreset applies the whole preset with one mutation', () => {
     const { store, sendMutation } = createStoreAt('idle', empty);
 
-    store.getState().applyPreset('social');
+    store.getState().togglePreset('social', true);
 
     expect(store.getState().blocklist.blocklist).toHaveLength(4);
+    expect(store.getState().blocklist.appliedPresetIds).toEqual(['social']);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
-  it('createTag applies and sends exactly one mutation', () => {
-    const { store, sendMutation } = createStoreAt('idle', empty);
-
-    store.getState().createTag('Focus');
-
-    expect(store.getState().blocklist.customTags).toHaveLength(1);
-    expect(sendMutation).toHaveBeenCalledTimes(1);
-  });
-
-  it('deleteTag applies and sends exactly one mutation', () => {
-    const { store, sendMutation } = createStoreAt('idle', withTaggedSite);
-
-    store.getState().deleteTag('focus');
-
-    expect(store.getState().blocklist.customTags).toEqual([]);
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
-    expect(sendMutation).toHaveBeenCalledTimes(1);
-  });
-
-  it('assignTag applies and sends exactly one mutation', () => {
+  it('savePreset applies and sends exactly one mutation', () => {
     const { store, sendMutation } = createStoreAt('idle', withSite);
 
-    store.getState().assignTag('x.com', 'focus');
+    store.getState().savePreset('Focus');
 
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual(['focus']);
+    expect(store.getState().blocklist.userPresets).toHaveLength(1);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 
-  it('unassignTag applies and sends exactly one mutation', () => {
-    const { store, sendMutation } = createStoreAt('idle', withTaggedSite);
+  it('renamePreset applies and sends exactly one mutation', () => {
+    const { store, sendMutation } = createStoreAt('idle', withSavedPreset);
 
-    store.getState().unassignTag('x.com', 'focus');
+    store.getState().renamePreset('user:focus', 'Deep work');
 
-    expect(store.getState().blocklist.blocklist[0]?.tagIds).toEqual([]);
+    expect(store.getState().blocklist.userPresets[0]?.name).toBe('Deep work');
+    expect(sendMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletePreset applies and sends exactly one mutation', () => {
+    const { store, sendMutation } = createStoreAt('idle', withSavedPreset);
+
+    store.getState().deletePreset('user:focus');
+
+    expect(store.getState().blocklist.userPresets).toEqual([]);
+    expect(store.getState().blocklist.blocklist).toEqual([site('x.com')]);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 });

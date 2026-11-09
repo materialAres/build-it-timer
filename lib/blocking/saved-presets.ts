@@ -1,8 +1,6 @@
+import { getPresetById } from '@/lib/blocking/presets';
 import { dropSource } from '@/lib/blocking/preset-toggle';
-import type {
-  PresetBlocklistState,
-  PresetShape,
-} from '@/lib/blocking/preset-toggle.types';
+import type { BlocklistState, Preset } from '@/store/store.types';
 
 // Saved (user) preset operations (CR4.T2, CR4.T1 §3.3–3.4). Pure like the toggle
 // logic: same reference back when nothing changes, ids minted by the caller.
@@ -11,7 +9,7 @@ import type {
 export const MAX_PRESET_NAME_LENGTH = 24;
 
 /** Prefix that keeps user preset ids from ever colliding with built-in ids. */
-const USER_PRESET_PREFIX = 'user:';
+export const USER_PRESET_PREFIX = 'user:';
 
 export function generatePresetId(now: number, random: number): string {
   return `${USER_PRESET_PREFIX}${now.toString(36)}-${Math.floor(random * 1_000_000).toString(36)}`;
@@ -27,7 +25,7 @@ function cleanName(name: string): string | null {
 /** Names are unique case-insensitively across built-in and user presets. */
 function isNameTaken(
   name: string,
-  presets: ReadonlyArray<PresetShape>,
+  presets: ReadonlyArray<Preset>,
   exceptId?: string,
 ): boolean {
   const target = name.toLowerCase();
@@ -43,11 +41,11 @@ function isNameTaken(
  * reference) for an empty list, a blank/long/duplicate name or a taken id.
  */
 export function saveUserPreset(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   id: string,
   name: string,
-  builtIn: ReadonlyArray<PresetShape>,
-): PresetBlocklistState {
+  builtIn: ReadonlyArray<Preset>,
+): BlocklistState {
   const cleaned = cleanName(name);
   const known = [...builtIn, ...state.userPresets];
   if (cleaned === null || id.length === 0 || state.blocklist.length === 0)
@@ -55,7 +53,7 @@ export function saveUserPreset(
   if (isNameTaken(cleaned, known) || known.some((preset) => preset.id === id))
     return state;
 
-  const preset: PresetShape = {
+  const preset: Preset = {
     id,
     name: cleaned,
     domains: state.blocklist.map((entry) => entry.domain),
@@ -73,11 +71,11 @@ export function saveUserPreset(
 
 /** Rename a user preset; built-in or unknown ids and invalid names are no-ops. */
 export function renameUserPreset(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   id: string,
   name: string,
-  builtIn: ReadonlyArray<PresetShape>,
-): PresetBlocklistState {
+  builtIn: ReadonlyArray<Preset>,
+): BlocklistState {
   const target = state.userPresets.find((preset) => preset.id === id);
   const cleaned = cleanName(name);
   if (target === undefined || cleaned === null || cleaned === target.name)
@@ -98,9 +96,9 @@ export function renameUserPreset(
  * it alone contributed stay on the list as manual entries.
  */
 export function deleteUserPreset(
-  state: PresetBlocklistState,
+  state: BlocklistState,
   id: string,
-): PresetBlocklistState {
+): BlocklistState {
   if (!state.userPresets.some((preset) => preset.id === id)) return state;
   return {
     blocklist: dropSource(state, id, true),
@@ -109,4 +107,15 @@ export function deleteUserPreset(
     ),
     userPresets: state.userPresets.filter((preset) => preset.id !== id),
   };
+}
+
+/** A preset by id: the built-in ones first, then the user's saved presets. */
+export function findPreset(
+  state: BlocklistState,
+  presetId: string,
+): Preset | undefined {
+  return (
+    getPresetById(presetId) ??
+    state.userPresets.find((preset) => preset.id === presetId)
+  );
 }

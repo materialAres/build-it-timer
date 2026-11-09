@@ -32,7 +32,7 @@ function captureLogger(): {
   return { records, logger };
 }
 
-const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
+const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, manual: true, presetIds: [] });
 
 /** Store stub, so the tests never depend on the real persist envelope. */
 function fakeStoreReader(initial: StoreSnapshot | undefined) {

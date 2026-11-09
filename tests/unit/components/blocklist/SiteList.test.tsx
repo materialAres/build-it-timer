@@ -13,13 +13,16 @@ import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
 
 const entry = (value: string): BlocklistEntry => ({
   domain: { value },
-  tagIds: [],
+  manual: true,
+  presetIds: [],
 });
 
 const resetBlocklist = (
   blocklist: ReadonlyArray<BlocklistEntry> = [],
 ): void => {
-  useAppStore.setState({ blocklist: { blocklist, customTags: [] } });
+  useAppStore.setState({
+    blocklist: { blocklist, appliedPresetIds: [], userPresets: [] },
+  });
 };
 
 const setStatus = (status: TimerStatus): void => {
@@ -233,14 +236,21 @@ describe('SiteList layout (UI.T1)', () => {
     expect(screen.getByRole('list')).toBeInTheDocument();
   });
 
-  it('labels each row with the presets and tags it came from', () => {
+  it('labels each row with the presets it came from', () => {
     useAppStore.setState({
       blocklist: {
         blocklist: [
-          { domain: { value: 'x.com' }, tagIds: ['social', 'work'] },
+          {
+            domain: { value: 'x.com' },
+            manual: false,
+            presetIds: ['social', 'user:work'],
+          },
           entry('mine.com'),
         ],
-        customTags: [{ id: 'work', label: 'Work' }],
+        appliedPresetIds: ['social', 'user:work'],
+        userPresets: [
+          { id: 'user:work', name: 'Work', domains: [{ value: 'x.com' }] },
+        ],
       },
     });
     render(<SiteList />);
@@ -251,6 +261,28 @@ describe('SiteList layout (UI.T1)', () => {
     expect(rows[0]).toHaveTextContent('Work');
     expect(rows[1]).toHaveTextContent('mine.com');
     expect(rows[1]?.querySelectorAll('.site-entry__source')).toHaveLength(0);
+  });
+
+  it('typing a site only a preset listed makes it manual instead of a duplicate', async () => {
+    useAppStore.setState({
+      blocklist: {
+        blocklist: [
+          { domain: { value: 'x.com' }, manual: false, presetIds: ['social'] },
+        ],
+        appliedPresetIds: ['social'],
+        userPresets: [],
+      },
+    });
+    render(<SiteList />);
+
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocked sites'),
+      'x.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(useAppStore.getState().blocklist.blocklist[0]?.manual).toBe(true);
+    expect(screen.queryByText(/already in/i)).not.toBeInTheDocument();
   });
 
   it('renders the quick-add slot between the add form and the list', () => {

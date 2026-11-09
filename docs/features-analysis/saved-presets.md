@@ -3,7 +3,7 @@
 > Change request: **presets become toggles over the single blocklist, and custom
 > tags become saved presets** (CR4; origin: UI critique UI.T2/UI.T3 in
 > `docs/ui/ui-review-tasks.md`).
-> Status: **planned** — written by CR4.T1, implemented by CR4.T2–CR4.T6. Names
+> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic) and CR4.T3 (store, v3 migration) are implemented; CR4.T4–CR4.T6 remain. Names
 > below refer to the code *before* CR4 unless stated otherwise; references use
 > symbols, not line numbers, because the files change under the following tasks.
 
@@ -297,3 +297,21 @@ table for the four preset messages (CR4.T4).
 - CR4.T5 confirmation copy: deleting a preset keeps its sites blocked; toggling a
   saved preset off removes its sites.
 - UI.T2/UI.T3 are completed by CR4.T5 (unchanged).
+- CR4.T3 (**implemented**): the model types moved into `store/store.types.ts`
+  (`BlocklistEntry`, `Preset`, `BlocklistState`); `preset-toggle.types.ts` was
+  removed and `PresetCoverage` now lives in `preset-toggle.ts`. Besides the store
+  files, T3 also had to touch the message types and the background handler
+  (`PRESET_*` replace `BLOCKLIST_APPLY_PRESET`/`TAG_*` — the slice sends them
+  and the tree would not compile otherwise), delete `TagEditor`, turn
+  `PresetPicker` into toggles and move `SiteList` to `presetIds`. CR4.T4 keeps
+  the boundary hardening, the lock/CR5 matrix tests and the sender; CR4.T5 keeps
+  the applied count, saved-preset management and the copy.
+- Persistence helpers added by T3: `lib/blocking/blocklist-state.ts`
+  (`sanitizeBlocklistState` for v3, total), `lib/blocking/migrate-presets.ts`
+  (`migrateToPresets`, `migratePersistedBlocklist` for v1/v2/v3),
+  `lib/blocking/blocklist-sites.ts` (site helpers moved out of the slice).
+  Enforcement (`rules.ts`, `is-domain-blocked.ts`, `apply-rules.ts`) now types an
+  entry as `Pick<BlocklistEntry, 'domain'>`, so it provably reads domains only.
+- Known edge of the migration: a v2 custom tag named like a built-in preset
+  (`Social`) becomes a second preset with the same name; names are only
+  validated on save/rename, so the migration keeps the user's label verbatim.

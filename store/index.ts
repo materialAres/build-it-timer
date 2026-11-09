@@ -15,10 +15,8 @@ import {
 } from './city.slice';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
-import {
-  migrateBlocklistState,
-  sanitizeBlocklistState,
-} from '@/lib/blocking/legacy-blocklist';
+import { sanitizeBlocklistState } from '@/lib/blocking/blocklist-state';
+import { migratePersistedBlocklist } from '@/lib/blocking/migrate-presets';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
@@ -140,7 +138,8 @@ export const partialize = (state: AppState): PersistedState => ({
   city: state.city,
   blocklist: {
     blocklist: state.blocklist.blocklist,
-    customTags: state.blocklist.customTags,
+    appliedPresetIds: state.blocklist.appliedPresetIds,
+    userPresets: state.blocklist.userPresets,
   },
   score: state.score,
   sessionHistory: state.sessionHistory,
@@ -226,21 +225,22 @@ function buildStore(
       // it every hydration would churn references the app already observes
       // (breaking `selectCity`-style identity checks) and could clobber state
       // written between store creation and the async hydration completing.
-      // Version 2 (CR1.T3): the persisted blocklist is the single-list shape
-      // `{ blocklist, customTags }`. Older payloads use the legacy two-list
-      // shape and are migrated on read (`lib/blocking/legacy-blocklist.ts`).
-      version: 2,
+      // Version 3 (CR4.T3): the persisted blocklist is
+      // `{ blocklist, appliedPresetIds, userPresets }`, with source-tracked
+      // entries. Older payloads (v1 two lists, v2 tags) are migrated on read
+      // (`lib/blocking/migrate-presets.ts`).
+      version: 3,
       migrate: (persistedState: unknown, version: number): PersistedState => {
         const saved =
           typeof persistedState === 'object' && persistedState !== null
             ? (persistedState as Partial<PersistedState> & { blocklist?: unknown })
             : {};
-        // zustand calls `migrate` only on a version mismatch, so a version-2
+        // zustand calls `migrate` only on a version mismatch, so a version-3
         // payload is already in the current shape. `merge` sanitizes it anyway.
-        if (version >= 2) return saved as PersistedState;
+        if (version >= 3) return saved as PersistedState;
         return {
           ...saved,
-          blocklist: migrateBlocklistState(saved.blocklist),
+          blocklist: migratePersistedBlocklist(saved.blocklist, version),
         } as PersistedState;
       },
       // CI-3 (M4.T3c): zustand consumes rehydration failures and keeps the
@@ -317,20 +317,13 @@ export type {
 } from './city.slice';
 export {
   createBlocklistSlice,
-  addBlocklistSite,
-  addPresetToBlocklist,
-  assignTagToSite,
-  unassignTagFromSite,
-  filterEntriesByTag,
-  generateTagId,
-  hasTagLabel,
   isBlocklistEditable,
-  removeBlocklistSite,
-  upsertTag,
-  removeTag,
+  selectAppliedPresetIds,
   selectBlocklist,
   selectBlocklistEditable,
-  selectCustomTags,
+  selectIsPresetApplied,
+  selectPresetCoveredCount,
+  selectUserPresets,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,

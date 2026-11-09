@@ -8,15 +8,15 @@ import {
   STORE_NAME,
 } from '@/store';
 import { createReadOnlyStorage } from '@/store/storage-adapter';
-import type { Tag } from '@/store/store.types';
+import type { Preset } from '@/store/store.types';
 
-const testTag: Tag = { id: 'focus', label: 'Focus' };
+const testPreset: Preset = { id: 'user:focus', name: 'Focus', domains: [] };
 
 /** Serialize a payload the way `zustand/persist` writes it. */
 function serialize(state: {
-  blocklist: { customTags: ReadonlyArray<Tag> };
+  blocklist: { userPresets: ReadonlyArray<Preset> };
 }): string {
-  return JSON.stringify({ state, version: 1 });
+  return JSON.stringify({ state, version: 3 });
 }
 
 describe('read-only store (M1.T9)', () => {
@@ -30,24 +30,24 @@ describe('read-only store (M1.T9)', () => {
 
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     await store.setState({
-      blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+      blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
     });
 
     expect(setSpy).not.toHaveBeenCalled();
     // The in-memory state still changes: only persistence is suppressed.
-    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(store.getState().blocklist.userPresets).toEqual([testPreset]);
     setSpy.mockRestore();
   });
 
   it('still hydrates from storage', async () => {
     await fakeBrowser.storage.local.set({
-      [STORE_NAME]: serialize({ blocklist: { customTags: [testTag] } }),
+      [STORE_NAME]: serialize({ blocklist: { userPresets: [testPreset] } }),
     });
 
     const store = createAppStore({ readOnly: true });
     await store.persist.rehydrate();
 
-    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(store.getState().blocklist.userPresets).toEqual([testPreset]);
   });
 
   it('still receives external updates through attachStoreSync (M1.T8)', async () => {
@@ -56,24 +56,24 @@ describe('read-only store (M1.T9)', () => {
     attachStoreSync(store);
 
     await fakeBrowser.storage.local.set({
-      [STORE_NAME]: serialize({ blocklist: { customTags: [testTag] } }),
+      [STORE_NAME]: serialize({ blocklist: { userPresets: [testPreset] } }),
     });
 
-    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(store.getState().blocklist.userPresets).toEqual([testPreset]);
   });
 
   it('a writable store still persists as before', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     await store.setState({
-      blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+      blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
     });
 
     const raw = await fakeBrowser.storage.local.get(STORE_NAME);
     const parsed = JSON.parse(raw[STORE_NAME] as string) as {
-      state: { blocklist: { customTags: Tag[] } };
+      state: { blocklist: { userPresets: Preset[] } };
     };
-    expect(parsed.state.blocklist.customTags).toEqual([testTag]);
+    expect(parsed.state.blocklist.userPresets).toEqual([testPreset]);
   });
 
   it('the popup-facing useAppStore is read-only', async () => {

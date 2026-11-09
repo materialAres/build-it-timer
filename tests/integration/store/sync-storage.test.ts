@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
-import type { Tag } from '@/store/store.types';
+import type { Preset } from '@/store/store.types';
 
-const testTag: Tag = { id: 'focus', label: 'Focus' };
+const testPreset: Preset = { id: 'user:focus', name: 'Focus', domains: [] };
 
 /** Serialize a persisted `partialize` payload the way `zustand/persist` does. */
 function serialize(state: {
-  blocklist: { customTags: ReadonlyArray<Tag> };
+  blocklist: { userPresets: ReadonlyArray<Preset> };
 }): string {
-  // Version 2 (CR1.T3): a matching version keeps hydration read-only. A legacy
+  // Version 3 (CR4.T3): a matching version keeps hydration read-only. A legacy
   // version would make zustand write the migrated state back once (by design),
   // which would add a second `set` to the no-echo assertions below.
-  return JSON.stringify({ state, version: 2 });
+  return JSON.stringify({ state, version: 3 });
 }
 
 describe('attachStoreSync (M1.T8)', () => {
@@ -28,11 +28,11 @@ describe('attachStoreSync (M1.T8)', () => {
     // "Context A" writes directly to storage.local, simulating the background.
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: serialize({
-        blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+        blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
       }),
     });
 
-    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(store.getState().blocklist.userPresets).toEqual([testPreset]);
   });
 
   it('updates the in-memory store without recreating it', async () => {
@@ -43,12 +43,12 @@ describe('attachStoreSync (M1.T8)', () => {
 
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: serialize({
-        blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+        blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
       }),
     });
 
     expect(store.getState()).not.toBe(stateBefore);
-    expect(store.getState().blocklist.customTags).toEqual([testTag]);
+    expect(store.getState().blocklist.userPresets).toEqual([testPreset]);
   });
 
   it('does not re-persist while handling an external change (no echo/loop)', async () => {
@@ -59,7 +59,7 @@ describe('attachStoreSync (M1.T8)', () => {
     const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: serialize({
-        blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+        blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
       }),
     });
 
@@ -75,7 +75,7 @@ describe('attachStoreSync (M1.T8)', () => {
 
     await fakeBrowser.storage.local.set({ 'some-other-key': 'value' });
 
-    expect(store.getState().blocklist.customTags).toEqual([]);
+    expect(store.getState().blocklist.userPresets).toEqual([]);
   });
 
   it('stops rehydrating after the unsubscribe function is called', async () => {
@@ -86,11 +86,11 @@ describe('attachStoreSync (M1.T8)', () => {
     unsubscribe();
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: serialize({
-        blocklist: { ...store.getState().blocklist, customTags: [testTag] },
+        blocklist: { ...store.getState().blocklist, userPresets: [testPreset] },
       }),
     });
 
-    expect(store.getState().blocklist.customTags).toEqual([]);
+    expect(store.getState().blocklist.userPresets).toEqual([]);
   });
 
   it('exposes the helper from the store barrel', () => {

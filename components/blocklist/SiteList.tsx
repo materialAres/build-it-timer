@@ -1,12 +1,12 @@
 import { i18n } from '#i18n';
-import { useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useMemo, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { computeEntrySourceLabels } from '@/lib/blocking/entry-sources';
 import { PRESETS } from '@/lib/blocking/presets';
 import {
   selectBlocklist,
   selectBlocklistEditable,
-  selectCustomTags,
+  selectUserPresets,
   useAppStore,
 } from '@/store';
 import { SiteEntry } from './SiteEntry';
@@ -33,7 +33,8 @@ interface SiteListProps {
  */
 export function SiteList({ quickAdd }: SiteListProps) {
   const entries = useAppStore(selectBlocklist);
-  const customTags = useAppStore(selectCustomTags);
+  const userPresets = useAppStore(selectUserPresets);
+  const presets = useMemo(() => [...PRESETS, ...userPresets], [userPresets]);
   const editable = useAppStore(selectBlocklistEditable);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -51,7 +52,11 @@ export function SiteList({ quickAdd }: SiteListProps) {
       return;
     }
     const domain = result.value;
-    if (entries.some((entry) => entry.domain.value === domain)) {
+    // A site only a preset listed is not a duplicate: adding it by hand makes it
+    // a manual entry, so switching that preset off keeps it.
+    if (
+      entries.some((entry) => entry.domain.value === domain && entry.manual)
+    ) {
       setFeedback({
         kind: 'info',
         text: i18n.t('blocklist.alreadyInList', [domain, listName]),
@@ -121,11 +126,7 @@ export function SiteList({ quickAdd }: SiteListProps) {
             <SiteEntry
               key={entry.domain.value}
               domain={entry.domain.value}
-              sources={computeEntrySourceLabels(
-                entry.tagIds,
-                PRESETS,
-                customTags,
-              )}
+              sources={computeEntrySourceLabels(entry.presetIds, presets)}
               editable={editable}
             />
           ))}

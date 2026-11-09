@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
 import { PRESETS } from '@/lib/blocking/presets';
@@ -15,10 +21,10 @@ const setStatus = (status: TimerStatus): void => {
   });
 };
 
-describe('PresetPicker (M3.T1)', () => {
+describe('PresetPicker (M3.T1, toggles CR4.T3)', () => {
   beforeEach(() => {
     useAppStore.setState({
-      blocklist: { blocklist: [], customTags: [] },
+      blocklist: { blocklist: [], appliedPresetIds: [], userPresets: [] },
     });
     setStatus('idle');
   });
@@ -32,19 +38,23 @@ describe('PresetPicker (M3.T1)', () => {
     render(<PresetPicker />);
 
     for (const preset of PRESETS) {
-      expect(screen.getByRole('button', { name: `Apply ${preset.name} preset` })).toBeEnabled();
+      expect(
+        screen.getByRole('button', { name: `Apply ${preset.name} preset` }),
+      ).toBeEnabled();
     }
   });
 
   it('adds every Social domain to the blocklist in a single action', async () => {
-    const applyPreset = vi.spyOn(useAppStore.getState(), 'applyPreset');
+    const togglePreset = vi.spyOn(useAppStore.getState(), 'togglePreset');
 
     render(<PresetPicker />);
-    await userEvent.click(screen.getByRole('button', { name: 'Apply Social preset' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Apply Social preset' }),
+    );
 
-    // The component invokes exactly one action for the whole preset.
-    expect(applyPreset).toHaveBeenCalledTimes(1);
-    expect(applyPreset).toHaveBeenCalledWith('social');
+    // The component invokes exactly one action, with the target state.
+    expect(togglePreset).toHaveBeenCalledTimes(1);
+    expect(togglePreset).toHaveBeenCalledWith('social', true);
     expect(domainValues()).toEqual([
       'instagram.com',
       'facebook.com',
@@ -53,13 +63,29 @@ describe('PresetPicker (M3.T1)', () => {
     ]);
   });
 
-  it('does not create duplicates when the same preset is applied again', async () => {
+  it('is a toggle: the second click switches the preset off again', async () => {
     render(<PresetPicker />);
+    const button = screen.getByRole('button', { name: 'Apply Social preset' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Apply Social preset' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Apply Social preset' }));
-
+    await userEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
     expect(domainValues()).toHaveLength(PRESETS[0]?.domains.length ?? 0);
+
+    await userEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(domainValues()).toEqual([]);
+  });
+
+  it('keeps a manually added site when its preset is switched off', async () => {
+    useAppStore.getState().addSite('x.com');
+    render(<PresetPicker />);
+    const button = screen.getByRole('button', { name: 'Apply Social preset' });
+
+    await userEvent.click(button);
+    await userEvent.click(button);
+
+    expect(domainValues()).toEqual(['x.com']);
   });
 
   it('carries its own stylesheet', () => {

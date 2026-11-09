@@ -7,30 +7,28 @@ import {
   saveUserPreset,
 } from '@/lib/blocking/saved-presets';
 import type {
-  PresetBlocklistState,
-  PresetShape,
-  SourcedEntry,
-} from '@/lib/blocking/preset-toggle.types';
+  BlocklistEntry,
+  BlocklistState,
+  Preset,
+} from '@/store/store.types';
 
 const preset = (
   id: string,
   name: string,
   domains: ReadonlyArray<string>,
-): PresetShape => ({ id, name, domains: domains.map((value) => ({ value })) });
+): Preset => ({ id, name, domains: domains.map((value) => ({ value })) });
 
 const SOCIAL = preset('social', 'Social', ['x.com', 'facebook.com']);
 const VIDEO = preset('video', 'Video', ['youtube.com', 'x.com']);
-const BUILT_IN: ReadonlyArray<PresetShape> = [SOCIAL, VIDEO];
+const BUILT_IN: ReadonlyArray<Preset> = [SOCIAL, VIDEO];
 
 const entry = (
   domain: string,
   manual: boolean,
   presetIds: ReadonlyArray<string> = [],
-): SourcedEntry => ({ domain: { value: domain }, manual, presetIds });
+): BlocklistEntry => ({ domain: { value: domain }, manual, presetIds });
 
-const state = (
-  over: Partial<PresetBlocklistState> = {},
-): PresetBlocklistState => ({
+const state = (over: Partial<BlocklistState> = {}): BlocklistState => ({
   blocklist: [],
   appliedPresetIds: [],
   userPresets: [],
