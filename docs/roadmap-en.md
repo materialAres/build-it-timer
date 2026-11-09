@@ -1288,7 +1288,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 
 ##### CR4.T5 — Popup: preset toggles, saved-preset management, tag editor removed
 * **Objective**: the UI side of UI.T2/UI.T3 on top of UI.T1's single list.
-* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `components/blocklist/SiteList.tsx`, `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml` (component tests updated alongside).
+* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `PresetToggle.tsx`, `SavedPresetControls.tsx`, `SavedPresetRow.tsx`, `PresetNameForm.tsx`, `preset-picker.styles.ts` (new, split for the 200-line rule), `lib/blocking/saved-presets.ts` (`validatePresetName`), `entrypoints/popup/App.tsx` (comment), `locales/en.yml`, `locales/it.yml` (component tests updated alongside). `SiteList` already shows source chips since CR4.T3.
 * **Dependencies**: CR4.T4, UI.T1
 * **Acceptance criteria**:
   - Preset buttons expose `aria-pressed`, show applied state and count, and are dimmed when locked; their domains are inspectable before applying.

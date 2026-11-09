@@ -5,6 +5,7 @@ import {
   MAX_PRESET_NAME_LENGTH,
   renameUserPreset,
   saveUserPreset,
+  validatePresetName,
 } from '@/lib/blocking/saved-presets';
 import type {
   BlocklistEntry,
@@ -156,5 +157,35 @@ describe('deleteUserPreset', () => {
   it('is a no-op for a built-in or unknown preset', () => {
     expect(deleteUserPreset(saved, 'social')).toBe(saved);
     expect(deleteUserPreset(saved, 'user:9')).toBe(saved);
+  });
+});
+
+describe('validatePresetName (CR4.T5)', () => {
+  const known: ReadonlyArray<Preset> = [
+    ...BUILT_IN,
+    preset('user:1', 'Work', []),
+  ];
+
+  it('accepts a free, trimmed name', () => {
+    expect(validatePresetName('  Study ', known)).toBeNull();
+  });
+
+  it('reports a blank name', () => {
+    expect(validatePresetName('   ', known)).toBe('empty');
+  });
+
+  it('reports a name over the maximum length', () => {
+    expect(
+      validatePresetName('x'.repeat(MAX_PRESET_NAME_LENGTH + 1), known),
+    ).toBe('tooLong');
+  });
+
+  it('reports a name already used, case-insensitively, built-ins included', () => {
+    expect(validatePresetName('social', known)).toBe('taken');
+    expect(validatePresetName('WORK', known)).toBe('taken');
+  });
+
+  it('ignores the preset being renamed', () => {
+    expect(validatePresetName('work', known, 'user:1')).toBeNull();
   });
 });

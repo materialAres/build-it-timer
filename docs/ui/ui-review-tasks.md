@@ -48,7 +48,7 @@ Notes:
 #### UI.T1 — Blocklist: one list, shown once, owning the tab
 **Priority**: P0 · **Command**: `/impeccable layout` · **Dependencies**: none
 
-**Status**: done (2026-11-09, uncommitted). One list in `SiteList` with a heading count, empty state and source chips (`SiteEntry`, `lib/blocking/entry-sources.ts`); presets passed in as the `quickAdd` slot with a visible label; the list scrolls inside a 17rem cap (fullest locked state: 455px). `TagEditor` is no longer rendered; the file and its tests stay until CR4.T5 deletes them. Visual drift (blue, grey buttons) is left to UI.T5.
+**Status**: done (2026-11-09, `6fed253`). One list in `SiteList` with a heading count, empty state and source chips (`SiteEntry`, `lib/blocking/entry-sources.ts`); presets passed in as the `quickAdd` slot with a visible label; the list scrolls inside a 17rem cap (fullest locked state: 455px). `TagEditor` is no longer rendered (deleted in CR4.T3). Visual drift (blue, grey buttons) is left to UI.T5.
 
 **Problem**
 - `TagEditor.tsx:198-207` renders every blocked domain with tag checkboxes; `SiteList.tsx:159-176` renders the same domains again under "Blocked sites".
@@ -74,6 +74,8 @@ Notes:
 #### UI.T2 — Presets as toggles
 **Priority**: P1 · **Command**: `/impeccable layout` (UI) + TDD on store/lib logic · **Dependencies**: UI.T1 · **Implemented by**: CR4.T1–CR4.T5 (logic), UI side in CR4.T5
 
+**Status**: done with CR4.T5 (2026-11-09). Preset pills are green toggles (`aria-pressed`) with a count (`total` while off, `covered/total` once a site was removed by hand), the domains in the tooltip, dimmed when locked; rows carry source chips. The other popup controls keep their pre-UI.T5 look.
+
 **Problem**
 - `applyPreset` (`store/blocklist.slice.ts:255-280`) inserts domains once: no applied state, no `aria-pressed`, no feedback, no undo. The preset tag ids are never shown.
 
@@ -88,6 +90,8 @@ Notes:
 
 #### UI.T3 — Custom tags become saved presets
 **Priority**: P1 · **Command**: `/impeccable shape` first (new scope), then implement · **Dependencies**: UI.T2 · **Implemented by**: CR4 (analysis CR4.T1, migration CR4.T3, UI CR4.T5)
+
+**Status**: done with CR4.T5 (2026-11-09). "Save list as preset" (name validated with the reason shown) and "Edit saved presets" (rename in place, delete after a confirmation that says the sites stay blocked); saved presets toggle next to the built-in ones; tags migrate to saved presets (CR4.T3).
 
 **Problem**
 - Creating a tag changes nothing about blocking; it only filters the duplicated list. Trust breaker and the heaviest clutter on the tab.

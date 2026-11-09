@@ -3,7 +3,7 @@
 > Change request: **presets become toggles over the single blocklist, and custom
 > tags become saved presets** (CR4; origin: UI critique UI.T2/UI.T3 in
 > `docs/ui/ui-review-tasks.md`).
-> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic), CR4.T3 (store, v3 migration) and CR4.T4 (message boundary) are implemented; CR4.T5–CR4.T6 remain. Names
+> Status: **in progress** — written by CR4.T1; CR4.T2 (pure logic), CR4.T3 (store, v3 migration), CR4.T4 (message boundary) and CR4.T5 (popup) are implemented; CR4.T6 (docs and final gate) remains. Names
 > below refer to the code *before* CR4 unless stated otherwise; references use
 > symbols, not line numbers, because the files change under the following tasks.
 
@@ -322,4 +322,11 @@ table for the four preset messages (CR4.T4).
   the pure helpers refuse (unknown preset, taken name, invalid site) stays a
   silent no-op. The CR5 predicate is not wired yet: every row of §3.6 is still
   `idle`-only, and `PRESET_TOGGLE.applied` is what CR5.T2 will read.
+- CR4.T5 (**implemented**): `validatePresetName` (`saved-presets.ts`) is now the
+  single name rule, used by save/rename and by the popup so a refused name is
+  explained (empty / too long / taken). Toggles show `total` while off and
+  `covered/total` once a site was removed by hand, list their domains in the
+  tooltip and are dimmed when locked. Save and edit are collapsed controls under
+  the row; delete asks first and says the sites stay blocked. The save note says
+  switching the preset off removes its sites (§3.4 decision 2).
 

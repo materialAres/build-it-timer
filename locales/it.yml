@@ -44,7 +44,25 @@ score:
 
 blocklist:
   presets: Preset
-  applyPreset: 'Applica preset $1'
+  presetToggle: 'Preset $1, $2 di $3 siti bloccati'
+  presetDomains: 'Blocca $1'
+  presetNoSites: Nessun sito in questo preset
+  savePreset: Salva lista come preset
+  savePresetNote: Salva tutti i siti della lista. Disattivando il preset vengono rimossi.
+  presetName: Nome del preset
+  save: Salva
+  cancel: Annulla
+  presetNameEmpty: Inserisci un nome.
+  presetNameTooLong: 'Usa al massimo $1 caratteri.'
+  presetNameTaken: Esiste già un preset con questo nome.
+  editSavedPresets: Modifica preset salvati
+  savedPresets: Preset salvati
+  renamePreset: Rinomina
+  renamePresetLabel: 'Rinomina $1'
+  deletePreset: Elimina
+  deletePresetLabel: 'Elimina $1'
+  deletePresetConfirm: 'Eliminare $1? I suoi siti restano bloccati.'
+  keepPreset: Mantieni
   sites: Siti
   blockedSites: Siti bloccati
   blocklistName: lista dei bloccati

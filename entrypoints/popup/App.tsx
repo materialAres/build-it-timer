@@ -77,9 +77,8 @@ function BlocklistSection() {
           {i18n.t('blocklist.locked')}
         </p>
       ) : null}
-      {/* UI.T1: one list, shown once. The tag editor's per-site checkbox grid
-          duplicated every domain and changed nothing about blocking; custom
-          tags are reworked into saved presets by CR4. */}
+      {/* UI.T1: one list, shown once. CR4: presets (built-in and saved) are
+          toggles over it, so there is no separate tag editor. */}
       <SiteList quickAdd={<PresetPicker />} />
     </div>
   );

@@ -32,8 +32,8 @@ describe('i18n shared instance (M3.T9)', () => {
     expect(i18n.t('timer.start')).toBe('Start');
     expect(i18n.t('overlay.title')).toBe('Stay focused');
     expect(i18n.t('score.badgeAriaLabel', ['Good'])).toBe('Focus score: Good');
-    expect(i18n.t('blocklist.applyPreset', ['Social'])).toBe(
-      'Apply Social preset',
+    expect(i18n.t('blocklist.presetToggle', ['Social', '4', '4'])).toBe(
+      'Social preset, 4 of 4 sites blocked',
     );
     expect(i18n.t('blocklist.locked')).toBe(
       'The blocklist is locked while a session is in progress. Reset the timer to edit it.',
@@ -86,8 +86,8 @@ describe('IT locale rendering (M3.T10)', () => {
     expect(i18n.t('score.badgeAriaLabel', ['Buono'])).toBe(
       'Punteggio di concentrazione: Buono',
     );
-    expect(i18n.t('blocklist.applyPreset', ['Social'])).toBe(
-      'Applica preset Social',
+    expect(i18n.t('blocklist.presetToggle', ['Social', '4', '4'])).toBe(
+      'Preset Social, 4 di 4 siti bloccati',
     );
     expect(i18n.t('blocklist.locked')).toBe(
       'La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.',

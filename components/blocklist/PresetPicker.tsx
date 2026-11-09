@@ -1,99 +1,50 @@
 import { i18n } from '#i18n';
+import { useMemo } from 'react';
 import { PRESETS } from '@/lib/blocking/presets';
 import {
   selectBlocklistEditable,
-  selectIsPresetApplied,
+  selectUserPresets,
   useAppStore,
 } from '@/store';
-import type { Preset } from '@/store/store.types';
+import { PresetToggle } from './PresetToggle';
+import { SavedPresetControls } from './SavedPresetControls';
+import { PRESET_PICKER_STYLES } from './preset-picker.styles';
 
-/**
- * The picker's own stylesheet, consistent with the CRT/monospace look used by
- * the rest of the popup (M2.T14/M2.T17/M2.T18).
- */
-const PRESET_PICKER_STYLES = `
-  .preset-picker {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  .preset-picker__label {
-    margin-right: 0.2rem;
-    color: #e6e6e6;
-    font-size: 0.7rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.8;
-  }
-  .preset-picker__button {
-    padding: 0.3rem 0.7rem;
-    border: 1px solid currentColor;
-    border-radius: 999px;
-    background: transparent;
-    color: #4dabf7;
-    cursor: pointer;
-    letter-spacing: 0.06em;
-    text-shadow: 0 0 4px currentColor;
-  }
-  .preset-picker__button:hover {
-    background: rgba(77, 171, 247, 0.15);
-  }
-`;
-
-/**
- * Preset selection UI (M3.T1, toggles since CR4.T3): each ready-made preset
- * (M2.T5) is a toggle over the blocklist, switched with a **single** store
- * action. The component is presentational — it holds no expansion logic; it
- * only invokes `togglePreset` with the target state, and the action owns the
- * single-update change and forwards one mutation to the background (M1.T10).
- * Saved-preset management and the applied count arrive with CR4.T5.
- */
 // A visible label (UI.T1): the pills sit under the add field, so the row has to
 // say what it is instead of relying on an invisible group name.
 const PRESET_PICKER_LABEL_ID = 'preset-picker-label';
 
+/**
+ * Preset row of the Blocklist tab (M3.T1, toggles and saved presets CR4.T5):
+ * built-in presets and the user's saved ones side by side, each a toggle over
+ * the single list, followed by the save / edit controls. Presentational: the
+ * store actions own every change and the background applies it (M1.T10).
+ */
 export function PresetPicker() {
   const editable = useAppStore(selectBlocklistEditable);
+  const userPresets = useAppStore(selectUserPresets);
+  const presets = useMemo(() => [...PRESETS, ...userPresets], [userPresets]);
 
   return (
-    <div
-      className="preset-picker"
-      role="group"
-      aria-labelledby={PRESET_PICKER_LABEL_ID}
-    >
+    <div className="preset-picker">
       <style>{PRESET_PICKER_STYLES}</style>
-      <span id={PRESET_PICKER_LABEL_ID} className="preset-picker__label">
-        {i18n.t('blocklist.presets')}
-      </span>
-      {PRESETS.map((preset) => (
-        <PresetToggle key={preset.id} preset={preset} editable={editable} />
-      ))}
+      <div
+        className="preset-picker__row"
+        role="group"
+        aria-labelledby={PRESET_PICKER_LABEL_ID}
+      >
+        <span id={PRESET_PICKER_LABEL_ID} className="preset-picker__label">
+          {i18n.t('blocklist.presets')}
+        </span>
+        {presets.map((preset) => (
+          <PresetToggle key={preset.id} preset={preset} editable={editable} />
+        ))}
+      </div>
+      <SavedPresetControls
+        presets={presets}
+        userPresets={userPresets}
+        editable={editable}
+      />
     </div>
-  );
-}
-
-interface PresetToggleProps {
-  readonly preset: Preset;
-  readonly editable: boolean;
-}
-
-function PresetToggle({ preset, editable }: PresetToggleProps) {
-  const applied = useAppStore(selectIsPresetApplied(preset.id));
-  return (
-    <button
-      type="button"
-      className="preset-picker__button"
-      data-preset-id={preset.id}
-      aria-pressed={applied}
-      disabled={!editable}
-      aria-label={i18n.t('blocklist.applyPreset', [preset.name])}
-      onClick={() => {
-        useAppStore.getState().togglePreset(preset.id, !applied);
-      }}
-    >
-      {preset.name}
-    </button>
   );
 }

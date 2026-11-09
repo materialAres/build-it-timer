@@ -15,23 +15,28 @@ export function generatePresetId(now: number, random: number): string {
   return `${USER_PRESET_PREFIX}${now.toString(36)}-${Math.floor(random * 1_000_000).toString(36)}`;
 }
 
-function cleanName(name: string): string | null {
-  const trimmed = name.trim();
-  return trimmed.length > 0 && trimmed.length <= MAX_PRESET_NAME_LENGTH
-    ? trimmed
-    : null;
-}
+/** Why a preset name is refused; `null` from the validator means it is free. */
+export type PresetNameError = 'empty' | 'tooLong' | 'taken';
 
-/** Names are unique case-insensitively across built-in and user presets. */
-function isNameTaken(
+/**
+ * The single name rule (CR4.T5): trimmed, 1–24 characters, unique
+ * case-insensitively across built-in and user presets (the preset being
+ * renamed excluded). Shared by the pure save/rename functions and the popup, so
+ * the UI can say *why* a name is refused instead of silently doing nothing.
+ */
+export function validatePresetName(
   name: string,
   presets: ReadonlyArray<Preset>,
   exceptId?: string,
-): boolean {
-  const target = name.toLowerCase();
-  return presets.some(
+): PresetNameError | null {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return 'empty';
+  if (trimmed.length > MAX_PRESET_NAME_LENGTH) return 'tooLong';
+  const target = trimmed.toLowerCase();
+  const taken = presets.some(
     (preset) => preset.id !== exceptId && preset.name.toLowerCase() === target,
   );
+  return taken ? 'taken' : null;
 }
 
 /**
@@ -46,12 +51,11 @@ export function saveUserPreset(
   name: string,
   builtIn: ReadonlyArray<Preset>,
 ): BlocklistState {
-  const cleaned = cleanName(name);
   const known = [...builtIn, ...state.userPresets];
-  if (cleaned === null || id.length === 0 || state.blocklist.length === 0)
-    return state;
-  if (isNameTaken(cleaned, known) || known.some((preset) => preset.id === id))
-    return state;
+  if (id.length === 0 || state.blocklist.length === 0) return state;
+  if (validatePresetName(name, known) !== null) return state;
+  if (known.some((preset) => preset.id === id)) return state;
+  const cleaned = name.trim();
 
   const preset: Preset = {
     id,
@@ -77,10 +81,9 @@ export function renameUserPreset(
   builtIn: ReadonlyArray<Preset>,
 ): BlocklistState {
   const target = state.userPresets.find((preset) => preset.id === id);
-  const cleaned = cleanName(name);
-  if (target === undefined || cleaned === null || cleaned === target.name)
-    return state;
-  if (isNameTaken(cleaned, [...builtIn, ...state.userPresets], id))
+  const cleaned = name.trim();
+  if (target === undefined || cleaned === target.name) return state;
+  if (validatePresetName(name, [...builtIn, ...state.userPresets], id) !== null)
     return state;
 
   return {

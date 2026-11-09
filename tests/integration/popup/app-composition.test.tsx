@@ -191,7 +191,7 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     await userEvent.click(
-      screen.getByRole('button', { name: 'Apply Social preset' }),
+      screen.getByRole('button', { name: /^Social preset,/ }),
     );
     await flushAsync();
 
