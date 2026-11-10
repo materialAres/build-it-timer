@@ -74,6 +74,12 @@ blocklist:
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
   added: 'Aggiunto $1.'
+  addedSites: 'Aggiunti $1 siti'
+  removed: 'Rimosso $1.'
+  removedSites: 'Rimossi $1 siti'
+  invalidEmpty: Inserisci un sito, ad esempio example.com.
+  invalidSuffix: '$1 è una terminazione di dominio, non un sito. Aggiungi il nome del sito, ad esempio example.com.'
+  invalidIp: Gli indirizzi IP non possono essere bloccati. Inserisci un nome di dominio.
   locked: La lista è bloccata. Reimposta il timer per modificarla.
   addOnly: Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.
   summarySites: 'Blocca $1 siti · solo aggiunte durante una sessione'

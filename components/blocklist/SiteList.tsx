@@ -1,5 +1,14 @@
 import { i18n } from '#i18n';
-import { useMemo, useState, type ReactNode, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from 'react';
+import { classifyEntryError } from '@/lib/blocking/entry-error';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { computeEntrySourceLabels } from '@/lib/blocking/entry-sources';
 import { PRESETS } from '@/lib/blocking/presets';
@@ -10,8 +19,13 @@ import {
   selectUserPresets,
   useAppStore,
 } from '@/store';
+import { describeEntryError } from './entry-error-message';
 import { SiteEntry } from './SiteEntry';
 import { SITE_LIST_STYLES } from './site-list.styles';
+import { useListChanges } from './use-list-changes';
+
+/** How long a confirmation stays; an error stays until the field is edited. */
+const INFO_FEEDBACK_MS = 3_000;
 
 interface Feedback {
   readonly kind: 'error' | 'info';
@@ -31,6 +45,9 @@ interface SiteListProps {
  * validate, and duplicates are detected only for the visible feedback — the
  * authoritative dedup stays in the store's pure helpers (M2.T4). Each domain is
  * rendered exactly once (UI.T1), labelled with the presets/tags it came from.
+ * UI.T6 hardening: a rejected entry says why and is linked to the field, a
+ * confirmation fades, new rows are highlighted and scrolled into view, and a
+ * preset's additions/removals are announced in a live region.
  *
  * Two windows (CR5.T3): adding is allowed from `idle` through `paused`, while
  * removing stays `idle`-only, so the form and the × buttons follow different
@@ -44,6 +61,23 @@ export function SiteList({ quickAdd }: SiteListProps) {
   const addAllowed = useAppStore(selectBlocklistAddAllowed);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const feedbackId = useId();
+  const formAdd = useRef<string | null>(null);
+  const domains = useMemo(
+    () => entries.map((entry) => entry.domain.value),
+    [entries],
+  );
+  const { added, announcement } = useListChanges(domains, formAdd);
+
+  useEffect(() => {
+    if (feedback?.kind !== 'info') return;
+    const timer = globalThis.setTimeout(() => {
+      setFeedback(null);
+    }, INFO_FEEDBACK_MS);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [feedback]);
 
   const title = i18n.t('blocklist.blockedSites');
   const listName = i18n.t('blocklist.blocklistName');
@@ -54,7 +88,10 @@ export function SiteList({ quickAdd }: SiteListProps) {
     event.preventDefault();
     const result = normalizeEntry(value);
     if (!result.ok) {
-      setFeedback({ kind: 'error', text: i18n.t('blocklist.invalidUrl') });
+      setFeedback({
+        kind: 'error',
+        text: describeEntryError(classifyEntryError(value)),
+      });
       return;
     }
     const domain = result.value;
@@ -69,6 +106,7 @@ export function SiteList({ quickAdd }: SiteListProps) {
       });
       return;
     }
+    formAdd.current = domain;
     useAppStore.getState().addSite(domain);
     setFeedback({ kind: 'info', text: i18n.t('blocklist.added', [domain]) });
     setValue('');
@@ -89,6 +127,10 @@ export function SiteList({ quickAdd }: SiteListProps) {
             type="text"
             value={value}
             disabled={!addAllowed}
+            aria-invalid={feedback?.kind === 'error' ? true : undefined}
+            aria-describedby={
+              addAllowed && feedback !== null ? feedbackId : undefined
+            }
             aria-label={i18n.t('blocklist.addTo', [title])}
             placeholder={i18n.t('blocklist.exampleDomain')}
             onChange={(event) => {
@@ -111,12 +153,22 @@ export function SiteList({ quickAdd }: SiteListProps) {
 
         {addAllowed && feedback !== null ? (
           <p
+            id={feedbackId}
             className={`site-list__feedback site-list__feedback--${feedback.kind}`}
             role={feedback.kind === 'error' ? 'alert' : 'status'}
           >
             {feedback.text}
           </p>
         ) : null}
+
+        <div
+          className="site-list__announce"
+          data-announcement
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {announcement}
+        </div>
 
         {quickAdd}
       </div>
@@ -134,6 +186,8 @@ export function SiteList({ quickAdd }: SiteListProps) {
               domain={entry.domain.value}
               sources={computeEntrySourceLabels(entry.presetIds, presets)}
               editable={editable}
+              isNew={added.includes(entry.domain.value)}
+              reveal={added[0] === entry.domain.value}
             />
           ))}
         </ul>

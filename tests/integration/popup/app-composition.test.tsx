@@ -77,6 +77,15 @@ describe('popup App composition (M3.T4)', () => {
     handle.dispose();
   });
 
+  it('names the tab panel after its tab, not after its contents (UI.T6)', async () => {
+    render(<App />);
+
+    expect(screen.getByRole('tabpanel', { name: 'Timer' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.getByRole('tabpanel', { name: 'Blocklist' })).toBeInTheDocument();
+  });
+
   it('renders the tab bar and the timer section by default', () => {
     render(<App />);
 

@@ -253,7 +253,7 @@ Quiet, labeled like a terminal.
 ### Inputs / Fields
 - **Style:** an `ink-field` background, a 1px `moss-frame` border with 4px corners that turns phosphor green on focus, `screen-white` text in the monospace stack, 0.8rem, 0.3rem 0.5rem padding and a phosphor caret.
 - **Placeholder:** `#8a948e`, 6.14:1 on `ink-field` (the browser default `#757575` is 4.17:1 and fails AA).
-- **Feedback:** an info line in `score-excellent` green and an error line in `alarm-red`, both 0.75rem.
+- **Feedback:** an info line in `score-excellent` green and an error line in `alarm-red`, both 0.75rem. A confirmation fades after 3 seconds; an error stays until the field is edited and is linked to it with `aria-describedby`. A row that was just added gets a `phosphor-wash` highlight for about 1.6 seconds (static under reduced motion).
 
 ### Score Badge and Population
 - **Badge:** an outline pill (0.15rem 0.6rem), uppercase 0.8rem, colored by the score tier, with a glow.

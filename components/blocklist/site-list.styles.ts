@@ -46,8 +46,18 @@ export const SITE_LIST_STYLES = `
     font-size: 0.7rem;
     color: #7dfba0;
     opacity: 0.9;
+    overflow-wrap: anywhere;
   }
-  .site-list__feedback { margin: 0; font-size: 0.75rem; }
+  .site-list__feedback { margin: 0; font-size: 0.75rem; overflow-wrap: anywhere; }
+  .site-list__announce {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .site-list__feedback--error { color: #ff6b6b; }
   .site-list__feedback--info { color: #51cf66; }
   .site-list__empty { margin: 0; font-size: 0.8rem; opacity: 0.6; }
@@ -77,7 +87,22 @@ export const SITE_LIST_STYLES = `
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .site-entry--new {
+    border-radius: 4px;
+    animation: site-entry-new 1.4s ease-out;
+  }
+  @keyframes site-entry-new {
+    from { background: rgba(125, 251, 160, 0.28); }
+    to { background: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .site-entry--new { animation: none; background: rgba(125, 251, 160, 0.12); }
+  }
   .site-entry__source {
+    min-width: 0;
+    max-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding: 0 0.4rem;
     border: 1px solid rgba(125, 251, 160, 0.35);
     border-radius: 999px;

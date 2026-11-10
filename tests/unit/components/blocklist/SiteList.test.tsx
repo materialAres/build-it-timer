@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   act,
   cleanup,
@@ -95,7 +95,7 @@ describe('SiteList (M3.T3)', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows "Enter a valid URL" for a bare public suffix and adds nothing', async () => {
+  it('names a bare public suffix instead of a generic error and adds nothing (UI.T6)', async () => {
     render(<SiteList />);
 
     await userEvent.type(
@@ -104,16 +104,20 @@ describe('SiteList (M3.T3)', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(screen.getByText('Enter a valid URL')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'co.uk is a domain ending, not a site. Add the site name, like example.com.',
+      ),
+    ).toBeInTheDocument();
     expect(currentBlocklist().blocklist).toEqual([]);
   });
 
-  it('shows "Enter a valid URL" for empty/whitespace input', async () => {
+  it('asks for a site when the input is empty (UI.T6)', async () => {
     render(<SiteList />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(screen.getByText('Enter a valid URL')).toBeInTheDocument();
+    expect(screen.getByText('Enter a site, like example.com.')).toBeInTheDocument();
     expect(currentBlocklist().blocklist).toEqual([]);
   });
 
@@ -355,5 +359,211 @@ describe('SiteList layout (UI.T1)', () => {
     expect(
       quickAdd.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+describe('SiteList error feedback (UI.T6)', () => {
+  beforeEach(() => {
+    resetBlocklist();
+    setStatus('idle');
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const submit = (container: HTMLElement, text: string): HTMLElement => {
+    const input = screen.getByLabelText('Add to Blocked sites');
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+    return input;
+  };
+
+  it.each([
+    ['com', 'com is a domain ending, not a site. Add the site name, like example.com.'],
+    ['192.168.1.1', 'IP addresses cannot be blocked. Enter a domain name.'],
+    ['not a url', 'Enter a valid URL'],
+  ])('says specifically what is wrong with %j', (text, message) => {
+    const { container } = render(<SiteList />);
+
+    submit(container, text);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(message);
+    expect(currentBlocklist().blocklist).toEqual([]);
+  });
+
+  it('links the error to the field and marks it invalid', () => {
+    const { container } = render(<SiteList />);
+
+    const input = submit(container, 'com');
+
+    const alert = screen.getByRole('alert');
+    expect(alert.id).not.toBe('');
+    expect(input).toHaveAttribute('aria-describedby', alert.id);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('drops the link and the invalid mark once the user edits the field', () => {
+    const { container } = render(<SiteList />);
+    const input = submit(container, 'com');
+
+    fireEvent.change(input, { target: { value: 'co' } });
+
+    expect(input).not.toHaveAttribute('aria-describedby');
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+  });
+});
+
+describe('SiteList transient feedback and live updates (UI.T6)', () => {
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    scrollIntoView.mockReset();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    resetBlocklist([entry('a.com')]);
+    setStatus('idle');
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  const addByForm = (container: HTMLElement, text: string): void => {
+    fireEvent.change(screen.getByLabelText('Add to Blocked sites'), {
+      target: { value: text },
+    });
+    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
+  };
+  const announcement = (container: HTMLElement): string =>
+    container.querySelector('[data-announcement]')?.textContent ?? '';
+  const advance = (ms: number): void => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+
+  it('clears "Added x." on its own but keeps an error until the user edits', () => {
+    const { container } = render(<SiteList />);
+
+    addByForm(container, 'facebook.com');
+    expect(screen.getByText('Added facebook.com.')).toBeInTheDocument();
+    advance(4_000);
+    expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
+
+    addByForm(container, 'com');
+    advance(60_000);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('does not highlight or scroll to the rows already there', () => {
+    const { container } = render(<SiteList />);
+
+    expect(container.querySelector('.site-entry--new')).toBeNull();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('highlights a new row, scrolls it into view and lets the highlight go', () => {
+    const { container } = render(<SiteList />);
+
+    addByForm(container, 'facebook.com');
+
+    const fresh = container.querySelectorAll('.site-entry--new');
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]).toHaveTextContent('facebook.com');
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    advance(3_000);
+    expect(container.querySelector('.site-entry--new')).toBeNull();
+  });
+
+  it('highlights every site a preset adds and reveals the first', () => {
+    const { container } = render(<SiteList />);
+
+    act(() => {
+      useAppStore.getState().togglePreset('social', true);
+    });
+
+    expect(container.querySelectorAll('.site-entry--new')).toHaveLength(4);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces what a preset added and removed, and the announcement fades', () => {
+    const { container } = render(<SiteList />);
+
+    act(() => {
+      useAppStore.getState().togglePreset('social', true);
+    });
+    expect(announcement(container)).toBe('Added 4 sites');
+
+    advance(5_000);
+    expect(announcement(container)).toBe('');
+
+    act(() => {
+      useAppStore.getState().togglePreset('social', false);
+    });
+    expect(announcement(container)).toBe('Removed 4 sites');
+  });
+
+  it('announces a single removal by name', () => {
+    const { container } = render(<SiteList />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove a.com' }));
+
+    expect(announcement(container)).toBe('Removed a.com.');
+  });
+
+  it('leaves a site added through the form to its own feedback', () => {
+    const { container } = render(<SiteList />);
+
+    addByForm(container, 'facebook.com');
+
+    expect(announcement(container)).toBe('');
+  });
+
+  it('keeps the announcement in a live region', () => {
+    const { container } = render(<SiteList />);
+
+    const region = container.querySelector('[data-announcement]');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+  });
+});
+
+describe('SiteList long names (UI.T6)', () => {
+  beforeEach(() => {
+    setStatus('idle');
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('keeps the full domain in a tooltip when the row truncates it', () => {
+    const long = 'a-really-quite-long-subdomain-name-for-testing.example.com';
+    resetBlocklist([entry(long)]);
+    render(<SiteList />);
+
+    expect(screen.getByText(long)).toHaveAttribute('title', long);
+  });
+
+  it('keeps the full preset name in a tooltip on a source chip', () => {
+    useAppStore.setState({
+      blocklist: {
+        blocklist: [
+          { domain: { value: 'x.com' }, manual: false, presetIds: ['user:w'] },
+        ],
+        appliedPresetIds: ['user:w'],
+        userPresets: [
+          { id: 'user:w', name: 'Very long preset name', domains: [{ value: 'x.com' }] },
+        ],
+      },
+    });
+    render(<SiteList />);
+
+    expect(screen.getByText('Very long preset name')).toHaveAttribute(
+      'title',
+      'Very long preset name',
+    );
   });
 });

@@ -150,6 +150,8 @@ Notes:
 #### UI.T6 — Edge cases and feedback
 **Priority**: P2 · **Command**: `/impeccable harden` · **Dependencies**: UI.T1, UI.T2
 
+**Status**: done (2026-11-10). Implemented directly, without running the impeccable command. New rows are highlighted for about 1.6s and the first is scrolled into view (the list keeps its order rather than moving new entries to the top). A live region (`data-announcement`, `aria-live="polite"`) announces what changed from the list's own diff (`lib/blocking/diff-domains.ts`): `Added 4 sites`, `Removed 4 sites`, `Removed a.com.`; a site typed in the form keeps its own visible feedback and is not announced twice. `Added x.` fades after 3s; an error stays until the field is edited. Rejected entries say why (`lib/blocking/entry-error.ts`): empty, an IP address, a bare public suffix named back to the user (`com is a domain ending, not a site…`), or the generic message; the error is linked to the field with `aria-describedby` and `aria-invalid`. Long domains and source chips truncate with an ellipsis and keep the full text in a tooltip; long feedback wraps. The tab panel was already named after its tab (`aria-labelledby`), so only a test was added. EN and IT. Checked in the built extension at 420px (suffix and IP errors, a 62-character domain, a long preset chip, a preset toggle).
+
 **Acceptance criteria**
 - New entries appear at the top of the list (or are scrolled into view) and are briefly highlighted.
 - Applying/removing a preset announces the change (`Added 4 sites` / `Removed 4 sites`) in a live region.
