@@ -182,7 +182,7 @@ The palette is a phosphor monitor at night: a near-black ground, one green beam,
 ### Signal (not accents)
 - **Sodium Amber** (`sodium-amber`): the lock notice shown while a session is running (the blocklist can't be edited).
 - **Lamp Amber** (`lamp-amber`): the blocked domain highlighted inside the overlay message.
-- **Alarm Red** (`alarm-red`, `alarm-red-soft`, `alarm-red-frame`): errors, removal and the "Yes, open it anyway" choice in the overlay.
+- **Alarm Red** (`alarm-red`, `alarm-red-soft`, `alarm-red-frame`): errors, removal and the "Open anyway" choice (the other button is "Back to work") in the overlay.
 
 ### Score tiers
 `score-excellent`, `score-great`, `score-good` and `score-bad` color only the score badge and the session-history rows. Their only job is to tell the four tiers apart. `score-great` is blue, and that's allowed only here.
@@ -256,7 +256,7 @@ Quiet, labeled like a terminal.
 - **Feedback:** an info line in `score-excellent` green and an error line in `alarm-red`, both 0.75rem. A confirmation fades after 3 seconds; an error stays until the field is edited and is linked to it with `aria-describedby`. A row that was just added gets a `phosphor-wash` highlight for about 1.6 seconds (static under reduced motion).
 
 ### Score Badge and Population
-- **Badge:** an outline pill (0.15rem 0.6rem), uppercase 0.8rem, colored by the score tier, with a glow.
+- **Badge:** an outline pill (0.15rem 0.6rem), uppercase 0.8rem, colored by the score tier, with a glow. During the first tenth of a session (and while idle) it reads "Starting" in muted grey, with no glow, instead of a red "Bad"; a finished session always shows its real tier.
 - **Population:** a bold 1.1rem numeral followed by a 0.7rem uppercase "population" label, both in `score-excellent` green with a glow.
 - **Session history row:** 4px corners, a 20% white border, 0.15rem 0.5rem padding, the score in its tier color.
 

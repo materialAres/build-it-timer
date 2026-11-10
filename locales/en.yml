@@ -28,12 +28,14 @@ city:
   exportPng: Export PNG
   exportJpeg: Export JPEG
   exportError: Could not export the city image.
+  emptyHint: Your city grows while you focus. Start a session to build it.
 
 score:
   excellent: Excellent
   great: Great
   good: Good
   bad: Bad
+  early: Starting
   badgeAriaLabel: 'Focus score: $1'
   population: population
   populationAriaLabel: 'Population: $1'
@@ -92,8 +94,8 @@ overlay:
   # `<span>` while the sentence stays translatable as a whole.
   questionPrefix: 'You put '
   questionSuffix: ' on your blocklist. Are you sure you want to access it?'
-  yes: Yes
-  no: No
+  openAnyway: Open anyway
+  backToWork: Back to work
 
 common:
   add: Add

@@ -21,7 +21,7 @@ describe('BlockedOverlay (M2.T8)', () => {
     expect(screen.getByText(/are you sure you want to access it\?/i)).toBeInTheDocument();
   });
 
-  it('offers exactly the two choices "Yes" and "No"', () => {
+  it('offers exactly the two choices "Open anyway" and "Back to work"', () => {
     render(
       <BlockedOverlay
         domain="facebook.com"
@@ -31,12 +31,12 @@ describe('BlockedOverlay (M2.T8)', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to work' })).toBeInTheDocument();
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
-  it('reports "Yes" through onProceed only', async () => {
+  it('reports "Open anyway" through onProceed only', async () => {
     const onProceed = vi.fn();
     const onGoBack = vi.fn();
 
@@ -48,13 +48,13 @@ describe('BlockedOverlay (M2.T8)', () => {
         onGoBack={onGoBack}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open anyway' }));
 
     expect(onProceed).toHaveBeenCalledTimes(1);
     expect(onGoBack).not.toHaveBeenCalled();
   });
 
-  it('reports "No" through onGoBack only', async () => {
+  it('reports "Back to work" through onGoBack only', async () => {
     const onProceed = vi.fn();
     const onGoBack = vi.fn();
 
@@ -66,7 +66,7 @@ describe('BlockedOverlay (M2.T8)', () => {
         onGoBack={onGoBack}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'No' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Back to work' }));
 
     expect(onGoBack).toHaveBeenCalledTimes(1);
     expect(onProceed).not.toHaveBeenCalled();
@@ -83,8 +83,8 @@ describe('BlockedOverlay (M2.T8)', () => {
     );
 
     expect(screen.getByText('Great! Keep focusing!')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'No' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open anyway' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to work' })).not.toBeInTheDocument();
   });
 
   it('carries its stylesheet inside its own markup', () => {

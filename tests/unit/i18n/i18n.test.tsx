@@ -70,8 +70,8 @@ describe('i18n shared instance (M3.T9)', () => {
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveTextContent('You put facebook.com on your blocklist.');
     expect(dialog).toHaveTextContent('Are you sure you want to access it?');
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to work' })).toBeInTheDocument();
   });
 });
 
@@ -138,7 +138,7 @@ describe('IT locale rendering (M3.T10)', () => {
       'Hai messo facebook.com nella lista dei bloccati.',
     );
     expect(dialog).toHaveTextContent('Sei sicuro di voler accedere?');
-    expect(screen.getByRole('button', { name: 'Sì' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apri comunque' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Torna al lavoro' })).toBeInTheDocument();
   });
 });

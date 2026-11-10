@@ -42,6 +42,14 @@
   gap: 0.6rem;
 }
 
+.city-empty-hint {
+  margin: 0;
+  color: #8a948e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .popup-section--timer {
   align-items: center;
 }

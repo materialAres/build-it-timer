@@ -60,6 +60,7 @@ const OVERLAY_STYLES = `
   }
   .blocked-overlay__actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     justify-content: center;
   }
@@ -146,14 +147,14 @@ export function BlockedOverlay({
                 className="blocked-overlay__button blocked-overlay__button--danger"
                 onClick={onProceed}
               >
-                {i18n.t('overlay.yes')}
+                {i18n.t('overlay.openAnyway')}
               </button>
               <button
                 type="button"
                 className="blocked-overlay__button"
                 onClick={onGoBack}
               >
-                {i18n.t('overlay.no')}
+                {i18n.t('overlay.backToWork')}
               </button>
             </div>
           </>

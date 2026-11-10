@@ -165,6 +165,8 @@ Notes:
 #### UI.T7 — Minor items
 **Priority**: P3 · **Command**: `/impeccable clarify` / `/impeccable polish` · **Dependencies**: UI.T5
 
+**Status**: done (2026-11-10). Implemented directly, without running the impeccable commands. Overlay buttons read `Open anyway` / `Back to work` (keys `overlay.openAnyway`, `overlay.backToWork`; IT `Apri comunque` / `Torna al lavoro`). The score badge shows a neutral grey `Starting` until a tenth of the session is built (`lib/score/score-reveal.ts`, `SCORE_REVEAL_RATIO`) and never for a `completed` session; only `bad` is held back, the other tiers are earned. The City tab shows `CityEmptyHint` while idle with nothing built. The hint does not say "every 2s": the cadence is `duration ÷ 600` characters (3s for 30 min), so the copy stays general. EN and IT.
+
 - Overlay buttons: `Open anyway` / `Back to work` instead of `Yes` / `No`.
 - Score: avoid a red `BAD` badge seconds into a session (neutral voice); consider showing tier only after a minimum of elapsed time or a softer early state.
 - City tab: empty-state hint that the city grows every 2s of focus.

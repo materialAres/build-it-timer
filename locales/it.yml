@@ -28,12 +28,14 @@ city:
   exportAriaLabel: Esporta città
   exportPng: Esporta PNG
   exportJpeg: Esporta JPEG
+  emptyHint: La tua città cresce mentre ti concentri. Avvia una sessione per costruirla.
   exportError: Impossibile esportare l'immagine della città.
 
 score:
   excellent: Eccellente
   great: Ottimo
   good: Buono
+  early: In partenza
   bad: Scarso
   badgeAriaLabel: 'Punteggio di concentrazione: $1'
   population: popolazione
@@ -93,8 +95,8 @@ overlay:
   # `<span>` while the sentence stays translatable as a whole.
   questionPrefix: 'Hai messo '
   questionSuffix: ' nella lista dei bloccati. Sei sicuro di voler accedere?'
-  yes: Sì
-  no: No
+  openAnyway: Apri comunque
+  backToWork: Torna al lavoro
 
 common:
   add: Aggiungi

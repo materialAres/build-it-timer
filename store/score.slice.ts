@@ -68,5 +68,8 @@ export const createScoreSlice: StateCreator<AppState, [], [], ScoreSlice> = (set
 export const selectScoreLevel = (state: ScoreSlice): ScoreLevel =>
   state.score.level;
 
+export const selectBuiltCharacters = (state: ScoreSlice): number =>
+  state.score.builtCharacters;
+
 export const selectPopulation = (state: ScoreSlice): number =>
   state.score.population;

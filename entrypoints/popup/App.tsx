@@ -17,6 +17,7 @@ import { DurationDrum } from '@/components/timer/DurationDrum';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
 import { CityCanvas } from '@/components/city/CityCanvas';
+import { CityEmptyHint } from '@/components/city/CityEmptyHint';
 import { ExportCityButton } from '@/components/city/ExportCityButton';
 import { ScoreBadge } from '@/components/score/ScoreBadge';
 import { PopulationCounter } from '@/components/score/PopulationCounter';
@@ -49,6 +50,7 @@ function CitySection() {
   return (
     <div className="popup-section popup-section--city">
       <CityCanvas />
+      <CityEmptyHint />
       {/* The export is offered once the session has ended, not while it runs
           (M3.T4): `completed` is the status M3.T3c introduced for exactly this
           signal, so a finished city can be saved without exposing the button

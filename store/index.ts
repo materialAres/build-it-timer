@@ -349,6 +349,7 @@ export {
   createScoreSlice,
   selectScoreLevel,
   selectPopulation,
+  selectBuiltCharacters,
 } from './score.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';
