@@ -1400,7 +1400,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   The environment stays fixed so the popup keeps its identity: black floor, phosphor-green grid, rain and HUD text (`#7dfba0`, DESIGN.md).
 - **Growth is derived, not stored.** Each plan lists its floors in build order (shuffled building order, each building bottom-up). The visible part is `builtCharacters / TOTAL_CHARACTERS_PER_SESSION × plan.totalFloors`: the whole part is the number of complete floors, the remainder is a partly paid floor.
 - **The malus damages the city through the score (option A).** The M4.T1 escalation (1 character per distraction tick, then 2, then 3 as the stay lengthens) moves into `builtCharacters`, so the score, the tiers, the population and the city all lose the same amount. In the city, the newest floors disappear first, with a glitch-out animation; when focus resumes the city grows again from where it is.
-- **Every lost character is visible.** A floor is worth several characters (about 4 for a 150-floor plan), so a partly paid top floor is drawn in a **damaged** state (cracked, flickering red edges) instead of waiting for a whole floor to vanish.
+- **Every lost character is visible.** A floor is worth several characters (2–3 for a 200–300-floor plan), so a partly paid top floor is drawn in a **damaged** state (cracked, flickering red edges) instead of waiting for a whole floor to vanish.
 - **Rendering stays light** (decisions from the exploration):
   - three.js is loaded only when the City tab opens (a separate chunk); the Timer tab never loads it;
   - render on demand: a frame is drawn only when the visible floors change, the camera moves or the view resizes; the ambient layer (rain, cars, window flicker, beacons) runs at most 30 fps and stops when the view is hidden;
@@ -1472,6 +1472,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `docs/features-analysis/city-3d.md` (ground-plan section updated to what was built), `docs/testing-matrix.md` (CR6.T2a row: seeds, invariants, variation checks).
 
 ##### CR6.T2b — Plan generator, part 2: archetypes, heights, landmarks, build order, names
+* **Status**: done (2026-11-11). Total floors re-derived as 200–300; two helper files were added (`fit-total-floors.ts`, `plan-props.ts`) to keep files under 200 lines; colors stay with CR6.T3.
 * **Objective**: complete the plan: a building on every lot, its floors in build order, landmarks, props and tower names.
 * **Files to create/modify**: `lib/city/plan/plan-buildings.ts` (archetype choice, heights, landmarks, props), `lib/city/plan/build-order.ts` (shuffled building order, each bottom-up), `lib/city/plan/building-archetypes.ts` (data), `lib/city/plan/tower-names.ts` (data), `lib/city/plan/generate-city-plan.ts` (wiring), `tests/unit/lib/city/plan/generate-city-plan.test.ts` (new).
 * **Dependencies**: CR6.T2a

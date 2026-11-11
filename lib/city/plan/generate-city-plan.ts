@@ -1,4 +1,17 @@
-import type { GroundOptions, GroundPlan, Lot, RoadSegment } from './city-plan.types';
+import type {
+  CityPlan,
+  Footprint,
+  GroundOptions,
+  GroundPlan,
+  Lot,
+  PlanOptions,
+  RoadSegment,
+} from './city-plan.types';
+import { ARCHETYPES } from './building-archetypes';
+import { orderFloors } from './build-order';
+import { placeBuildings } from './plan-buildings';
+import { placeProps } from './plan-props';
+import { TOWER_NAME_PARTS } from './tower-names';
 import {
   GROUND_DEPTH,
   GROUND_WIDTH,
@@ -9,7 +22,6 @@ import {
 import { packLots, planRoads } from './plan-lots';
 import { LOT_FOOTPRINTS, ROAD_LAYOUTS } from './road-layouts';
 import { createRng, type SeededRandom } from './rng';
-import type { Footprint } from './city-plan.types';
 
 const distanceToRange = (count: number): number =>
   count < MIN_LOTS ? MIN_LOTS - count : Math.max(0, count - MAX_LOTS);
@@ -37,18 +49,12 @@ function packWithinBounds(
   return best;
 }
 
-/**
- * The ground plan of a session (CR6.T2a): a road layout, shifted by a random
- * offset, and the lots that tile the land around it. Pure: everything random
- * comes from `seed` (§1.4), so the same seed always gives the same plan.
- * Layouts and footprints are data; pass others through `options` or edit
- * `road-layouts.ts`. CR6.T2b extends the result with buildings.
- */
-export function generateCityPlan(
+/** The ground plan: a road layout, shifted by a random offset, and its lots. */
+function generateGroundPlan(
   seed: number,
-  options: GroundOptions = {},
+  rng: SeededRandom,
+  options: GroundOptions,
 ): GroundPlan {
-  const rng = createRng(seed);
   const layouts = options.layouts ?? ROAD_LAYOUTS;
   const footprints = options.footprints ?? LOT_FOOTPRINTS;
   const { layoutId, offset, roads } = planRoads(rng, layouts);
@@ -59,5 +65,34 @@ export function generateCityPlan(
     bounds: { width: GROUND_WIDTH, depth: GROUND_DEPTH },
     roads,
     lots: packWithinBounds(roads, rng, footprints),
+  };
+}
+
+/**
+ * The city plan of a session (CR6.T2a/T2b): the ground plan, a building on
+ * every lot that is not a park, the floors in build order, and the props. Pure:
+ * everything random comes from `seed` (§1.4), so the same seed always gives the
+ * same plan. Layouts, footprints, archetypes and tower names are data; pass
+ * others through `options` or edit their files.
+ */
+export function generateCityPlan(
+  seed: number,
+  options: PlanOptions = {},
+): CityPlan {
+  const rng = createRng(seed);
+  const ground = generateGroundPlan(seed, rng, options);
+  const buildings = placeBuildings(
+    ground,
+    rng,
+    options.archetypes ?? ARCHETYPES,
+    options.towerNames ?? TOWER_NAME_PARTS,
+  );
+  const floors = orderFloors(buildings, rng);
+  return {
+    ...ground,
+    buildings,
+    floors,
+    props: placeProps(ground, buildings, rng),
+    totalFloors: floors.length,
   };
 }

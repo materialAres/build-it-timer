@@ -69,7 +69,7 @@ Facts that shape the decisions:
 ## 3. The `CityPlan`
 
 All in `lib/city/plan/` (pure, no DOM, no three.js). Types in
-`lib/city/plan/city-plan.types.ts` (CR6.T2a built `GroundPlan` = seed, layout id, offset, bounds, roads, lots; CR6.T2b extends it to the `CityPlan` below).
+`lib/city/plan/city-plan.types.ts` (CR6.T2a built `GroundPlan` = seed, layout id, offset, bounds, roads, lots; CR6.T2b extends it to the `CityPlan` below; CR6.T3 adds `paletteId`, `hueShift` and the building colors). Sections and floors are as built; see "Buildings as built".
 
 ```ts
 interface CityPlan {
@@ -87,7 +87,7 @@ interface CityPlan {
 }
 interface Lot { id; x; z; w; d }                       // footprint in cells
 interface PlanBuilding {
-  id; lotId; archetypeId; floors: number; color: string; // color is a hex
+  id; lotId; archetypeId; height: number /* levels */; color: string; // color: CR6.T3
   landmark: boolean; name: string | null;                // names only on landmarks
   sections: ReadonlyArray<Section>;                      // setbacks, twins, spire
 }
@@ -112,14 +112,14 @@ Rules:
   | Ground | 12 × 10 cells |
   | Lots per plan | **30–48** (`MIN_LOTS`, `MAX_LOTS`; measured, see "Ground plan as built") |
   | Empty lots (parks) | ≤ 10% of lots |
-  | Floors per building | 2–28; landmarks 22–32 (`MAX_BUILDING_FLOORS` = 32) |
-  | Total floors | **120–180** (`MIN_TOTAL_FLOORS`, `MAX_TOTAL_FLOORS`) |
+  | Levels per building | 2–16 by archetype; landmarks 16–26 (`MAX_BUILDING_FLOORS` = 32) |
+  | Total floors | **200–300** (`MIN_TOTAL_FLOORS`, `MAX_TOTAL_FLOORS`), re-derived in CR6.T2b from 120–180 |
   | Landmarks | 1–3 |
   | Props | lamps ≤ 40, signs ≤ 12, beacons ≤ 4 |
 
   The generator raises or trims the shortest and tallest non-landmark buildings
   (seeded, one floor at a time) until `totalFloors` is inside the range, so a
-  plan always has between 3.3 and 5 characters per floor (`600 / totalFloors`).
+  plan always has between 2 and 3 characters per floor (`600 / totalFloors`).
   The tallest building is `32 × 0.35 = 11.2` world units against a 12-unit
   ground, so the camera frame (CR6.T6a) is one constant for every plan.
 - **Ground plan as built (CR6.T2a).** `generateCityPlan(seed, options?)`
@@ -131,11 +131,23 @@ Rules:
   32–54 lots (means 41–46 per layout), so the plan range is **30–48**, not the
   24–40 first guessed; `packWithinBounds` retries up to 12 times and keeps the
   closest attempt, which stays deterministic. `layouts` and `footprints` can be
-  passed as options. **Consequence for CR6.T2b:** with 30–48 lots the total
-  floors bound of 120–180 below gives only 2.5–6 floors per building, too low
-  for the archetype ranges; CR6.T2b re-derives `MIN_TOTAL_FLOORS` and
-  `MAX_TOTAL_FLOORS` (about 200–300, 2–3 characters per floor) and updates this
-  table. A lost character still changes the visible output.
+  passed as options. With 30–48 lots the first total of 120–180 floors left
+  only 2.5–6 per building, too low for the archetype ranges, so CR6.T2b set it
+  to **200–300** (2–3 characters per floor).
+- **Buildings as built (CR6.T2b).** `placeBuildings` (`plan-buildings.ts`) first
+  leaves up to 10% of the lots as parks, picks 1–3 landmark lots (larger lots
+  first) and draws an eligible archetype by weight and a height inside its
+  range for every other lot. `fitTotalFloors` (`fit-total-floors.ts`) then moves
+  regular buildings one level at a time, chosen by the generator, until the
+  total is inside 200–300; landmarks keep their height, and when no height can
+  move it swaps a building to the lowest- or highest-floor archetype. Landmarks
+  get a unique `PREFIX SUFFIX` name (`tower-names.ts`); regular buildings have
+  none. `orderFloors` (`build-order.ts`) shuffles the buildings and lists each
+  one bottom-up, level by level, all its sections of a level before the next
+  level. Props (`plan-props.ts`): lamps on about 30% of the road cells (≤ 40),
+  signs on about a third of the buildings (≤ 12), beacons on landmarks first,
+  then spires (≤ 4). `generateCityPlan(seed, options)` accepts `archetypes` and
+  `towerNames` besides the ground options. Colors and palettes are CR6.T3.
 - **Variation sets (data, Open/Closed).** Adding one is an array entry:
   - *Road layouts* (4, `road-layouts.ts`): `grid` (one avenue, two streets),
     `crossroads`, `comb` (one avenue with three side streets), `ring` (a loop
@@ -143,10 +155,13 @@ Rules:
     on each axis and is clipped to the ground, so it stays connected.
   - *Lot footprints* (`LOT_FOOTPRINTS`): 1×1 (10%), 2×1 and 1×2 (30% each),
     2×2 (30%), packed over the land cells.
-  - *Archetypes* (6): `tower` (one box, 8–20 floors), `slab` (wide, 4–10),
-    `stepped` (2–3 setbacks, 10–24), `twin` (two boxes on a base, 8–18),
-    `spire` (box plus a thin spire section, 10–22), `lowBlock` (2–5). Each
-    entry holds its floor range, footprint rule and section builder.
+  - *Archetypes* (6, `building-archetypes.ts`; levels): `tower` (one box,
+    5–14), `slab` (wide lots only, 2–6), `stepped` (three setbacks, 8–16),
+    `twin` (two towers on a lot of area ≥ 2, 4–10, two floors per level),
+    `spire` (box plus a 3-level needle, 8–14), `lowBlock` (2–4). Landmarks are
+    drawn from `tower`, `stepped` and `spire` with their own range (16–26).
+    Each entry holds its weight, ranges, minimum lot area and a pure section
+    builder.
   - *Palettes* (≥ 6, ≥ 6 neon hues each): `data` in `lib/city/plan/palettes.ts`.
     Hue shift ∈ [−25°, +25°], applied in HSL so a palette never drifts out of
     the neon range. Neighbouring lots (sharing an edge) never share a color:
@@ -181,7 +196,7 @@ partial  = exact − complete                        // 0 ≤ partial < 1
     `focusCharacters = min(total, floor(focusedMs × total / durationMs))`.
     Both come from the persisted `timer` accumulators, so the popup needs no new
     state and the damage survives a restart.
-  - A drop of a single character moves `exact` by `floors / 600` (≈ 0.2–0.3
+  - A drop of a single character moves `exact` by `floors / 600` (≈ 0.33–0.5
     floor), so the partial floor or the visible count changes every time: the
     "every lost character is visible" rule holds without a separate rule.
 - **Amends the CR6.T4 card.** The card said the partly paid floor is *always*

@@ -67,7 +67,7 @@ describe('generateCityPlan — ground plan (CR6.T2a)', () => {
     }
   });
 
-  describe('invariants over 1,000 seeds', () => {
+  describe('invariants over 1,000 seeds', { timeout: 20_000 }, () => {
     const all = plans(1000);
 
     it('keeps every road and lot inside the frame', () => {

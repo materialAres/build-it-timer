@@ -57,3 +57,75 @@ export interface GroundPlan {
   readonly roads: ReadonlyArray<RoadSegment>;
   readonly lots: ReadonlyArray<Lot>;
 }
+
+/** A box of a building: a ground rectangle (in cells) over floors [from, to). */
+export interface Section {
+  readonly rect: CellRect;
+  readonly fromLevel: number;
+  readonly toLevel: number;
+}
+
+export interface FloorRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+/**
+ * A building type (data, Open/Closed). `floors` is the range in levels;
+ * `landmarkFloors` is set only for types that can be a landmark tower.
+ * `buildSections` is pure and gets the lot and the chosen height in levels.
+ */
+export interface Archetype {
+  readonly id: string;
+  readonly weight: number;
+  readonly floors: FloorRange;
+  readonly landmarkFloors?: FloorRange;
+  readonly minLotArea: number;
+  readonly buildSections: (lot: CellRect, levels: number) => ReadonlyArray<Section>;
+}
+
+export interface TowerNameParts {
+  readonly prefixes: ReadonlyArray<string>;
+  readonly suffixes: ReadonlyArray<string>;
+}
+
+/** `id` is the index in `CityPlan.buildings`; `height` is in levels. */
+export interface PlanBuilding {
+  readonly id: number;
+  readonly lotId: number;
+  readonly archetypeId: string;
+  readonly height: number;
+  readonly landmark: boolean;
+  readonly name: string | null;
+  readonly sections: ReadonlyArray<Section>;
+}
+
+/** One floor in build order: a level of a section of a building. */
+export interface PlanFloor {
+  readonly building: number;
+  readonly level: number;
+  readonly section: number;
+}
+
+export type PropKind = 'lamp' | 'sign' | 'beacon';
+
+/** `x`/`z` in cells, `level` in floors above the ground. */
+export interface PlanProp {
+  readonly kind: PropKind;
+  readonly x: number;
+  readonly z: number;
+  readonly level: number;
+  readonly building: number | null;
+}
+
+export interface PlanOptions extends GroundOptions {
+  readonly archetypes?: ReadonlyArray<Archetype>;
+  readonly towerNames?: TowerNameParts;
+}
+
+export interface CityPlan extends GroundPlan {
+  readonly buildings: ReadonlyArray<PlanBuilding>;
+  readonly floors: ReadonlyArray<PlanFloor>;
+  readonly props: ReadonlyArray<PlanProp>;
+  readonly totalFloors: number;
+}

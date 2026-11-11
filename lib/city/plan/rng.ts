@@ -51,3 +51,17 @@ export function pickWeighted<T>(
   }
   return last;
 }
+
+/** A shuffled copy (Fisher–Yates); the input is left alone. */
+export function shuffled<T>(rng: SeededRandom, items: ReadonlyArray<T>): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = nextInt(rng, 0, i);
+    const a = copy[i];
+    const b = copy[j];
+    if (a === undefined || b === undefined) continue;
+    copy[i] = b;
+    copy[j] = a;
+  }
+  return copy;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRng, nextInt, pickWeighted } from '@/lib/city/plan/rng';
+import { createRng, nextInt, pickWeighted, shuffled } from '@/lib/city/plan/rng';
 
 describe('createRng (CR6.T2a)', () => {
   it('gives the same sequence for the same seed', () => {
@@ -70,5 +70,23 @@ describe('pickWeighted (CR6.T2a)', () => {
     const zeroWeight = pickWeighted(createRng(1), [1], () => 0);
     expect(noWeight).toBeUndefined();
     expect(zeroWeight).toBeUndefined();
+  });
+});
+
+describe('shuffled (CR6.T2b)', () => {
+  it('returns a permutation, the same one for the same seed, leaving the input alone', () => {
+    const input = [1, 2, 3, 4, 5, 6, 7, 8];
+    const a = shuffled(createRng(5), input);
+    expect([...a].sort()).toEqual(input);
+    expect(shuffled(createRng(5), input)).toEqual(a);
+    expect(input).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('does not always return the same order', () => {
+    const input = [1, 2, 3, 4, 5, 6, 7, 8];
+    const orders = new Set(
+      Array.from({ length: 20 }, (_, seed) => shuffled(createRng(seed), input).join()),
+    );
+    expect(orders.size).toBeGreaterThan(10);
   });
 });
