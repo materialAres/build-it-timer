@@ -8,53 +8,14 @@ import {
   type DirtyReason,
   type SchedulerInput,
 } from '@/lib/city/render-scheduler';
-import type { CityPlan } from '@/lib/city/plan/city-plan.types';
-import type { SceneFrame, ScenePlan } from '@/lib/city/plan/scene-data';
+import type { SceneFrame } from '@/lib/city/plan/scene-data';
+import { captureFrame } from './capture-frame';
 import { createCityScene, type CityScene } from './city-scene';
-import { createPostProcessing, type PostProcessing, type PostProcessingOptions } from './post-processing';
+import type { CityRenderer, CityRendererOptions, FrameSource } from './city-renderer.types';
+import { createPostProcessing, type PostProcessing } from './post-processing';
 import { applyFraming, cameraAxes, createGlContext, disposeScene, type GlContext } from './renderer-context';
 
-/** A source of animation frames, injectable so tests drive time by hand. */
-export interface FrameSource {
-  request(callback: (time: number) => void): number;
-  cancel(id: number): void;
-}
-
-export interface CityRendererOptions {
-  /** The element the canvas is added to. */
-  readonly host: HTMLElement;
-  /** Called once when the GPU context is lost, so the view can fall back. */
-  readonly onContextLost: () => void;
-  readonly reducedMotion: boolean;
-  /** Whether an ambient layer exists (CR6.T7); false draws only real changes. */
-  readonly ambient: boolean;
-  /** Bloom and the CRT look; omitted means a plain render (no post-processing). */
-  readonly effects?: PostProcessingOptions;
-  readonly now?: () => number;
-  readonly frames?: FrameSource;
-}
-
-export interface CityRenderer {
-  /** Frames drawn so far (the e2e probe reads it to prove "0 renders when idle"). */
-  readonly renderCount: number;
-  /** Fit the canvas and the camera to a size in CSS pixels; unusable sizes are ignored. */
-  resize(width: number, height: number): void;
-  /** Something that changes the picture happened; one frame will be drawn for it. */
-  invalidate(reason: DirtyReason): void;
-  /** Whether the view is on screen (its tab is open); a hidden view draws nothing. */
-  setVisible(visible: boolean): void;
-  setReducedMotion(reducedMotion: boolean): void;
-  /** Replace the city: build its meshes from the plan's scene data and add them. */
-  setScene(scene: ScenePlan, plan: CityPlan): void;
-  /** Show the floors of a frame (a plan and the progress, already derived) and draw once. */
-  setFrame(frame: SceneFrame): void;
-  /** The CRT look on or off; nothing else changes. */
-  setCrt(enabled: boolean): void;
-  /** Register a cleanup (render targets, composer passes) to run on `dispose()`. */
-  registerDisposable(cleanup: () => void): void;
-  /** Free every GPU resource and listener; safe to call twice. */
-  dispose(): void;
-}
+export type { CityRenderer, CityRendererOptions, FrameSource } from './city-renderer.types';
 
 const browserFrames: FrameSource = {
   request: (callback) => requestAnimationFrame(callback),
@@ -90,6 +51,7 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
   let reducedMotion = options.reducedMotion;
   let disposed = false;
   let lost = false;
+  let viewSize = { width: 0, height: 0 };
   const post: PostProcessing | null = options.effects ? createPostProcessing(gl, options.effects) : null;
   let city: CityScene | null = null;
   let lastFrame: SceneFrame | null = null;
@@ -111,15 +73,23 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     const current = input();
     const decision = decideFrame(state, current);
     if (decision.draw) {
-      city?.update(current.now);
-      if (city) city.orient(...cameraAxes(gl.camera));
-      if (post) post.render();
-      else gl.renderer.render(gl.scene, gl.camera);
+      drawScene(current.now);
       renderCount += 1;
       state = frameDrawn(state, decision, current.now);
     }
     pump();
   }
+  const drawScene = (at: number): void => {
+    city?.update(at);
+    if (city) city.orient(...cameraAxes(gl.camera));
+    if (post) post.render();
+    else gl.renderer.render(gl.scene, gl.camera);
+  };
+  const fit = (width: number, height: number, updateStyle: boolean): void => {
+    gl.renderer.setSize(width, height, updateStyle);
+    applyFraming(gl.camera, width, height);
+    post?.resize(width, height);
+  };
   const change = (reason: DirtyReason): void => {
     state = invalidate(state, reason);
     pump();
@@ -141,10 +111,25 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     get renderCount(): number { return renderCount; },
     resize(width, height): void {
       if (!(Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0)) return;
-      gl.renderer.setSize(width, height);
-      applyFraming(gl.camera, width, height);
-      post?.resize(width, height);
+      viewSize = { width, height };
+      fit(width, height, true);
       change('resize');
+    },
+    captureFrame(width, height, format) {
+      if (disposed || lost) return err(new Error('The city view is not available'));
+      return captureFrame(
+        {
+          canvas,
+          pixelRatio: { get: () => gl.renderer.getPixelRatio(), set: (ratio) => { gl.renderer.setPixelRatio(ratio); } },
+          fit,
+          draw: () => { drawScene(now()); },
+          viewSize: () => viewSize,
+          restored: () => { change('resize'); },
+        },
+        width,
+        height,
+        format,
+      );
     },
     setScene(scene, plan): void {
       if (disposed) return;

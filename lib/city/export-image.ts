@@ -1,4 +1,4 @@
-import type { Result } from '@/utils/result';
+import { err, type Result } from '@/utils/result';
 import { ENVIRONMENT_COLORS } from './plan/environment-colors';
 import {
   rasterizeCityImage,
@@ -70,8 +70,8 @@ function renderChar(
  * Serialize the text city (`renderSkyline`, CR6.T8b) to a deterministic SVG:
  * the black floor, one phosphor-green `<text>` per non-blank character on a
  * fixed grid, so the image does not depend on the font that renders it. This
- * is the export path where WebGL is missing; the 3D view's own capture arrives
- * in CR6.T10. Pure (no DOM access), so it is unit-tested in isolation.
+ * is the export path where WebGL is missing or the capture fails. Pure (no DOM
+ * access), so it is unit-tested in isolation.
  */
 export function buildCityImage(
   rows: ReadonlyArray<string>,
@@ -104,15 +104,47 @@ export function buildCityImage(
   return { svg, width, height };
 }
 
+/** Size of the exported picture of the 3D city, in pixels (16:9, large enough to share). */
+export const EXPORT_WIDTH = 1600;
+export const EXPORT_HEIGHT = 900;
+
 /**
- * High-level export used by `ExportCityButton`: serialize the rows and
- * rasterize them in the requested format. The component only calls this and
- * handles the download/error UI (Separation of Concerns, §1.1).
+ * Renders one frame of the 3D city at a size and reads it (`captureFrame` of the
+ * renderer, CR6.T10). Present only while the 3D view is running.
+ */
+export type FrameCapture = (
+  width: number,
+  height: number,
+  format: ImageFormat,
+) => Result<RasterizedCityImage>;
+
+function tryCapture(
+  capture: FrameCapture,
+  format: ImageFormat,
+): Result<RasterizedCityImage> {
+  try {
+    return capture(EXPORT_WIDTH, EXPORT_HEIGHT, format);
+  } catch (cause) {
+    return err(cause instanceof Error ? cause : new Error(String(cause)));
+  }
+}
+
+/**
+ * High-level export used by `ExportCityButton` (§1.4 boundary: every failure is
+ * a `Result`). With the 3D view running it is the 3D frame at `EXPORT_WIDTH` ×
+ * `EXPORT_HEIGHT`; without it (no WebGL, a lost context) or when the capture
+ * fails, it is the text city serialized as SVG. The component only calls this
+ * and handles the download/error UI (Separation of Concerns, §1.1).
  */
 export async function exportCityImage(
   rows: ReadonlyArray<string>,
   format: ImageFormat = DEFAULT_IMAGE_FORMAT,
+  capture: FrameCapture | null = null,
 ): Promise<Result<RasterizedCityImage>> {
+  if (capture !== null) {
+    const framed = tryCapture(capture, format);
+    if (framed.ok) return framed;
+  }
   const { svg, width, height } = buildCityImage(rows);
   return rasterizeCityImage(svg, width, height, format);
 }

@@ -1623,6 +1623,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - The rewritten `CLAUDE.md` rows use the reference description from CR6.T1.
 
 ##### CR6.T10 — Export the city image from the 3D view
+* **Status**: done (2026-11-11). Beyond the card: `capture-frame.ts` (the testable capture), `city-renderer.types.ts` (types moved out to keep the renderer under 200 lines) and `components/city/city-capture.ts` (the bridge between the lazy view and the button). A failed capture falls back to the text city rather than showing an error. Never run against a real GPU: the capture is tested with a fake host and a mocked three.js; the real-browser check is CR6.T12.
 * **Objective**: keep the JPEG/PNG export (M3.T8) working with the new view.
 * **Files to create/modify**: `lib/city/export-image.ts` (frame capture and the fallback path), `lib/city/rasterize-image.ts`, `components/city/ExportCityButton.tsx`, `components/city/three/city-renderer.ts` (`captureFrame(width, height)`), their tests.
 * **Dependencies**: CR6.T8b

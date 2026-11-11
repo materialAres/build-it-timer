@@ -9,6 +9,8 @@ import {
 import { ok, err } from '@/utils/result';
 import { createLogger, type LogRecord } from '@/utils/logger';
 import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
+import { setCityCapture } from '@/components/city/city-capture';
+import type { FrameCapture } from '@/lib/city/export-image';
 import { renderSkyline } from '@/lib/city/plan/plan-skyline';
 import type { RasterizedCityImage } from '@/lib/city/rasterize-image';
 
@@ -50,7 +52,10 @@ describe('ExportCityButton (M3.T8)', () => {
     setCity(null, 0);
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    setCityCapture(null);
+  });
 
   it('offers both a PNG and a JPEG export', () => {
     render(<ExportCityButton exporter={makeExporter()} />);
@@ -87,6 +92,20 @@ describe('ExportCityButton (M3.T8)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
 
     expect(exporter.mock.calls[0]?.[0]).toEqual([]);
+  });
+
+  it('hands the exporter the 3D capture while the 3D view is running, and null without it', async () => {
+    const exporter = makeExporter();
+    exporter.mockResolvedValue(ok(RASTER));
+    const capture: FrameCapture = () => ok(RASTER);
+
+    render(<ExportCityButton exporter={exporter} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
+    expect(exporter.mock.calls[0]?.[2]).toBeNull();
+
+    setCityCapture(capture);
+    await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
+    expect(exporter.mock.calls[1]?.[2]).toBe(capture);
   });
 
   it('asks for the JPEG format from the JPEG button', async () => {

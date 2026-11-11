@@ -19,6 +19,8 @@ timer-focus/
 │   │   ├── three/               # the 3D view's renderer shell (CR6): lifecycle, camera, meshes; no store, no browser APIs
 │   │   │   ├── city-renderer.ts    # create / resize / invalidate / dispose, draws only when the scheduler says
 │   │   │   ├── renderer-context.ts # WebGL renderer, orthographic camera, limited orbit controls
+│   │   │   ├── capture-frame.ts    # CR6.T10: one frame at a size as an image, view restored (testable host)
+│   │   │   ├── city-renderer.types.ts # CityRenderer, CityRendererOptions, FrameSource
 │   │   │   ├── city-scene.ts       # the whole city for the renderer: meshes + animations + ambient layer + labels (CR6.T7)
 │   │   │   ├── city-meshes.ts      # ground, grid, roads, instanced floors and windows, edge lines (CR6.T6b)
 │   │   │   ├── floor-slots.ts      # draws one floor slot: resting, partly paid, shifted, glitching (CR6.T7)
@@ -29,6 +31,7 @@ timer-focus/
 │   │   │   └── post-processing.ts / crt-pass.ts  # half-size bloom and the switchable CRT pass (CR6.T6b)
 │   │   ├── CityPanel.tsx        # CR6.T8a: the City tab's stage, HUD line and screen-reader summary; lazy-loads CityView3D
 │   │   ├── CityView3D.tsx       # CR6.T8a: mounts the renderer and wires the selectors (the lazy three.js chunk)
+│   │   ├── city-capture.ts      # CR6.T10: bridge from the lazy 3D view to the export button
 │   │   ├── CityFallback.tsx     # CR6.T8b: the plan as text where WebGL2 is missing or lost
 │   │   ├── webgl-support.ts     # CR6.T8b: `hasWebGl2()` capability check
 │   │   ├── use-city-renderer.ts # CR6.T8a: renderer lifecycle (size, visibility, reduced motion, dispose)
@@ -73,7 +76,7 @@ timer-focus/
 │   │   ├── ambient-plan.ts      # CR6.T7: seeded car routes, flicker schedule, rain; time → position/level (pure)
 │   │   ├── floor-motion.ts      # CR6.T7: timeline of the floor animations (drop, glitch, crack), ends at rest (pure)
 │   │   ├── migrate-city.ts      # CR6: persist v1–v3 city → `{ sessionId }`
-│   │   ├── export-image.ts      # text city rows → SVG → JPEG/PNG (3D capture added in CR6.T10)
+│   │   ├── export-image.ts      # 3D frame capture or text city rows → SVG → JPEG/PNG
 │   │   └── rasterize-image.ts   # SVG → canvas → data URL
 │   ├── score/
 │   │   ├── calculate-score.ts   # Excellent/Great/Good/Bad from the completion bands (CR3)

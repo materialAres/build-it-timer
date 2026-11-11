@@ -39,6 +39,7 @@ vi.mock('three', () => {
       mocks.rendererOptions.push(options);
     }
     setPixelRatio(ratio: number): void { mocks.pixelRatios.push(ratio); }
+    getPixelRatio(): number { return mocks.pixelRatios.at(-1) ?? 1; }
     setSize(w: number, h: number): void { mocks.sizes.push([w, h]); }
     setClearColor(): void {}
     render(): void { mocks.renders += 1; }
@@ -556,6 +557,78 @@ describe('createCityRenderer (CR6.T6a)', () => {
       expect(city().setReducedMotion).toHaveBeenCalledWith(true);
       clock.flush(1_100);
       expect(mocks.renders).toBe(before + 1);
+    });
+  });
+
+  describe('capture (CR6.T10)', () => {
+    const plan = generateCityPlan(hashString('session-capture'));
+    const scene = createScenePlan(plan);
+
+    function withCanvas(r: CityRenderer): void {
+      const canvas = host.querySelector('canvas');
+      if (canvas === null) throw new Error('no canvas');
+      canvas.toDataURL = ((type: string) => `data:${type};base64,AAAA`);
+      r.setScene(scene, plan);
+    }
+
+    it('renders one frame at the requested size and returns it as an image', () => {
+      const r = create({ effects: { bloom: true, crt: true } });
+      r.resize(480, 272);
+      withCanvas(r);
+      clock.flush(1_000);
+      const rendersBefore = mocks.renders;
+      const result = r.captureFrame(1600, 900, 'png');
+
+      expect(result).toEqual({
+        ok: true,
+        value: { dataUrl: 'data:image/png;base64,AAAA', mimeType: 'image/png', width: 1600, height: 900 },
+      });
+      expect(mocks.sizes).toContainEqual([1600, 900]);
+      expect(mocks.renders).toBe(rendersBefore + 1);
+      expect(mocks.fx[0]?.resize).toHaveBeenCalledWith(1600, 900);
+    });
+
+    it('is exactly as large as asked: the pixel ratio is 1 while it renders and back afterwards', () => {
+      vi.stubGlobal('devicePixelRatio', 2);
+      const r = create();
+      r.resize(480, 272);
+      withCanvas(r);
+      const before = mocks.pixelRatios.length;
+      r.captureFrame(800, 450, 'jpeg');
+      expect(mocks.pixelRatios.slice(before)).toEqual([1, 1.5]);
+      vi.unstubAllGlobals();
+    });
+
+    it('puts the view back and draws it again, and does not count as a rendered frame of the view', () => {
+      const r = create();
+      r.resize(480, 272);
+      withCanvas(r);
+      clock.flush(1_000);
+      const frames = r.renderCount;
+      r.captureFrame(800, 450, 'png');
+      expect(mocks.sizes.at(-1)).toEqual([480, 272]);
+      expect(r.renderCount).toBe(frames);
+      const rendersBefore = mocks.renders;
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(rendersBefore + 1);
+    });
+
+    it('returns an error for an unusable size without rendering', () => {
+      const r = create();
+      withCanvas(r);
+      const rendersBefore = mocks.renders;
+      expect(r.captureFrame(0, 900, 'png').ok).toBe(false);
+      expect(mocks.renders).toBe(rendersBefore);
+    });
+
+    it('returns an error after the context is lost or the renderer is disposed', () => {
+      const r = create();
+      withCanvas(r);
+      host.querySelector('canvas')?.dispatchEvent(new Event('webglcontextlost'));
+      expect(r.captureFrame(800, 450, 'png').ok).toBe(false);
+      const other = create();
+      other.dispose();
+      expect(other.captureFrame(800, 450, 'png').ok).toBe(false);
     });
   });
 

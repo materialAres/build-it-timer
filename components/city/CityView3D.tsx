@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
+import type { FrameCapture } from '@/lib/city/export-image';
 import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
 import { createSceneFrame, createScenePlan } from '@/lib/city/plan/scene-data';
+import { clearCityCapture, setCityCapture } from './city-capture';
 import { useCityRenderer } from './use-city-renderer';
 
 /**
@@ -20,6 +22,13 @@ export default function CityView3D({ onUnavailable }: CityView3DProps) {
   const host = useRef<HTMLDivElement>(null);
   const { renderer, failed } = useCityRenderer(host, plan !== null);
   const scene = useMemo(() => (plan === null ? null : createScenePlan(plan)), [plan]);
+
+  useEffect(() => {
+    if (!renderer) return undefined;
+    const capture: FrameCapture = (width, height, format) => renderer.captureFrame(width, height, format);
+    setCityCapture(capture);
+    return () => { clearCityCapture(capture); };
+  }, [renderer]);
 
   useEffect(() => {
     if (failed) onUnavailable?.();

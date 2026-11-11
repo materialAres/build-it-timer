@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { act, cleanup, render } from '@testing-library/react';
 import { err, ok } from '@/utils/result';
 import { useAppStore } from '@/store';
+import { getCityCapture } from '@/components/city/city-capture';
 import type { CityRenderer, CityRendererOptions } from '@/components/city/three/city-renderer';
 
 interface FakeRenderer {
@@ -10,6 +11,7 @@ interface FakeRenderer {
   setFrame: Mock<(frame: unknown) => void>;
   setVisible: Mock<(visible: boolean) => void>;
   setReducedMotion: Mock<(reduced: boolean) => void>;
+  captureFrame: Mock<(width: number, height: number, format: string) => unknown>;
   dispose: Mock<() => void>;
 }
 const created = vi.hoisted(() => ({
@@ -28,6 +30,7 @@ vi.mock('@/components/city/three/city-renderer', () => ({
       setFrame: vi.fn<(frame: unknown) => void>(),
       setVisible: vi.fn<(visible: boolean) => void>(),
       setReducedMotion: vi.fn<(reduced: boolean) => void>(),
+      captureFrame: vi.fn<(width: number, height: number, format: string) => unknown>(() => ok({ dataUrl: 'data:image/png;base64,A' })),
       dispose: vi.fn<() => void>(),
     };
     created.renderers.push(fake);
@@ -142,6 +145,21 @@ describe('CityView3D (CR6.T8a)', () => {
     expect(first().setVisible).toHaveBeenLastCalledWith(false);
     act(() => { watcher?.callback([{ isIntersecting: true }]); });
     expect(first().setVisible).toHaveBeenLastCalledWith(true);
+  });
+
+  it('offers its renderer as the 3D capture for the export while it runs', () => {
+    expect(getCityCapture()).toBeNull();
+    render(<CityView3D />);
+    const capture = getCityCapture();
+    expect(capture).not.toBeNull();
+    capture?.(1600, 900, 'png');
+    expect(first().captureFrame).toHaveBeenCalledWith(1600, 900, 'png');
+  });
+
+  it('withdraws the capture when it goes away', () => {
+    const { unmount } = render(<CityView3D />);
+    unmount();
+    expect(getCityCapture()).toBeNull();
   });
 
   it('starts no renderer before there is a city', () => {

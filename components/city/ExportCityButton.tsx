@@ -3,23 +3,27 @@ import { useState } from 'react';
 import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
 import {
   exportCityImage,
+  type FrameCapture,
   type ImageFormat,
 } from '@/lib/city/export-image';
 import { renderSkyline } from '@/lib/city/plan/plan-skyline';
 import type { RasterizedCityImage } from '@/lib/city/rasterize-image';
 import type { Result } from '@/utils/result';
 import { createLogger, type Logger } from '@/utils/logger';
+import { getCityCapture } from './city-capture';
 
 const defaultLogger = createLogger('popup:export-city');
 
 /**
  * Injected boundary (principle D/L): the production default serializes and
- * rasterizes the text city, while a test substitutes a spy so it can assert the
- * component handed it the current rows without touching a canvas.
+ * rasterizes the city, while a test substitutes a spy so it can assert the
+ * component handed it the current rows and the 3D capture (null when the 3D view
+ * is not running) without touching a canvas.
  */
 export type CityImageExporter = (
   rows: ReadonlyArray<string>,
   format: ImageFormat,
+  capture: FrameCapture | null,
 ) => Promise<Result<RasterizedCityImage>>;
 
 export interface ExportCityButtonProps {
@@ -65,9 +69,9 @@ function triggerDownload(dataUrl: string, filename: string): void {
 }
 
 /**
- * Export the finished city as PNG/JPEG (roadmap M3.T8). Until CR6.T10 adds the
- * 3D capture it exports the text city (`renderSkyline`) of the current plan and
- * visible floors. The component is presentational: it reads them from the
+ * Export the finished city as PNG/JPEG (roadmap M3.T8). With the 3D view
+ * running it exports a frame of it (CR6.T10); otherwise the text city
+ * (`renderSkyline`) of the current plan and visible floors. The component is presentational: it reads them from the
  * store, then delegates serialization to `lib/city/export-image.ts` and only
  * handles the download and the error state (Separation of Concerns, §1.1). Because the
  * exporter returns a `Result`, a failed export shows a localized message
@@ -92,7 +96,7 @@ export function ExportCityButton({
 
     try {
       const rows = plan === null ? [] : renderSkyline(plan, visible);
-      void exporter(rows, format)
+      void exporter(rows, format, getCityCapture())
         .then((result) => {
           if (!result.ok) {
             fail(result.error, 'city export failed');
