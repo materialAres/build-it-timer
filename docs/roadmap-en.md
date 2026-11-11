@@ -1588,6 +1588,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `DESIGN.md` (fallback view), `city-3d.md` (fallback as built).
 
 ##### CR6.T9a — Remove the ASCII growth engine, its components and tests
+* **Status**: done (2026-11-11). Beyond the card: `export-image.ts` and `ExportCityButton.tsx` were rebased on the text city (`renderSkyline`) because they could not outlive the layers and `palette.ts`; CR6.T10 keeps that path as the no-WebGL export and adds the 3D capture. `createCitySlice` takes no dependencies any more and `StoreDependencies` lost the city part.
 * **Objective**: delete the code the plan replaced, so only one city model exists.
 * **Files to create/modify**: delete `lib/city/growth-engine.ts`, `tile-library.ts`, `building-composer.ts`, `decoration-engine.ts`, `street-props.ts`, `palette.ts`, `theme-registry.ts`, `city-size.ts` (as listed in CR6.T1), what remains of `lib/score/apply-malus.ts`, `components/city/CityCanvas.tsx`, `CityLayer.tsx`, `CityCell.tsx`, the layer types in `city.types.ts`, and their tests.
 * **Dependencies**: CR6.T8b

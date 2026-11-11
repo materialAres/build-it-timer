@@ -143,7 +143,7 @@ describe('malus wiring (M2.T16, CR6.T5b)', () => {
     await startRunning(s);
     s.wiring.handleAttempt(proceed('facebook.com'));
 
-    s.store.getState().resetCityForNewSession('session-2', 'default');
+    s.store.getState().resetCityForNewSession('session-2');
     s.account(50_000, 256);
 
     expect(s.send).not.toHaveBeenCalled();

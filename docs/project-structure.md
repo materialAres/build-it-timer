@@ -33,12 +33,7 @@ timer-focus/
 │   │   ├── webgl-support.ts     # CR6.T8b: `hasWebGl2()` capability check
 │   │   ├── use-city-renderer.ts # CR6.T8a: renderer lifecycle (size, visibility, reduced motion, dispose)
 │   │   ├── use-city-summary.ts  # CR6.T8a: live summary for the HUD, milestone summary for screen readers
-│   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground); removed in CR6.T9a
-│   │   ├── CityLayer.tsx        # a single layer positioned absolute/overlay
-│   │   ├── CityCell.tsx
-│   │   ├── ThemeProvider.tsx    # applies the current session's color theme/biome
-│   │   ├── ExportCityButton.tsx # export grid as JPEG/PNG
-│   │   └── city.types.ts
+│   │   └── ExportCityButton.tsx # export the city as JPEG/PNG (the text city until CR6.T10 adds the 3D capture)
 │   ├── timer/
 │   │   ├── TimerControls.tsx
 │   │   ├── TimerDisplay.tsx     # hh:mm:ss format (the clock inside the drum)
@@ -78,17 +73,12 @@ timer-focus/
 │   │   ├── ambient-plan.ts      # CR6.T7: seeded car routes, flicker schedule, rain; time → position/level (pure)
 │   │   ├── floor-motion.ts      # CR6.T7: timeline of the floor animations (drop, glitch, crack), ends at rest (pure)
 │   │   ├── migrate-city.ts      # CR6: persist v1–v3 city → `{ sessionId }`
-│   │   ├── tile-library.ts      # library of composable ASCII modules (bases, floors, tops)
-│   │   ├── building-composer.ts # composes a building from modules based on unlocked time/minutes
-│   │   ├── growth-engine.ts     # computes the state of the three layers from elapsed time
-│   │   ├── decoration-engine.ts # procedural details (lit windows, trees, cars, clouds)
-│   │   ├── theme-registry.ts    # color themes/biomes available per session
-│   │   ├── palette.ts           # domain hash → deterministic color (within the active theme)
-│   │   └── export-image.ts      # city canvas/DOM serialization → JPEG/PNG
+│   │   ├── export-image.ts      # text city rows → SVG → JPEG/PNG (3D capture added in CR6.T10)
+│   │   └── rasterize-image.ts   # SVG → canvas → data URL
 │   ├── score/
 │   │   ├── calculate-score.ts   # Excellent/Great/Good/Bad from the completion bands (CR3)
 │   │   ├── calculate-population.ts # tiered rate per character by completion band + 7% completion bonus (CR3)
-│   │   └── apply-malus.ts       # character-by-character deletion of the affected building
+│   │   └── malus-escalation.ts  # the escalating malus schedule (M4.T1, moved into the score by CR6.T5b)
 │   └── timer/
 │       ├── alarm-adapter.ts     # interface + implementation for browser.alarms
 │       └── duration-drum.ts     # pure index/motion math of the Duration Drum (UI.T9)

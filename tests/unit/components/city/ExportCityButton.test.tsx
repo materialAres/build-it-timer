@@ -6,15 +6,10 @@ import {
   ExportCityButton,
   type CityImageExporter,
 } from '@/components/city/ExportCityButton';
-import { getThemeById } from '@/lib/city/theme-registry';
 import { ok, err } from '@/utils/result';
 import { createLogger, type LogRecord } from '@/utils/logger';
-import { useAppStore, DEFAULT_CITY_HEIGHT, DEFAULT_CITY_WIDTH } from '@/store';
-import type {
-  CityCell,
-  CityGrid,
-  CityLayers,
-} from '@/components/city/city.types';
+import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
+import { renderSkyline } from '@/lib/city/plan/plan-skyline';
 import type { RasterizedCityImage } from '@/lib/city/rasterize-image';
 
 const RASTER: RasterizedCityImage = {
@@ -24,34 +19,11 @@ const RASTER: RasterizedCityImage = {
   height: 10,
 };
 
-function makeGrid(
-  width: number,
-  height: number,
-  occupied: Readonly<Record<string, CityCell>> = {},
-): CityGrid {
-  return {
-    width,
-    height,
-    cells: Array.from({ length: height }, (_, row) =>
-      Array.from(
-        { length: width },
-        (_, col) => occupied[`${String(row)}:${String(col)}`] ?? { char: null },
-      ),
-    ),
-  };
-}
-
-function makeLayers(overrides: Partial<CityLayers> = {}): CityLayers {
-  return {
-    background: makeGrid(DEFAULT_CITY_WIDTH, DEFAULT_CITY_HEIGHT),
-    middleground: makeGrid(DEFAULT_CITY_WIDTH, DEFAULT_CITY_HEIGHT),
-    foreground: makeGrid(DEFAULT_CITY_WIDTH, DEFAULT_CITY_HEIGHT),
-    ...overrides,
-  };
-}
-
-function setCity(layers: CityLayers, themeId: string | null = null): void {
-  useAppStore.setState((state) => ({ city: { ...state.city, layers, themeId } }));
+function setCity(sessionId: string | null, built: number): void {
+  useAppStore.setState((state) => ({
+    city: { ...state.city, sessionId },
+    score: { ...state.score, builtCharacters: built },
+  }));
 }
 
 function makeExporter() {
@@ -75,7 +47,7 @@ function captureLogger(): {
 describe('ExportCityButton (M3.T8)', () => {
   beforeEach(() => {
     fakeBrowser.reset();
-    setCity(makeLayers());
+    setCity(null, 0);
   });
 
   afterEach(cleanup);
@@ -88,11 +60,8 @@ describe('ExportCityButton (M3.T8)', () => {
     expect(screen.getByRole('group', { name: 'Export city' })).toBeInTheDocument();
   });
 
-  it('exports the current grid and active theme as PNG', async () => {
-    const layers = makeLayers({
-      background: makeGrid(4, 2, { '0:0': { char: '#' } }),
-    });
-    setCity(layers, 'phosphor');
+  it('exports the text city of the current plan and floors as PNG', async () => {
+    setCity('session-export', 300);
     const exporter = makeExporter();
     exporter.mockResolvedValue(ok(RASTER));
 
@@ -100,13 +69,24 @@ describe('ExportCityButton (M3.T8)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
 
     expect(exporter).toHaveBeenCalledTimes(1);
-    const [calledLayers, calledTheme, calledFormat] = exporter.mock.calls[0] ?? [];
-    expect(calledLayers).toBe(layers);
-    expect(calledTheme?.id).toBe('phosphor');
-    expect(calledTheme?.backgroundColor).toBe(
-      getThemeById('phosphor')?.backgroundColor,
-    );
-    expect(calledFormat).toBe('png');
+    const [rows, format] = exporter.mock.calls[0] ?? [];
+    const state = useAppStore.getState();
+    const plan = selectCityPlan(state);
+    expect(plan).not.toBeNull();
+    if (plan !== null) expect(rows).toEqual(renderSkyline(plan, selectVisibleFloors(state)));
+    expect(rows?.join('')).toMatch(/#/);
+    expect(format).toBe('png');
+  });
+
+  it('exports an empty picture, not an error, before there is a city', async () => {
+    setCity(null, 0);
+    const exporter = makeExporter();
+    exporter.mockResolvedValue(ok(RASTER));
+
+    render(<ExportCityButton exporter={exporter} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Export PNG' }));
+
+    expect(exporter.mock.calls[0]?.[0]).toEqual([]);
   });
 
   it('asks for the JPEG format from the JPEG button', async () => {
@@ -117,7 +97,7 @@ describe('ExportCityButton (M3.T8)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export JPEG' }));
 
     expect(exporter).toHaveBeenCalledTimes(1);
-    expect(exporter.mock.calls[0]?.[2]).toBe('jpeg');
+    expect(exporter.mock.calls[0]?.[1]).toBe('jpeg');
   });
 
   it('logs a failed result and keeps the localized error, without throwing', async () => {

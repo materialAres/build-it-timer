@@ -5,137 +5,63 @@ import {
   CITY_CHAR_WIDTH,
   CITY_IMAGE_PADDING,
 } from '@/lib/city/export-image';
-import { getBuildingColor } from '@/lib/city/palette';
-import type {
-  CityCell,
-  CityGrid,
-  CityLayers,
-  Theme,
-} from '@/components/city/city.types';
-
-const THEME: Theme = {
-  id: 'test-theme',
-  name: 'Test',
-  palette: ['#111111', '#222222', '#333333', '#444444'],
-  backgroundColor: '#0a0b0c',
-};
-
-/** Build a grid where `occupied` is keyed by `"row:col"`. */
-function makeGrid(
-  width: number,
-  height: number,
-  occupied: Readonly<Record<string, CityCell>> = {},
-): CityGrid {
-  return {
-    width,
-    height,
-    cells: Array.from({ length: height }, (_, row) =>
-      Array.from(
-        { length: width },
-        (_, col) => occupied[`${String(row)}:${String(col)}`] ?? { char: null },
-      ),
-    ),
-  };
-}
-
-function makeLayers(overrides: Partial<CityLayers> = {}): CityLayers {
-  return {
-    background: makeGrid(2, 2),
-    middleground: makeGrid(2, 2),
-    foreground: makeGrid(2, 2),
-    ...overrides,
-  };
-}
+import { ENVIRONMENT_COLORS } from '@/lib/city/plan/environment-colors';
 
 const countTexts = (svg: string): number => svg.split('<text').length - 1;
 
-describe('buildCityImage (M3.T8)', () => {
-  it('computes deterministic dimensions from the grid size', () => {
-    const image = buildCityImage(makeLayers({ background: makeGrid(3, 2) }), THEME);
+describe('buildCityImage (M3.T8, text city since CR6.T9a)', () => {
+  it('computes deterministic dimensions from the rows', () => {
+    const image = buildCityImage(['abc', 'def']);
 
     expect(image.width).toBe(3 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
     expect(image.height).toBe(2 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
     expect(image.svg).toContain(`width="${String(image.width)}"`);
     expect(image.svg).toContain(`height="${String(image.height)}"`);
-    expect(image.svg).toContain(
-      `viewBox="0 0 ${String(image.width)} ${String(image.height)}"`,
+    expect(image.svg).toContain(`viewBox="0 0 ${String(image.width)} ${String(image.height)}"`);
+  });
+
+  it('paints the black floor and phosphor-green text', () => {
+    const { svg } = buildCityImage(['#']);
+
+    expect(svg).toContain(`fill="${ENVIRONMENT_COLORS.floor}"`);
+    expect(svg).toContain(`fill="${ENVIRONMENT_COLORS.hud}"`);
+  });
+
+  it('emits one text per non-blank character at its grid position', () => {
+    const { svg } = buildCityImage(['#  .', ' :   ']);
+
+    expect(countTexts(svg)).toBe(3);
+    expect(svg).toContain(
+      `<text x="${String(CITY_IMAGE_PADDING)}" y="${String(CITY_IMAGE_PADDING + CITY_CHAR_HEIGHT)}">#</text>`,
+    );
+    expect(svg).toContain(
+      `<text x="${String(CITY_IMAGE_PADDING + CITY_CHAR_WIDTH)}" y="${String(CITY_IMAGE_PADDING + 2 * CITY_CHAR_HEIGHT)}">:</text>`,
     );
   });
 
-  it('uses the active theme background color', () => {
-    const image = buildCityImage(makeLayers(), THEME);
+  it('emits no text for blanks but keeps the full-grid dimensions', () => {
+    const image = buildCityImage(['   ', '   ']);
 
-    expect(image.svg).toContain(`fill="${THEME.backgroundColor}"`);
-  });
-
-  it('paints an occupied cell with the active palette color of its layer', () => {
-    const layers = makeLayers({
-      background: makeGrid(2, 2, { '0:0': { char: '#' } }),
-    });
-    const expected = getBuildingColor('background', THEME.palette);
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain(`fill="${expected}">#</text>`);
-    expect(image.svg).toContain('data-layer="background"');
-  });
-
-  it('lets a per-cell color override the layer palette color', () => {
-    const layers = makeLayers({
-      middleground: makeGrid(2, 2, { '1:1': { char: '|', color: '#ff0000' } }),
-    });
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain('fill="#ff0000">|</text>');
-  });
-
-  it('emits no text for empty cells but keeps the full-grid dimensions', () => {
-    const layers = makeLayers({
-      background: makeGrid(4, 3, { '0:0': { char: '.' } }),
-    });
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(countTexts(image.svg)).toBe(1);
-    expect(image.width).toBe(4 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
-    expect(image.height).toBe(3 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
-  });
-
-  it('renders the three layers with the CityCanvas parallax ordering', () => {
-    const image = buildCityImage(makeLayers(), THEME);
-
-    const background = image.svg.indexOf('data-layer="background"');
-    const middleground = image.svg.indexOf('data-layer="middleground"');
-    const foreground = image.svg.indexOf('data-layer="foreground"');
-    expect(background).toBeGreaterThan(-1);
-    expect(background).toBeLessThan(middleground);
-    expect(middleground).toBeLessThan(foreground);
+    expect(countTexts(image.svg)).toBe(0);
+    expect(image.width).toBe(3 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
   });
 
   it('escapes the glyphs that would break the SVG markup', () => {
-    const layers = makeLayers({
-      background: makeGrid(2, 2, { '0:0': { char: '<' }, '0:1': { char: '&' } }),
-    });
+    const { svg } = buildCityImage(['<&>"\'']);
 
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain('&lt;</text>');
-    expect(image.svg).toContain('&amp;</text>');
+    for (const escaped of ['&lt;', '&amp;', '&gt;', '&quot;', '&apos;']) {
+      expect(svg).toContain(`${escaped}</text>`);
+    }
   });
 
   it('honors custom geometry options and defends against non-finite ones', () => {
-    const layers = makeLayers({ background: makeGrid(2, 2) });
+    const rows = ['ab', 'cd'];
 
-    const custom = buildCityImage(layers, THEME, {
-      charWidth: 10,
-      charHeight: 20,
-      padding: 5,
-    });
+    const custom = buildCityImage(rows, { charWidth: 10, charHeight: 20, padding: 5 });
     expect(custom.width).toBe(2 * 10 + 5 * 2);
     expect(custom.height).toBe(2 * 20 + 5 * 2);
 
-    const defensive = buildCityImage(layers, THEME, {
+    const defensive = buildCityImage(rows, {
       charWidth: Number.NaN,
       charHeight: -1,
       padding: Number.POSITIVE_INFINITY,
@@ -144,11 +70,17 @@ describe('buildCityImage (M3.T8)', () => {
     expect(defensive.height).toBe(2 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
   });
 
-  it('is deterministic: the same grid and theme yield the same image', () => {
-    const layers = makeLayers({
-      background: makeGrid(3, 2, { '0:0': { char: '#' }, '1:2': { char: '.' } }),
-    });
+  it('handles an empty city without throwing', () => {
+    const image = buildCityImage([]);
 
-    expect(buildCityImage(layers, THEME)).toEqual(buildCityImage(layers, THEME));
+    expect(image.width).toBe(CITY_IMAGE_PADDING * 2);
+    expect(image.height).toBe(CITY_IMAGE_PADDING * 2);
+    expect(countTexts(image.svg)).toBe(0);
+  });
+
+  it('is deterministic: the same rows yield the same image', () => {
+    const rows = ['#  .', ' :  '];
+
+    expect(buildCityImage(rows)).toEqual(buildCityImage(rows));
   });
 });

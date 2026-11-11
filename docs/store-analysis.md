@@ -13,8 +13,8 @@
 > migrates v1–v3 by dropping `layers`, `buildings` and `themeId`). The plan is derived from the
 > session id (`selectCityPlan`) and the visible floors from the score (`selectVisibleFloors`),
 > both in `store/city.selectors.ts` and memoized. The ASCII `layers`, `buildings` and `themeId`
-> remain as unpersisted in-memory fields until CR6.T9a. The text below is the M1.T4 baseline
-> and is kept as history.
+> were removed in CR6.T9a: `CitySlice` is now `{ city: { sessionId }, resetCityForNewSession }` with
+> no injected dependencies. The text below is the M1.T4 baseline and is kept as history.
 
 ---
 

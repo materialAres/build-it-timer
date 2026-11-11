@@ -90,12 +90,12 @@ export interface BackgroundHandle {
  * (`lib/timer/focus-presets.ts`), so a longer focus builds the same city more
  * slowly (duration-neutral).
  *
- * The whole session ticks the accumulated focus time covers are handed to
- * `citySlice.growCityByTicks` (M2.T11), which delegates to the session-seeded
- * engine (M2.T12). Deriving the target from the *total* focus time (not the
- * per-tick delta) is what makes catch-up idempotent: any number of missed
- * samples is recovered by the next accounting step, and the leftover fraction
- * of a tick is carried by construction. Time spent while the timer is not
+ * The whole session ticks the accumulated focus time covers become
+ * `score.builtCharacters` (CR6.T5b); the city view derives its floors from that
+ * value. Deriving the target from the *total* focus time (not the per-tick
+ * delta) is what makes catch-up idempotent: any number of missed samples is
+ * recovered by the next accounting step, and the leftover fraction of a tick is
+ * carried by construction. Time spent while the timer is not
  * `running` is never credited because the checkpoint is cleared on pause/reset/
  * completion, so paused/idle time is not counted as focus.
  *

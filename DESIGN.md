@@ -279,7 +279,7 @@ The city is the product. Since CR6 it is a 3D view, not an ASCII grid. The **sta
 
 **Fallback view (CR6.T8b):** where WebGL2 is missing, or after the GPU context is lost, the stage shows the same city as text: a monospace `pre` (`city-hud` green, 0.8rem, line-height 1, the standard 4px glow, top-aligned so the bottom 1rem stays free for the HUD line) of 20 rows by 60 columns, 16rem tall and about 29rem wide, inside the 32rem popup. It is a front view of the same plan and the same visible floors: `#` for the edges of a standing floor, `:` for its windows, `=` for the floor under construction and `!` for a damaged one, `_` for the ground, nearer buildings hiding farther ones. It keeps the stage label, the HUD line and the same screen-reader summary, is hidden from assistive technology itself, and a quiet 0.7rem line under the stage says that the 3D view is unavailable and a text version is shown. The 3D chunk is not requested at all when WebGL2 is missing.
 
-The ASCII layers (`CityCanvas`) remain in the code only until CR6.T9a.
+The old three-layer ASCII canvas (`CityCanvas`) is gone (CR6.T9a); the text city above is the only ASCII view.
 
 #### City 3D motion (CR6.T7)
 The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader and colors are tuned by eye in CR6.T8a.

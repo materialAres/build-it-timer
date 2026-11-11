@@ -1,18 +1,10 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
-import { selectThemeId } from '@/lib/city/theme-registry';
-import { growCityByTicks } from '@/lib/city/growth-engine';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
-import {
-  createCitySlice,
-  DEFAULT_CITY_HEIGHT,
-  DEFAULT_CITY_WIDTH,
-  type CityDependencies,
-  type CitySlice,
-} from './city.slice';
+import { createCitySlice, type CitySlice } from './city.slice';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import { sanitizeBlocklistState } from '@/lib/blocking/blocklist-state';
@@ -85,25 +77,14 @@ const initialUiState: UiSlice['ui'] = {
 };
 
 // Collaborators the slices need to act (principle D). Injected through
-// `createAppStore` so a test can substitute a fake alarm provider, growth
-// engine, theme picker and a deterministic clock/entropy source without
-// touching the browser APIs. The timer slice (M2.T1) and the city slice
-// (M2.T11) share this object; later slices extend it.
-export type StoreDependencies = TimerDependencies & CityDependencies & BlocklistDependencies;
+// `createAppStore` so a test can substitute a fake alarm provider and a
+// deterministic clock/entropy source without touching the browser APIs. The
+// city slice needs none since CR6 (the plan is derived from the session id).
+export type StoreDependencies = TimerDependencies & BlocklistDependencies;
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
-  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCityByTicks`
-  // receives the whole ticks the background derived from the elapsed focus time
-  // and the session cadence, so the running app actually builds a city instead
-  // of the placeholder identity.
-  growthEngine: growCityByTicks,
-  // Each session gets a deterministic biome from the theme registry (M2.T13b),
-  // replacing the placeholder fixed default.
-  selectThemeId,
-  width: DEFAULT_CITY_WIDTH,
-  height: DEFAULT_CITY_HEIGHT,
   // A read-only context changes configuration only by asking the background
   // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) and the timer
   // commands (M3.T3b) both use this sender.
@@ -116,7 +97,7 @@ const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
   (set, get, ...rest) => ({
     ...createTimerSlice(dependencies)(set, get, ...rest),
-    ...createCitySlice(dependencies)(set, get, ...rest),
+    ...createCitySlice()(set, get, ...rest),
     ...createBlocklistSlice(dependencies)(set, get, ...rest),
     ...createScoreSlice(set, get, ...rest),
     ...createSessionHistorySlice(set, get, ...rest),
@@ -268,8 +249,7 @@ function buildStore(
           ...current,
           ...saved,
           timer: saved.timer ? { ...current.timer, ...saved.timer } : current.timer,
-          // Only the session id is persisted; the in-memory ASCII fields keep
-          // their current value (CR6.T5a, removed in CR6.T9a).
+          // Only the session id is persisted (CR6.T5a); the plan is derived from it.
           city: saved.city
             ? { ...current.city, sessionId: sanitizeSessionId(saved.city.sessionId) }
             : current.city,
@@ -314,21 +294,10 @@ export {
 export type { TimerDependencies } from './timer.slice';
 export {
   createCitySlice,
-  DEFAULT_CITY_HEIGHT,
-  DEFAULT_CITY_WIDTH,
-  DEFAULT_THEME_ID,
-  identityGrowthEngine,
   selectCity,
-  selectCityBuildings,
-  selectCityLayers,
   selectCitySessionId,
-  selectCityThemeId,
 } from './city.slice';
-export type {
-  CityDependencies,
-  CityGrowthEngine,
-  CityState,
-} from './city.slice';
+export type { CityState } from './city.slice';
 export {
   createBlocklistSlice,
   selectAppliedPresetIds,

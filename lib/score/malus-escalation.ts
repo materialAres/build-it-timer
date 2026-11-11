@@ -50,8 +50,8 @@ function tickCost(tickNumber: number): number {
  * population and the city all lose the same amount. The value is
  * cumulative and **monotonic non-decreasing** — more time can never yield a
  * smaller malus — because every tick contributes a non-negative cost. Pure and
- * total (non-finite/negative input is normalized to zero, mirroring
- * `applyMalus`), so it is unit-testable in isolation.
+ * total (non-finite/negative input is normalized to zero), so it is
+ * unit-testable in isolation.
  */
 export function malusForDistractionTicks(ticksOfDistraction: number): number {
   const ticks = normalizeTicks(ticksOfDistraction);

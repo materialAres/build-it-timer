@@ -36,7 +36,7 @@ describe('useAppStore', () => {
       level: 'bad',
       population: 0,
     });
-    expect(state.city.layers.background.width).toBeGreaterThan(0);
+    expect(state.city).toEqual({ sessionId: null });
     expect(state.sessionHistory.sessions).toEqual([]);
     expect(state.ui.activeTab).toBe('timer');
   });

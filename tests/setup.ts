@@ -5,7 +5,7 @@ import type * as FramerMotion from 'framer-motion';
 import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 import { installI18nBackend, resetTestLocale } from '@/tests/helpers/i18n';
 
-// The city's grow/destroy transitions (M3.T5, `components/city/CityCell.tsx`)
+// Animated transitions (the duration drum, M3.T5 history)
 // are purely visual. In tests they would keep an exiting character mounted
 // until its animation ends, making the rendered DOM timing-dependent. The
 // transition is therefore replaced with a passthrough that renders only the
