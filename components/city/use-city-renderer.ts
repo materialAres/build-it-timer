@@ -15,7 +15,11 @@ export interface CityRendererState {
  * and when the user prefers reduced motion, and disposes it on unmount. It does
  * no drawing decisions; the renderer's scheduler does.
  */
-export function useCityRenderer(host: RefObject<HTMLElement | null>, enabled: boolean): CityRendererState {
+export function useCityRenderer(
+  host: RefObject<HTMLElement | null>,
+  enabled: boolean,
+  freeCamera = false,
+): CityRendererState {
   const [state, setState] = useState<CityRendererState>({ renderer: null, failed: false });
 
   useEffect(() => {
@@ -27,6 +31,7 @@ export function useCityRenderer(host: RefObject<HTMLElement | null>, enabled: bo
       onContextLost: () => { setState({ renderer: null, failed: true }); },
       reducedMotion: motion?.matches ?? false,
       ambient: true,
+      freeCamera,
       effects: { bloom: true, crt: true },
     });
     if (!created.ok) {
@@ -55,7 +60,7 @@ export function useCityRenderer(host: RefObject<HTMLElement | null>, enabled: bo
       viewWatch?.disconnect();
       renderer.dispose();
     };
-  }, [host, enabled]);
+  }, [host, enabled, freeCamera]);
 
   return state;
 }

@@ -8,6 +8,11 @@ Folder structure consistent with a WXT project (explicit entrypoints + shared co
 timer-focus/
 ├── entrypoints/
 │   ├── background.ts            # orchestrator: alarms, DNR, messages
+│   ├── city/                    # CR6.T11: the full-city page (`city.html`), read-only, free camera
+│   │   ├── index.html
+│   │   ├── main.tsx             # attaches the store sync, mounts App in the ErrorBoundary
+│   │   ├── App.tsx              # title, hint and `<CityPanel full />`
+│   │   └── style.css            # page layout; the stage styles are `components/city/city-panel.css`
 │   ├── popup/
 │   │   ├── index.html
 │   │   ├── main.tsx
@@ -29,6 +34,8 @@ timer-focus/
 │   │   │   ├── ambient-motion.ts   # the rain and cars meshes (CR6.T7)
 │   │   │   ├── city-labels.ts      # `> NAME` tags on landmark towers, one texture, one mesh (CR6.T7)
 │   │   │   └── post-processing.ts / crt-pass.ts  # half-size bloom and the switchable CRT pass (CR6.T6b)
+│   │   ├── OpenCityPageButton.tsx # CR6.T11: "View full city" opens `/city.html` in a new tab
+│   │   ├── city-panel.css       # the City stage, HUD, fallback and button styles (popup and full page)
 │   │   ├── CityPanel.tsx        # CR6.T8a: the City tab's stage, HUD line and screen-reader summary; lazy-loads CityView3D
 │   │   ├── CityView3D.tsx       # CR6.T8a: mounts the renderer and wires the selectors (the lazy three.js chunk)
 │   │   ├── city-capture.ts      # CR6.T10: bridge from the lazy 3D view to the export button
@@ -65,6 +72,8 @@ timer-focus/
 ├── lib/                         # pure domain logic, no direct browser dependencies
 │   ├── url/
 │   │   └── domain.ts            # wrapper around tldts
+│   ├── browser/
+│   │   └── open-extension-page.ts # CR6.T11: opens one of the extension's own pages in a new tab (injectable API, `Result`)
 │   ├── blocking/
 │   │   ├── rules.ts             # generates declarativeNetRequest rules
 │   │   └── presets.ts           # preset data (Social, Video, etc.)

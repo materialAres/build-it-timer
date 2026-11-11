@@ -30,6 +30,20 @@ export const ORBIT_LIMITS = {
   maxZoom: 1.8,
 } as const;
 
+/**
+ * The free orbit of the full-city page (CR6.T11): all the way round, tilted
+ * from nearly overhead down to just above the horizon, zoomed further out and
+ * in than the popup view, and pannable.
+ */
+export const FREE_ORBIT_LIMITS = {
+  minPolar: 0.15,
+  maxPolar: 1.5,
+  minAzimuth: -Infinity,
+  maxAzimuth: Infinity,
+  minZoom: 0.5,
+  maxZoom: 4,
+} as const;
+
 export interface Frustum {
   readonly left: number;
   readonly right: number;

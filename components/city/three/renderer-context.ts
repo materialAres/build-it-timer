@@ -3,6 +3,7 @@ import { OrthographicCamera, Scene, WebGLRenderer } from 'three';
 import {
   CAMERA_HOME,
   CAMERA_TARGET,
+  FREE_ORBIT_LIMITS,
   ORBIT_LIMITS,
   frustumFor,
 } from '@/lib/city/camera-framing';
@@ -27,9 +28,10 @@ interface Disposable {
  * Light by construction: no MSAA, a low-power GPU, no preserved drawing buffer
  * (a capture renders and reads in one task), a capped pixel ratio, and orbit
  * controls without pan or damping so a still view needs no frame loop.
+ * `free` swaps the limited orbit for the full-city page's free one (CR6.T11).
  * Throws when WebGL is unavailable; the caller turns that into a `Result`.
  */
-export function createGlContext(host: HTMLElement): GlContext {
+export function createGlContext(host: HTMLElement, free = false): GlContext {
   const renderer = new WebGLRenderer({
     antialias: false,
     powerPreference: 'low-power',
@@ -46,14 +48,15 @@ export function createGlContext(host: HTMLElement): GlContext {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z);
-  controls.enablePan = false;
+  const limits = free ? FREE_ORBIT_LIMITS : ORBIT_LIMITS;
+  controls.enablePan = free;
   controls.enableDamping = false;
-  controls.minPolarAngle = ORBIT_LIMITS.minPolar;
-  controls.maxPolarAngle = ORBIT_LIMITS.maxPolar;
-  controls.minAzimuthAngle = ORBIT_LIMITS.minAzimuth;
-  controls.maxAzimuthAngle = ORBIT_LIMITS.maxAzimuth;
-  controls.minZoom = ORBIT_LIMITS.minZoom;
-  controls.maxZoom = ORBIT_LIMITS.maxZoom;
+  controls.minPolarAngle = limits.minPolar;
+  controls.maxPolarAngle = limits.maxPolar;
+  controls.minAzimuthAngle = limits.minAzimuth;
+  controls.maxAzimuthAngle = limits.maxAzimuth;
+  controls.minZoom = limits.minZoom;
+  controls.maxZoom = limits.maxZoom;
   controls.update();
 
   return { renderer, camera, scene: new Scene(), controls };

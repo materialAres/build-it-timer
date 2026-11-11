@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CAMERA_HOME,
   CAMERA_TARGET,
+  FREE_ORBIT_LIMITS,
   ORBIT_LIMITS,
   VIEW_SIZE,
   frustumFor,
@@ -47,3 +48,20 @@ describe('camera framing (CR6.T6a)', () => {
     expect(ORBIT_LIMITS.maxPolar).toBeLessThan(Math.PI / 2);
   });
 });
+
+describe('free orbit (CR6.T11)', () => {
+  it('turns all the way round, tilts without going under the ground and zooms further than the popup view', () => {
+    expect(FREE_ORBIT_LIMITS.minAzimuth).toBe(-Infinity);
+    expect(FREE_ORBIT_LIMITS.maxAzimuth).toBe(Infinity);
+    expect(FREE_ORBIT_LIMITS.minPolar).toBeGreaterThan(0);
+    expect(FREE_ORBIT_LIMITS.maxPolar).toBeLessThan(Math.PI / 2);
+    expect(FREE_ORBIT_LIMITS.minZoom).toBeLessThan(ORBIT_LIMITS.minZoom);
+    expect(FREE_ORBIT_LIMITS.maxZoom).toBeGreaterThan(ORBIT_LIMITS.maxZoom);
+  });
+
+  it('lets the polar range include the limited one, so the home view is inside it', () => {
+    expect(FREE_ORBIT_LIMITS.minPolar).toBeLessThanOrEqual(ORBIT_LIMITS.minPolar);
+    expect(FREE_ORBIT_LIMITS.maxPolar).toBeGreaterThanOrEqual(ORBIT_LIMITS.maxPolar);
+  });
+});
+

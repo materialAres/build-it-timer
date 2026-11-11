@@ -33,12 +33,18 @@ city:
   emptyHint: La tua città cresce mentre ti concentri. Avvia una sessione per costruirla.
   exportError: Impossibile esportare l'immagine della città.
   loading: CARICAMENTO CITTÀ…
+  openFull: Vedi la città intera
+  openError: Impossibile aprire la pagina della città intera.
   fallbackNote: Vista 3D non disponibile qui, mostro una versione testuale.
   hud: '> $1/$2 PIANI'
   summaryEmpty: 'Città: ancora nulla di costruito.'
   summary: 'Città: $1 piani costruiti su $2. Edifici in piedi: $3.'
   summaryTallestNamed: 'Più alto: $1, piani: $2.'
   summaryTallest: 'Edificio più alto, piani: $1.'
+
+cityPage:
+  title: Build-it! — Città intera
+  hint: Trascina per ruotare, scorri per zoomare, trascina col tasto destro per spostare.
 
 score:
   excellent: Eccellente

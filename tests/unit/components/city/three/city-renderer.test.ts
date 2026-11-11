@@ -109,7 +109,7 @@ vi.mock('@/components/city/three/city-scene', () => ({
   },
 }));
 
-import { ORBIT_LIMITS } from '@/lib/city/camera-framing';
+import { FREE_ORBIT_LIMITS, ORBIT_LIMITS } from '@/lib/city/camera-framing';
 import { createCityRenderer } from '@/components/city/three/city-renderer';
 import type { CityRenderer, CityRendererOptions } from '@/components/city/three/city-renderer';
 
@@ -351,6 +351,27 @@ describe('createCityRenderer (CR6.T6a)', () => {
         minZoom: ORBIT_LIMITS.minZoom,
         maxZoom: ORBIT_LIMITS.maxZoom,
       });
+    });
+  });
+
+  describe('free camera (CR6.T11)', () => {
+    it('turns all the way round and may pan, still without damping', () => {
+      create({ freeCamera: true });
+      expect(mocks.lastControls).toMatchObject({
+        enablePan: true,
+        enableDamping: false,
+        minPolarAngle: FREE_ORBIT_LIMITS.minPolar,
+        maxPolarAngle: FREE_ORBIT_LIMITS.maxPolar,
+        minAzimuthAngle: -Infinity,
+        maxAzimuthAngle: Infinity,
+        minZoom: FREE_ORBIT_LIMITS.minZoom,
+        maxZoom: FREE_ORBIT_LIMITS.maxZoom,
+      });
+    });
+
+    it('is the limited camera unless asked', () => {
+      create();
+      expect(mocks.lastControls).toMatchObject({ enablePan: false, maxAzimuthAngle: ORBIT_LIMITS.maxAzimuth });
     });
   });
 

@@ -3,12 +3,13 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { CityPanel } from '@/components/city/CityPanel';
 import { selectCityPlan, useAppStore } from '@/store';
 
-const mocks = vi.hoisted(() => ({ webgl: true, onUnavailable: null as (() => void) | null }));
+const mocks = vi.hoisted(() => ({ webgl: true, freeCamera: false, onUnavailable: null as (() => void) | null }));
 
 vi.mock('@/components/city/webgl-support', () => ({ hasWebGl2: () => mocks.webgl }));
 vi.mock('@/components/city/CityView3D', () => ({
-  default: ({ onUnavailable }: { onUnavailable?: () => void }) => {
+  default: ({ onUnavailable, freeCamera }: { onUnavailable?: () => void; freeCamera?: boolean }) => {
     mocks.onUnavailable = onUnavailable ?? null;
+    mocks.freeCamera = freeCamera === true;
     return <div data-testid="view-3d" />;
   },
 }));
@@ -27,6 +28,7 @@ describe('CityPanel (CR6.T8a)', () => {
   beforeEach(() => {
     mocks.webgl = true;
     mocks.onUnavailable = null;
+    mocks.freeCamera = false;
     setCity(null, 0);
   });
   afterEach(cleanup);
@@ -127,6 +129,31 @@ describe('CityPanel (CR6.T8a)', () => {
       render(<CityPanel />);
       await screen.findByTestId('view-3d');
       expect(screen.queryByText(/3D view unavailable here/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('full page (CR6.T11)', () => {
+    it('is the same stage with the free camera and a full-size class', async () => {
+      const { container } = render(<CityPanel full />);
+      await screen.findByTestId('view-3d');
+      expect(container.querySelector('.city-stage')).toHaveClass('city-stage--full');
+      expect(mocks.freeCamera).toBe(true);
+    });
+
+    it('keeps the popup stage and the limited camera by default', async () => {
+      const { container } = render(<CityPanel />);
+      await screen.findByTestId('view-3d');
+      expect(container.querySelector('.city-stage')).not.toHaveClass('city-stage--full');
+      expect(mocks.freeCamera).toBe(false);
+    });
+
+    it('keeps the label, the HUD line and the summary', async () => {
+      setCity('session-a', 300);
+      render(<CityPanel full />);
+      await screen.findByTestId('view-3d');
+      expect(screen.getByRole('img', { name: /city/i })).toBeInTheDocument();
+      expect(screen.getByText(/FLOORS$/)).toBeInTheDocument();
+      expect(summary()).toMatch(/^City: \d+ of \d+ floors built/);
     });
   });
 });

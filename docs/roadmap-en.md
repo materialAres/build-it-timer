@@ -1634,6 +1634,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `README.md` (export), `DESIGN.md` if it describes the exported image.
 
 ##### CR6.T11 — *(Optional)* Full-city extension page
+* **Status**: done (2026-11-11), the optional card was taken. Beyond the card: `lib/browser/open-extension-page.ts`, `components/city/OpenCityPageButton.tsx`, `components/city/city-panel.css` (the stage styles moved out of the popup's `App.css` so the page shares them) and a `freeCamera` option through `CityPanel`, `CityView3D`, `useCityRenderer` and the renderer. Not opened in a real browser; no keyboard alternative for the camera.
 * **Objective**: a "View full city" page with a large canvas and free camera, as in sketch C. Can be dropped without affecting the other tasks.
 * **Files to create/modify**: `entrypoints/city/index.html`, `entrypoints/city/main.tsx`, `entrypoints/city/App.tsx` (new), a link in the City tab, `locales/en.yml`, `locales/it.yml`.
 * **Dependencies**: CR6.T8a

@@ -32,7 +32,7 @@ const browserFrames: FrameSource = {
 export function createCityRenderer(options: CityRendererOptions): Result<CityRenderer> {
   let gl: GlContext;
   try {
-    gl = createGlContext(options.host);
+    gl = createGlContext(options.host, options.freeCamera === true);
   } catch (cause) {
     return err(cause instanceof Error ? cause : new Error('WebGL could not start'));
   }

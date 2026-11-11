@@ -14,13 +14,15 @@ import { useCityRenderer } from './use-city-renderer';
 export interface CityView3DProps {
   /** Called once when WebGL cannot start or its context is lost; the parent switches to the text fallback. */
   readonly onUnavailable?: () => void;
+  /** The full-city page's free camera (CR6.T11). */
+  readonly freeCamera?: boolean;
 }
 
-export default function CityView3D({ onUnavailable }: CityView3DProps) {
+export default function CityView3D({ onUnavailable, freeCamera = false }: CityView3DProps) {
   const plan = useAppStore(selectCityPlan);
   const visible = useAppStore(selectVisibleFloors);
   const host = useRef<HTMLDivElement>(null);
-  const { renderer, failed } = useCityRenderer(host, plan !== null);
+  const { renderer, failed } = useCityRenderer(host, plan !== null, freeCamera);
   const scene = useMemo(() => (plan === null ? null : createScenePlan(plan)), [plan]);
 
   useEffect(() => {

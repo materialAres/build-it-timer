@@ -102,6 +102,14 @@ describe('CityView3D (CR6.T8a)', () => {
     expect(options?.reducedMotion).toBe(false);
   });
 
+  it('asks for the free camera only when told to (the full-city page)', () => {
+    const { unmount } = render(<CityView3D />);
+    expect(created.options[0]?.freeCamera).toBeFalsy();
+    unmount();
+    render(<CityView3D freeCamera />);
+    expect(created.options.at(-1)?.freeCamera).toBe(true);
+  });
+
   it('passes the reduced-motion preference and follows its changes', () => {
     reduced = true;
     render(<CityView3D />);

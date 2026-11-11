@@ -17,6 +17,8 @@ export interface CityRendererOptions {
   /** Called once when the GPU context is lost, so the view can fall back. */
   readonly onContextLost: () => void;
   readonly reducedMotion: boolean;
+  /** The full-city page's free camera (CR6.T11); omitted means the popup's limited orbit. */
+  readonly freeCamera?: boolean;
   /** Whether an ambient layer exists (CR6.T7); false draws only real changes. */
   readonly ambient: boolean;
   /** Bloom and the CRT look; omitted means a plain render (no post-processing). */
