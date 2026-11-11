@@ -328,6 +328,7 @@ Each task is a standalone card, with this fixed format:
   - **Note**: the exact formula by which `distractionRatio` is derived from individual distraction events (duration, number of events, weight of each) remains an **open point**, to be defined in a later revision of the plan — see Section 4. This task implements only the threshold function (`ratio → level`), which is stable regardless of how the ratio is computed upstream.
 
 #### M2.T10 — `lib/score/apply-malus.ts` — progressive character-by-character deletion
+> **Superseded by CR6** (see §2.9.3): the malus lowers `builtCharacters`; the city follows, and `apply-malus.ts` is gone (CR6.T5b, CR6.T9a).
 * **Objective**: when the `SITE_BLOCKED_ATTEMPT` message (from M2.T8) arrives with the "proceed" choice, the background applies the malus as the **inverse of growth**: as long as the user stays on the blocked site (or keeps a tab open on it, see below), the characters of the affected building are removed one at a time at the same 2s cadence used for construction (M2.T15), rather than being destroyed all at once.
 * **Files**: `lib/score/apply-malus.ts`
 * **Dependencies**: M2.T9, M2.T8
@@ -339,6 +340,7 @@ Each task is a standalone card, with this fixed format:
   - Pure and testable without a browser; multi-tab detection (which requires browser APIs) lives separately in a dedicated adapter (`lib/timer/tab-distraction-tracker.ts` or similar), never mixed with `apply-malus.ts`.
 
 #### M2.T11 — `citySlice` — city grid/layer state, new every session
+> **Amended by CR6** (see §2.9.3): the slice stores only the session id; the plan is derived from it (CR6.T5a, CR6.T9a).
 * **Objective**: slice with `{ layers: { background: CityGrid, middleground: CityGrid, foreground: CityGrid }, buildings: Record<domain, BuildingMeta>, themeId, sessionId }`.
 * **Files**: `store/city.slice.ts`
 * **Dependencies**: M1.T4
@@ -348,6 +350,7 @@ Each task is a standalone card, with this fixed format:
   - The slice exposes `growCity(delta)`, `applyMalusToCity(ticks)` actions that delegate to the growth engine (M2.T12) and to `apply-malus.ts` (M2.T10) respectively, without computing anything internally.
 
 #### M2.T11b — `lib/city/tile-library.ts` — library of composable ASCII modules
+> **Superseded by CR6** (see §2.9.3): the ASCII module library is replaced by data-driven archetypes in the plan generator (CR6.T2b).
 * **Objective**: static, typed dataset of reusable ASCII modules, all of compatible width (e.g. multiples of a configurable base width): bases/foundations, floor sections (office, residential, glass-front), top elements (antennas, domes, helipads).
 * **Files**: `lib/city/tile-library.ts`
 * **Dependencies**: M1.T1
@@ -357,6 +360,7 @@ Each task is a standalone card, with this fixed format:
   - Data only, no selection logic here (Open/Closed principle, Section 1.1) — selection is the job of `building-composer.ts` (M2.T11c).
 
 #### M2.T11c — `lib/city/building-composer.ts` — building composition from modules based on minutes
+> **Superseded by CR6** (see §2.9.3): the building composer is replaced by the plan generator (CR6.T2b).
 * **Objective**: pure function `composeBuilding(minutesFocused: number, rng: SeededRandom): Building` that progressively unlocks modules via minute thresholds (e.g. minute 5 → base, minute 10 → first floor, minute 20 → additional floor, minute 25 → top element), choosing the specific variant of each module pseudo-randomly via the seeded generator received as a parameter (see Section 1.4).
 * **Files**: `lib/city/building-composer.ts`
 * **Dependencies**: M2.T11b
@@ -366,6 +370,7 @@ Each task is a standalone card, with this fixed format:
   - An "unbuilt" building (minutes = 0) is representable and distinct from a building with only the base.
 
 #### M2.T12 — `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid
+> **Superseded by CR6** (see §2.9.3): the growth engine is replaced by visible floors derived from `builtCharacters` (CR6.T4).
 * **Objective**: pure engine that, given the current state of the three layers and an "elapsed focus time", computes the new state: every 2 seconds of undistracted focus, one character (from a module composed by `building-composer.ts`, M2.T11c) is inserted into a cell, distributing growth across the three layers (background with small buildings/stars, middleground with the main skyscrapers, foreground with street/cars/trees).
 * **Files**: `lib/city/growth-engine.ts`
 * **Dependencies**: M2.T11, M2.T11c, M2.T1
@@ -375,6 +380,7 @@ Each task is a standalone card, with this fixed format:
   - **Behavior at a full grid**: when all three layers are completely occupied, further growth ticks **no longer modify the grid** (no error, no extension beyond the configured dimensions) — the function returns the same unchanged city state. Score and population (M2.T9, M2.T18), which are calculated elsewhere based on elapsed time and not on the grid state, continue instead to evolve normally even beyond this point: the cap is purely visual/rendering-related, not a cap on session progress.
 
 #### M2.T12b — `lib/city/decoration-engine.ts` — procedural details
+> **Superseded by CR6** (see §2.9.3): the decoration engine is replaced by the ambient layer of the 3D view (CR6.T7).
 * **Objective**: pure function `decorate(cityState, rng: SeededRandom): CityState` that, while keeping the already-composed building structure intact, randomizes fine details: lit/unlit windows (occasionally replacing `[ ]` with `[*]`/`[#]`/`[░]`), background/foreground decorative elements (trees, streetlights, cars, clouds).
 * **Files**: `lib/city/decoration-engine.ts`
 * **Dependencies**: M2.T12
@@ -384,6 +390,7 @@ Each task is a standalone card, with this fixed format:
   - Distinct and decoupled from the growth engine: decoration is a subsequent, optional step, disableable without breaking structural growth (Separation of Concerns principle).
 
 #### M2.T13 — `lib/city/palette.ts` (domain hash → color)
+> **Superseded by CR6** (see §2.9.3): the domain hash → color is replaced by a random session palette with a hue shift (CR6.T3).
 * **Objective**: deterministic pure function `getBuildingColor(domain: string): string` that always assigns the same color to the same domain, drawing from a defined palette (blue/orange/green/yellow).
 * **Files**: `lib/city/palette.ts`
 * **Dependencies**: M1.T2
@@ -392,6 +399,7 @@ Each task is a standalone card, with this fixed format:
   - Reasonably uniform distribution over a sample of N test domains (no gross bias toward a single color) — verifiable with a simple, non-rigorous statistical test.
 
 #### M2.T13b — `lib/city/theme-registry.ts` — color themes/biomes per session
+> **Superseded by CR6** (see §2.9.3): the theme registry is replaced by the session palettes (CR6.T3).
 * **Objective**: define the available color themes/biomes as **data** (Open/Closed principle, Section 1.1) and assign one to each session **deterministically**, so the same session always renders in the same biome across a service-worker restart while different sessions vary. A biome supplies the palette the M2.T13 domain hash draws from and the CRT backdrop color, without changing the hash logic itself.
 * **Files**: `lib/city/theme-registry.ts`, `utils/hash.ts` (shared FNV-1a hash), `store/city.slice.ts` (re-export of `DEFAULT_THEME_ID`), `store/index.ts` (wiring of the `selectThemeId` port).
 * **Dependencies**: M1.T1
@@ -403,6 +411,7 @@ Each task is a standalone card, with this fixed format:
   - No internal `Date.now()`/`Math.random()` (Dependency Inversion principle).
 
 #### M2.T14 — `CityCanvas` + `CityCell` (ASCII render + CRT glow)
+> **Superseded by CR6** (see §2.9.3): `CityCanvas`/`CityCell` are replaced by the three.js view with bloom and CRT pass, and a text fallback (CR6.T6a–T8b).
 * **Objective**: React components that render the city grid as monospace `<pre>`/`<span>` with green CRT `text-shadow`, applying colors from `palette.ts`.
 * **Files**: `components/city/CityCanvas.tsx`, `components/city/CityCell.tsx`
 * **Dependencies**: M2.T12, M2.T13
@@ -412,6 +421,7 @@ Each task is a standalone card, with this fixed format:
   - A snapshot/rendering test verifies that a `destroyed` cell no longer shows the building's character/color.
 
 #### M2.T15 — Linking growth-engine ↔ timer tick
+> **Amended by CR6** (see §2.9.3): the growth tick advances session progress only; the view derives the floors (CR6.T5b).
 * **Objective**: every timer tick (M2.T1/M2.T2) invokes `growCity` on the city store with the elapsed, distraction-free time delta.
 * **Files**: `entrypoints/background.ts` (extension)
 * **Dependencies**: M2.T12, M2.T2
@@ -420,6 +430,7 @@ Each task is a standalone card, with this fixed format:
   - Integration test: a sequence of simulated ticks produces a grid consistent with the growth engine's expected output.
 
 #### M2.T16 — Linking malus ↔ building destruction
+> **Amended by CR6** (see §2.9.3): the malus wiring lowers the score; the newest floors disappear and a partly paid floor shows as damaged (CR6.T4, CR6.T5b).
 * **Objective**: the malus event (M2.T10) applies `destroyBuilding` on the actual city state in the store, not just on the isolated model.
 * **Files**: `entrypoints/background.ts` (extension)
 * **Dependencies**: M2.T10, M2.T12
@@ -544,6 +555,7 @@ Each task is a standalone card, with this fixed format:
 * **Notes/decisions**: the composition is deliberately split from the timer path (M3.T3b) and session completion (M3.T3c) so this card stays a pure composition task; its acceptance criteria depend on those two landing first. **Test seam (decision: option A)**: the integration test starts the real background in-process with `fakeBrowser` (the pattern of `tests/integration/messaging/mutation-bus.test.ts`) and renders `<App />` against the module-level `useAppStore` singleton, letting the background's writes reach the popup through `attachStoreSync` (M1.T8) — no injectable-store refactor of the components. The dead `ui.malusAlertVisible` field is dropped here: the malus alert is the content-script overlay (M2.T8), not a popup element, so the flag has no consumer.
 
 #### M3.T5 — `framer-motion` animations on building growth/destruction
+> **Superseded by CR6** (see §2.9.3): the `framer-motion` character animations are replaced by floor drop, glitch-out and damaged-floor effects in the renderer (CR6.T7).
 * **Objective**: animated transitions when a cell moves from `growing→building` or is destroyed.
 * **Files**: `components/city/CityCell.tsx` (extension)
 * **Dependencies**: M2.T14
@@ -570,6 +582,7 @@ Each task is a standalone card, with this fixed format:
   - Test: rendering with an empty history and with 5 entries, and the transition when a new session is recorded.
 
 #### M3.T8 — `ExportCityButton` — export city as JPEG/PNG at end of focus
+> **Amended by CR6** (see §2.9.3): the export serializes the text city until CR6.T10 adds the 3D frame capture (CR6.T9a, CR6.T10).
 * **Objective**: let the user export the city of a finished session as an image, so the "one city per session" result can be kept outside the extension.
 * **Files**: `lib/city/export-image.ts` (DOM/canvas serialization → JPEG/PNG), `components/city/ExportCityButton.tsx`, `entrypoints/popup/App.tsx` (composition, M3.T4).
 * **Dependencies**: M2.T14
@@ -607,6 +620,7 @@ Each task is a standalone card, with this fixed format:
 ### 1.7 Milestone 4 — Polish and Nice-to-have
 
 #### M4.T1 — *(Nice to have)* Malus proportional to time spent on the blocked site
+> **Amended by CR6** (see §2.9.3): the escalation is part of `builtCharacters`, so it lowers the score and the city alike (CR6.T5b).
 * **Objective**: extend `apply-malus.ts` (M2.T10) so that the malus grows as a function of time spent on the blocked site, not just the single event.
 * **Files**: `lib/score/apply-malus.ts` (extension)
 * **Dependencies**: M2.T10
@@ -614,6 +628,7 @@ Each task is a standalone card, with this fixed format:
   - All else being equal, more time spent on the blocked site produces a greater or equal malus, never a smaller one (monotonic property tested).
 
 #### M4.T2 — *(Nice to have)* TexturePacker / building sprite sheet integration
+> **Superseded by CR6** (see §2.9.3): the 3D view needs no sprite sheet.
 * **Objective**: replace (or complement) pure ASCII rendering with optimized sprites generated via TexturePacker to reduce rendering calls, while keeping the deterministic palette from M2.T13.
 * **Files**: `assets/ascii/` (or a new `assets/sprites/` folder), update to `CityCell.tsx`.
 * **Dependencies**: M2.T14
@@ -1598,6 +1613,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: JSDoc in code that stays no longer references removed modules; `docs/project-structure.md` (removed files).
 
 ##### CR6.T9b — Retire the old model in the documentation
+* **Status**: done (2026-11-11). Beyond the card: the old rows of `docs/testing-matrix.md` are marked as history, and `CLAUDE.md` also lost the `CityCanvas`/`CityCell` examples, the TexturePacker mention and the hover-on-a-city-cell UI example. `PRODUCT.md` and `README.md` were already updated by CR6.T8a/T8b and stay with CR6.T13 for the final pass.
 * **Objective**: the project rules and the historical record point at the new model.
 * **Files to create/modify**: `CLAUDE.md` (§1.1 KISS row about the tile library, DRY row about the domain-hash palette, §1.4 pure-function examples naming `building-composer.ts` and `decoration-engine.ts`, rewritten for the plan generator), the Section 1 cards of this roadmap listed in §2.9.3, the historical documents from the CR6.T1 inventory.
 * **Dependencies**: CR6.T9a

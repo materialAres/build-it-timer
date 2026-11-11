@@ -1,5 +1,7 @@
 # I009 — Malus not applied to a blocked site already open when the session starts
 
+> Superseded by CR6 (§2.9): describes the ASCII city.
+
 - **Status**: **fixed**
 - **Severity**: medium (the reward/penalty model is inverted for the whole stay: no malus, and the city grows)
 - **Type**: real bug — stale tab set in the distraction tracker

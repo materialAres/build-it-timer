@@ -1,5 +1,7 @@
 # I002 — The drawn city is scattered characters, not recognizable buildings
 
+> Superseded by CR6 (§2.9): describes the ASCII city.
+
 - **Status**: open
 - **Severity**: high (the city is the product's main visual output; it reads as noise)
 - **Type**: real bug — a design defect in the growth engine's placement strategy
