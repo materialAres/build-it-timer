@@ -1533,6 +1533,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `CLAUDE.md` "two clocks" technical note (the fine tick advances progress; the view derives floors); `docs/features-analysis/score-population.md` (escalation now in the score, worked example from CR6.T1); `README.md` (how the city grows and how distractions damage it); `.serena/memories/core.md` (malus through `builtCharacters`; background never touches rendering); `docs/testing-matrix.md` row.
 
 ##### CR6.T6a — Add three.js; renderer lifecycle and pure render scheduler
+* **Status**: done (2026-11-11). three.js 0.187.0 (exact). Two helper files were added beyond the card (`lib/city/camera-framing.ts`, `components/city/three/renderer-context.ts`); the renderer is not loaded by anything yet (the lazy view is CR6.T8a), so the build is unchanged.
 * **Objective**: a framework-free renderer shell that starts, resizes, stops and cleans up correctly, and draws a frame only when one is due.
 * **Files to create/modify**: `package.json` (`three`, `@types/three`, exact versions), `components/city/three/city-renderer.ts` (WebGL renderer, orthographic camera, limited orbit controls, resize, `dispose()`, context loss), `lib/city/render-scheduler.ts` (pure: decides when a frame is due), `tests/unit/lib/city/render-scheduler.test.ts`, a renderer test with three.js mocked.
 * **Dependencies**: CR6.T4

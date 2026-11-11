@@ -16,6 +16,9 @@ timer-focus/
 │       └── blocked-overlay.content.ts   # content script, mounts Shadow DOM
 ├── components/                  # pure, reusable React components
 │   ├── city/
+│   │   ├── three/               # the 3D view's renderer shell (CR6): lifecycle, camera, meshes; no store, no browser APIs
+│   │   │   ├── city-renderer.ts    # create / resize / invalidate / dispose, draws only when the scheduler says
+│   │   │   └── renderer-context.ts # WebGL renderer, orthographic camera, limited orbit controls
 │   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground)
 │   │   ├── CityLayer.tsx        # a single layer positioned absolute/overlay
 │   │   ├── CityCell.tsx
@@ -54,6 +57,10 @@ timer-focus/
 │   │   ├── rules.ts             # generates declarativeNetRequest rules
 │   │   └── presets.ts           # preset data (Social, Video, etc.)
 │   ├── city/
+│   │   ├── plan/                # CR6: the seeded city plan, pure (roads, lots, buildings, floors, colors, scene data)
+│   │   ├── render-scheduler.ts  # CR6: when a frame is due (pure)
+│   │   ├── camera-framing.ts    # CR6: fixed isometric framing and orbit limits (pure)
+│   │   ├── migrate-city.ts      # CR6: persist v1–v3 city → `{ sessionId }`
 │   │   ├── tile-library.ts      # library of composable ASCII modules (bases, floors, tops)
 │   │   ├── building-composer.ts # composes a building from modules based on unlocked time/minutes
 │   │   ├── growth-engine.ts     # computes the state of the three layers from elapsed time

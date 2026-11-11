@@ -1,0 +1,369 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+const mocks = vi.hoisted(() => {
+  const log = {
+    rendererOptions: [] as Array<Record<string, unknown>>,
+    pixelRatios: [] as number[],
+    sizes: [] as Array<[number, number]>,
+    renders: 0,
+    disposed: [] as string[],
+    controlsListeners: new Map<string, () => void>(),
+    failConstruct: false,
+    lastControls: null as Record<string, unknown> | null,
+  };
+  return log;
+});
+
+vi.mock('three', () => {
+  class WebGLRenderer {
+    domElement: HTMLCanvasElement = document.createElement('canvas');
+    constructor(options: Record<string, unknown>) {
+      if (mocks.failConstruct) throw new Error('WebGL unavailable');
+      mocks.rendererOptions.push(options);
+    }
+    setPixelRatio(ratio: number): void { mocks.pixelRatios.push(ratio); }
+    setSize(w: number, h: number): void { mocks.sizes.push([w, h]); }
+    setClearColor(): void {}
+    render(): void { mocks.renders += 1; }
+    dispose(): void { mocks.disposed.push('renderer'); }
+    forceContextLoss(): void { mocks.disposed.push('context'); }
+  }
+  class Scene {
+    children: unknown[] = [];
+    traverse(fn: (o: unknown) => void): void { for (const c of this.children) fn(c); }
+  }
+  class OrthographicCamera {
+    position = { set: vi.fn(), x: 0, y: 0, z: 0, copy: vi.fn() };
+    zoom = 1;
+    left = 0; right = 0; top = 0; bottom = 0;
+    lookAt(): void {}
+    updateProjectionMatrix(): void {}
+  }
+  class Color { constructor(public value?: unknown) {} }
+  return { WebGLRenderer, Scene, OrthographicCamera, Color, Vector3: class { constructor(public x = 0, public y = 0, public z = 0) {} } };
+});
+
+vi.mock('three/addons/controls/OrbitControls.js', () => {
+  class OrbitControls {
+    enablePan = true; enableDamping = true; enableZoom = true;
+    minZoom = 0; maxZoom = 0; minPolarAngle = 0; maxPolarAngle = 0; minAzimuthAngle = 0; maxAzimuthAngle = 0;
+    target = { set: vi.fn(), x: 0, y: 0, z: 0 };
+    constructor() { mocks.lastControls = this as unknown as Record<string, unknown>; }
+    addEventListener(type: string, fn: () => void): void { mocks.controlsListeners.set(type, fn); }
+    removeEventListener(type: string): void { mocks.controlsListeners.delete(type); }
+    update(): void {}
+    dispose(): void { mocks.disposed.push('controls'); }
+  }
+  return { OrbitControls };
+});
+
+import { ORBIT_LIMITS } from '@/lib/city/camera-framing';
+import { createCityRenderer } from '@/components/city/three/city-renderer';
+import type { CityRenderer, CityRendererOptions } from '@/components/city/three/city-renderer';
+
+/** A manual frame clock: callbacks run only when the test says so. */
+function createFrameClock() {
+  let next = 1;
+  const pending = new Map<number, (t: number) => void>();
+  return {
+    request: (cb: (t: number) => void): number => {
+      const id = next;
+      next += 1;
+      pending.set(id, cb);
+      return id;
+    },
+    cancel: (id: number): void => { pending.delete(id); },
+    /** Run every pending callback once at `time`; returns how many ran. */
+    flush(time: number): number {
+      const batch = [...pending.entries()];
+      pending.clear();
+      for (const [, cb] of batch) cb(time);
+      return batch.length;
+    },
+    get size(): number { return pending.size; },
+  };
+}
+
+describe('createCityRenderer (CR6.T6a)', () => {
+  let host: HTMLElement;
+  let clock: ReturnType<typeof createFrameClock>;
+  let time: number;
+  let lost: Mock<() => void>;
+  let created: CityRenderer[];
+
+  function create(overrides: Partial<CityRendererOptions> = {}): CityRenderer {
+    const result = createCityRenderer({
+      host,
+      onContextLost: lost,
+      reducedMotion: false,
+      ambient: false,
+      now: () => time,
+      frames: clock,
+      ...overrides,
+    });
+    if (!result.ok) throw result.error;
+    created.push(result.value);
+    return result.value;
+  }
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    clock = createFrameClock();
+    time = 1_000;
+    lost = vi.fn<() => void>();
+    created = [];
+    mocks.rendererOptions.length = 0;
+    mocks.pixelRatios.length = 0;
+    mocks.sizes.length = 0;
+    mocks.renders = 0;
+    mocks.disposed.length = 0;
+    mocks.controlsListeners.clear();
+    mocks.failConstruct = false;
+    mocks.lastControls = null;
+    vi.stubGlobal('devicePixelRatio', 1);
+  });
+
+  afterEach(() => {
+    for (const r of created) r.dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  describe('creation', () => {
+    it('is light: no MSAA, low-power GPU, no preserved drawing buffer', () => {
+      create();
+      expect(mocks.rendererOptions[0]).toMatchObject({
+        antialias: false,
+        powerPreference: 'low-power',
+        preserveDrawingBuffer: false,
+      });
+    });
+
+    it.each([[1, 1], [1.25, 1.25], [2, 1.5], [3, 1.5]])('caps the pixel ratio: device %s → %s', (device, expected) => {
+      vi.stubGlobal('devicePixelRatio', device);
+      create();
+      expect(mocks.pixelRatios.at(-1)).toBe(expected);
+    });
+
+    it('puts one canvas in the host', () => {
+      create();
+      expect(host.querySelectorAll('canvas')).toHaveLength(1);
+    });
+
+    it('returns an error, never throws, when WebGL is unavailable', () => {
+      mocks.failConstruct = true;
+      const result = createCityRenderer({
+        host, onContextLost: lost, reducedMotion: false, ambient: false, now: () => time, frames: clock,
+      });
+      expect(result.ok).toBe(false);
+      expect(host.querySelectorAll('canvas')).toHaveLength(0);
+    });
+  });
+
+  describe('frames on demand', () => {
+    it('draws the first frame, then nothing while nothing changes', () => {
+      create();
+      clock.flush(1_000);
+      expect(mocks.renders).toBe(1);
+      expect(clock.size).toBe(0);
+      expect(clock.flush(2_000)).toBe(0);
+      expect(mocks.renders).toBe(1);
+    });
+
+    it('draws one frame when the floors change', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.invalidate('floors');
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+      clock.flush(1_200);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('merges changes made before the next frame into one draw', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.invalidate('floors');
+      r.invalidate('floors');
+      r.invalidate('camera');
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('draws when the camera moves (orbit controls change)', () => {
+      create();
+      clock.flush(1_000);
+      mocks.controlsListeners.get('change')?.();
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('resizes the canvas and the camera, and draws', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.resize(400, 300);
+      expect(mocks.sizes.at(-1)).toEqual([400, 300]);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('ignores a resize to an unusable size', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.resize(0, 300);
+      r.resize(Number.NaN, 300);
+      expect(clock.flush(1_100)).toBe(0);
+      expect(mocks.renders).toBe(1);
+    });
+
+    it('counts its renders for the e2e probe', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.invalidate('floors');
+      clock.flush(1_100);
+      expect(r.renderCount).toBe(2);
+    });
+  });
+
+  describe('visibility and motion', () => {
+    it('draws nothing while hidden and the pending change when shown again', () => {
+      const r = create();
+      r.setVisible(false);
+      r.invalidate('floors');
+      clock.flush(1_000);
+      expect(mocks.renders).toBe(0);
+      r.setVisible(true);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(1);
+    });
+
+    it('stops while the document is hidden', () => {
+      const r = create();
+      clock.flush(1_000);
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      r.invalidate('floors');
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(1);
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      document.dispatchEvent(new Event('visibilitychange'));
+      clock.flush(1_200);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('runs an ambient layer at most 30 times a second', () => {
+      create({ ambient: true });
+      let frames = 0;
+      for (let t = 0; t < 1_000; t += 4) {
+        time = t;
+        frames += clock.flush(t) > 0 ? 1 : 0;
+      }
+      expect(mocks.renders).toBeLessThanOrEqual(30);
+      expect(mocks.renders).toBeGreaterThanOrEqual(25);
+      expect(frames).toBeGreaterThan(0);
+    });
+
+    it('draws no ambient frame under reduced motion', () => {
+      create({ ambient: true, reducedMotion: true });
+      clock.flush(1_000);
+      expect(mocks.renders).toBe(1);
+      clock.flush(1_500);
+      expect(mocks.renders).toBe(1);
+    });
+
+    it('follows a change of the reduced-motion preference', () => {
+      const r = create({ ambient: true, reducedMotion: true });
+      clock.flush(1_000);
+      r.setReducedMotion(false);
+      time = 1_100;
+      clock.flush(1_100);
+      time = 1_200;
+      clock.flush(1_200);
+      expect(mocks.renders).toBeGreaterThan(1);
+    });
+  });
+
+  describe('limited orbit controls', () => {
+    it('allows no pan and no damping, only a bounded orbit and zoom', () => {
+      create();
+      expect(mocks.lastControls).toMatchObject({
+        enablePan: false,
+        enableDamping: false,
+        minPolarAngle: ORBIT_LIMITS.minPolar,
+        maxPolarAngle: ORBIT_LIMITS.maxPolar,
+        minAzimuthAngle: ORBIT_LIMITS.minAzimuth,
+        maxAzimuthAngle: ORBIT_LIMITS.maxAzimuth,
+        minZoom: ORBIT_LIMITS.minZoom,
+        maxZoom: ORBIT_LIMITS.maxZoom,
+      });
+    });
+  });
+
+  describe('context loss', () => {
+    it('reports a lost context to the caller and stops drawing', () => {
+      create();
+      clock.flush(1_000);
+      const canvas = host.querySelector('canvas');
+      const event = new Event('webglcontextlost', { cancelable: true });
+      canvas?.dispatchEvent(event);
+      expect(lost).toHaveBeenCalledTimes(1);
+      expect(event.defaultPrevented).toBe(true);
+    });
+  });
+
+  describe('dispose', () => {
+    it('frees the renderer, the context and the controls, and removes the canvas', () => {
+      const r = create();
+      r.dispose();
+      expect(mocks.disposed).toEqual(expect.arrayContaining(['renderer', 'context', 'controls']));
+      expect(host.querySelectorAll('canvas')).toHaveLength(0);
+    });
+
+    it('cancels the pending frame and draws nothing afterwards', () => {
+      const r = create();
+      r.dispose();
+      expect(clock.size).toBe(0);
+      r.invalidate('floors');
+      clock.flush(2_000);
+      expect(mocks.renders).toBe(0);
+    });
+
+    it('removes its listeners', () => {
+      const r = create();
+      const canvas = host.querySelector('canvas');
+      r.dispose();
+      expect(mocks.controlsListeners.has('change')).toBe(false);
+      canvas?.dispatchEvent(new Event('webglcontextlost'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(lost).not.toHaveBeenCalled();
+    });
+
+    it('is safe to call twice', () => {
+      const r = create();
+      r.dispose();
+      expect(() => { r.dispose(); }).not.toThrow();
+      expect(mocks.disposed.filter((d) => d === 'renderer')).toHaveLength(1);
+    });
+
+    it('runs the cleanups other modules registered', () => {
+      const r = create();
+      const cleanup = vi.fn();
+      r.registerDisposable(cleanup);
+      r.dispose();
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('has no extension API and no store access (§1.3)', () => {
+    const dir = resolve(import.meta.dirname, '../../../../../components/city/three');
+    for (const name of readdirSync(dir)) {
+      const source = readFileSync(resolve(dir, name), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      expect(source).not.toMatch(/\b(chrome|browser)\.|from '@\/store|useAppStore|wxt\//);
+    }
+  });
+});
