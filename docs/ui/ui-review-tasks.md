@@ -19,6 +19,10 @@ Tasks are meant to be tackled one at a time, following **Execution order** below
 
 - None.
 
+## Decisions taken (2026-11-10, after the UI.T8 critique)
+
+- Follow-ups UI.T10–UI.T13 cover the critique's findings except the **City canvas overflow** (P1), which the user chose not to take on. Revisit it only if the popup is seen clipped in real Chrome. Re-run the critique after UI.T10–UI.T13 to compare against 26/40.
+
 ## Execution order
 
 The IDs reflect the order findings were recorded, not the order of work. Follow this sequence; it is derived from the **Dependencies** fields here and in the roadmap cards for CR4 (§2.7) and CR5 (§2.8).
@@ -35,7 +39,11 @@ The IDs reflect the order findings were recorded, not the order of work. Follow 
 | 8 | **UI.T9**: Duration Drum | Reuses UI.T5's pill and focus styles. |
 | 9 | **UI.T6**: edge cases and feedback | Needs the final list and presets; running it late also covers the Timer tab and the drum. |
 | 10 | **UI.T7**: minor items | Copy and small polish, last. |
-| 11 | **UI.T8**: re-run the critique | Compare against 17/40. |
+| 11 | **UI.T8**: re-run the critique | Done: 26/40. Findings became UI.T10–UI.T13. |
+| 12 | **UI.T10**: status copy and affordances | First follow-up: small, copy-only, no layout risk. |
+| 13 | **UI.T11**: explain the score and the empty city | Needs the final copy voice from UI.T10. |
+| 14 | **UI.T12**: live strip on the Timer tab | Largest change; builds on settled copy and score legend. |
+| 15 | **UI.T13**: undo after Reset, whole-domain hint | P3, last. |
 
 Notes:
 - **Gap between steps 1 and 3.** UI.T1 removes the tag checkbox grid before CR4 replaces tags, so tags can't be assigned from the popup in between. This is harmless: tags don't affect blocking, persisted tag data is untouched, and CR4.T3 migrates it.
@@ -204,4 +212,69 @@ Notes:
 #### UI.T8 — Re-run the critique
 **Command**: `/impeccable critique entrypoints/popup` · **Dependencies**: UI.T1–UI.T7, UI.T9
 
+**Status**: critique re-run (2026-11-10): **26/40 (Acceptable)**, up from 17/40; snapshot `.impeccable/critique/2026-11-10T12-05-34Z__entrypoints-popup.md` (local only). The first snapshot (17/40) is not closed yet: `/impeccable polish` closes it. Open findings: P1 the City canvas is about 492px wide and overflows a 420px popup, P1 time, city and score live on three tabs, P2 paused and Resume copy plus a stale blocklist summary after Reset (the summary target is 13px tall), P2 nothing explains the score tiers, P3 Reset has no undo. Detector: 8 advisory findings, none structural; `#8a948e` is missing from DESIGN.md's front-matter tokens.
+
 Compare against 17/40 and close the snapshot.
+
+---
+
+#### UI.T10 — Status copy and affordances
+**Priority**: P2 · **Command**: `/impeccable clarify` · **Dependencies**: UI.T8
+
+**Problem** (critique 26/40)
+- While `paused` the main button still says `Start` (the locale has only `timer.start` and `timer.pause`) and nothing marks the pause.
+- `BlocklistSummary` keeps `Blocks N sites · add-only during a session` after Reset (idle), when removal is allowed again.
+- The summary is dotted text but a tab stop, 115×13px: below the 24px target size and not obviously a link.
+- The tab is `Blocklist`, the heading `Blocked sites`.
+
+**Acceptance criteria**
+- Paused shows a visible, quiet marker on the clock (for example the digits dimmed plus a `Paused` label in the same slot, no layout shift) and the button reads `Resume` (EN and IT, both locales, drift test green).
+- The summary drops `add-only during a session` unless a session is running or paused; idle copy states only the count.
+- The summary is a clear link/button with a target of at least 24px tall, in the shared outline style.
+- One name for the list in the tab and the heading.
+- Neutral voice kept (PRODUCT.md): no cheering or scolding.
+- Tests: label per status, idle vs in-session summary, target size class.
+
+---
+
+#### UI.T11 — Explain the score and the empty city
+**Priority**: P2 · **Command**: `/impeccable onboard` · **Dependencies**: UI.T10
+
+**Problem**
+- The Score tab never says what the tiers mean (30/70/100% of the city) or what population counts.
+- The empty City canvas is a blank box; the hint sits below it, away from the eye.
+- `STARTING` looks like a disabled button.
+
+**Acceptance criteria**
+- A quiet tier legend on the Score tab (factual: `Good from 30%, Great from 70%, Excellent at 100%`), data-driven from `COMPLETION_BANDS`, not hard-coded.
+- The empty-city hint moves into or directly under the frame; it still disappears once a session runs or a city exists.
+- The `STARTING` state is visibly a status, not a control (shape or treatment differs from the pills that act); keep it neutral.
+- EN and IT; no number that depends on the session length (the cadence is `duration ÷ 600`).
+
+---
+
+#### UI.T12 — Live strip on the Timer tab
+**Priority**: P1 · **Command**: `/impeccable layout` · **Dependencies**: UI.T10, UI.T11
+
+**Problem**
+- Time, city and score live on three tabs, so the feedback loop is split: the running Timer tab is a clock in an empty frame, and the City tab cannot show the time left.
+
+**Acceptance criteria**
+- While `running`/`paused`, the Timer tab shows a compact read-only strip (the score badge plus population, or the last columns of the city; decide in the card's shape step) under the clock.
+- The City tab shows the remaining time in one quiet line while a session is active.
+- Presentation only: values come from existing selectors; no new store state; the Timer tab stays under the 600px popup cap.
+- Idle layout does not change.
+
+---
+
+#### UI.T13 — Undo after Reset, whole-domain hint
+**Priority**: P3 · **Command**: `/impeccable harden` · **Dependencies**: UI.T12
+
+**Problem**
+- Reset is one click and discards the in-progress city.
+- Adding `news.ycombinator.com` silently becomes `ycombinator.com` (the whole domain); only the confirmation line shows it.
+
+**Acceptance criteria**
+- Decide in the shape step whether Reset needs an undo window or a confirm step; the background stays the single writer, so any undo is a background message, not popup-only state.
+- When normalization widens a subdomain, the add feedback says so plainly (`Added ycombinator.com (the whole domain).`), EN and IT.
+- Tests for both paths; no regression to the add-only window (CR5).
