@@ -1441,6 +1441,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 #### 2.9.2 Task cards
 
 ##### CR6.T1 — Analysis: city plan model, derivation, renderer, budgets, migration, docs inventory
+* **Status**: done (2026-11-11) — `docs/features-analysis/city-3d.md`. Two decisions amend later cards (CR6.T4, CR6.T5b); two open points are listed in its §11.
 * **Objective**: write `docs/features-analysis/city-3d.md` mapping the current city paths and recording the decisions the later tasks implement.
 * **Files to create/modify**: `docs/features-analysis/city-3d.md` (new).
 * **Dependencies**: —
@@ -1496,8 +1497,8 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 * **Files to create/modify**: `lib/city/plan/visible-floors.ts` (complete floors and the damaged fraction), `lib/city/plan/scene-data.ts` (instance transforms, window colors, edge segments, label anchors as typed arrays, the damaged-floor marker), `lib/city/plan/plan-summary.ts` (text summary for screen readers), their unit tests (new).
 * **Dependencies**: CR6.T2b, CR6.T3
 * **Acceptance criteria**:
-  - `visibleFloors(plan, builtCharacters, total)` returns `{ complete, damagedFraction }` per the CR6.T1 formula: nothing at 0, every floor complete at `total`, monotonic, invalid input → nothing.
-  - Lowering `builtCharacters` removes the newest floors first; a partly paid top floor is reported as damaged, so a loss of a single character always changes the output.
+  - `visibleFloors(plan, builtCharacters, total, lostCharacters)` returns `{ complete, partialFraction, damaged }` per the CR6.T1 formula (`city-3d.md` §4): nothing at 0, every floor complete at `total`, monotonic, invalid input → nothing.
+  - Lowering `builtCharacters` removes the newest floors first. The partly paid top floor is *under construction* while no character has been lost and **damaged** once `lostCharacters > 0` (`max(0, focusCharacters − built)`, derived from the `timer` accumulators), so a loss of a single character always changes the output and a growing city never flashes red.
   - `sceneData` output for a fixed seed matches a snapshot; instance and edge counts equal the visible floors.
   - Pure: no `Date.now()`, no browser or three.js imports.
   - **Docs**: `city-3d.md` derivation section, `docs/testing-matrix.md` row.
@@ -1518,6 +1519,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 * **Files to create/modify**: `lib/score/calculate-built-characters.ts` (escalated distraction cost), `lib/score/malus-escalation.ts` (new: `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks` moved out of `apply-malus.ts`), `lib/timer/session-progress.ts`, `entrypoints/background.ts` (growth tick keeps progress only; malus wiring without `applyMalusToCity`; `MALUS_APPLIED` computed from the `builtCharacters` drop), their unit and integration tests (score, session progress, background growth, malus).
 * **Dependencies**: CR6.T5a
 * **Acceptance criteria**:
+  - Penalty = `malusForDistractionTicks(floor(distractedMs × total / durationMs))` over the cumulative `distractedMs`; no "proceed" baseline and no immediate extra character (`city-3d.md` §5; open point 1 there).
   - Tests written first for the score: a long stay costs more than a short one by the escalation schedule; the result stays an integer in `[0, total]`; a full undistracted session still reaches 100%.
   - The background never writes city geometry; the city view reflects a malus within the same store update as the score.
   - `MALUS_APPLIED` still reaches the overlay with the characters lost (now the `builtCharacters` drop).
