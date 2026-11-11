@@ -16,7 +16,7 @@ const testPreset: Preset = { id: 'user:focus', name: 'Focus', domains: [] };
 function serialize(state: {
   blocklist: { userPresets: ReadonlyArray<Preset> };
 }): string {
-  return JSON.stringify({ state, version: 3 });
+  return JSON.stringify({ state, version: 4 });
 }
 
 describe('read-only store (M1.T9)', () => {

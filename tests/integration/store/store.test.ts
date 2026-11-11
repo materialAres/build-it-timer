@@ -124,8 +124,8 @@ describe('useAppStore', () => {
 
     expect(parsed.state).toHaveProperty('blocklist');
     expect(parsed.state).not.toHaveProperty('ui');
-    // CR4.T3: the persisted payload carries the source-tracked shape at version 3.
-    expect(parsed.version).toBe(3);
+    // CR4.T3/CR6.T5a: the persisted payload is at version 4 (the city is only its session id).
+    expect(parsed.version).toBe(4);
     expect(parsed.state.blocklist).toEqual({
       blocklist: [],
       appliedPresetIds: [],
@@ -417,7 +417,7 @@ describe('useAppStore', () => {
     expect(store.getState().blocklist.appliedPresetIds).toEqual([]);
   });
 
-  it('persists only the source-tracked shape at version 3 (CR4.T3)', async () => {
+  it('persists only the source-tracked shape, now at version 4 (CR4.T3, CR6.T5a)', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     const blocklist = {
@@ -437,7 +437,7 @@ describe('useAppStore', () => {
       version: number;
     };
 
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
     expect(parsed.state.blocklist).toEqual(blocklist);
     expect(Object.keys(parsed.state.blocklist).sort()).toEqual([
       'appliedPresetIds',

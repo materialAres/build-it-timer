@@ -556,7 +556,10 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
     });
     await restarted.ready;
 
-    expect(countOccupied(restartedStore.getState().city.layers)).toBe(5);
+    // CR6.T5a: the ASCII layers are no longer persisted, so only the four
+    // catch-up characters are redrawn; the score and population (derived from
+    // the persisted timer) still count all five. Removed with CR6.T5b/T9a.
+    expect(countOccupied(restartedStore.getState().city.layers)).toBe(4);
     expect(selectPopulation(restartedStore.getState())).toBe(before + 4 * 5);
 
     restarted.dispose();

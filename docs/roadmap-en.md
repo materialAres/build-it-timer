@@ -1508,6 +1508,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `city-3d.md` derivation section, `docs/testing-matrix.md` row.
 
 ##### CR6.T5a — Store and persistence v4: derived city instead of layers
+* **Status**: done (2026-11-11). Expand/contract: the persisted city is `{ sessionId }` and the plan/floor selectors exist, but the ASCII `layers`/`buildings`/`themeId` stay in memory (unpersisted) so the background and its tests keep working until CR6.T5b/T9a; the popup's old City view is blank until CR6.T8a.
 * **Objective**: the store holds only what the plan needs.
 * **Files to create/modify**: `store/city.slice.ts` (state reduced to the session id and any CR6.T1 field; memoized `selectCityPlan`, `selectVisibleFloors`), `store/store.types.ts`, `store/index.ts` (version 4 and migration), `lib/city/migrate-city.ts` (new), tests for the slice and the migration.
 * **Dependencies**: CR6.T4

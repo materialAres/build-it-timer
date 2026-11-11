@@ -308,6 +308,21 @@ built = max(0, floor(focusCharacters − distractionCharacters))
   session id on the next read. Its first view is therefore a new-looking city
   with the same completion percentage. Old ASCII layers are not converted.
 - The popup store stays read-only; only the background writes `city.sessionId`.
+- **As built (CR6.T5a).** `migrateCity` and `sanitizeSessionId` live in
+  `lib/city/migrate-city.ts`; a rejected city is logged (`city migration
+  rejected`, version and key only) and falls back to `{ sessionId: null }`
+  while the rest of the snapshot migrates normally. `partialize` writes
+  `city: { sessionId }` and `merge` applies only the sanitized session id.
+  `selectCityPlan(state)` and `selectVisibleFloors(state)` (`store/city.selectors.ts`)
+  remember one entry each (plan by session id, floors by plan, built and lost
+  characters), so the plan is generated once per session and a component
+  selecting the floors re-renders only when the city changes. **Transitional:**
+  the ASCII `layers`, `buildings` and `themeId` stay in `CityState`, in memory
+  only and no longer persisted, so the background's growth and malus (CR6.T5b)
+  and their tests keep working until CR6.T9a deletes them. The popup rehydrates
+  from storage, so its old ASCII City view is blank from this task until
+  CR6.T8a draws the plan; a worker restart also loses the redrawn ASCII
+  characters.
 
 ## 7. Rendering decisions
 

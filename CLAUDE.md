@@ -48,7 +48,7 @@ Conventions:
 ### 1.3 State management (Zustand)
 
 * **Persisted store** (`persist` middleware, `browser.storage.local` backend via a custom adapter): everything that must survive a browser restart and represents "historical" data or user configuration —
-  * the city state **of the current, in-progress session** (grid/layers, buildings, palettes assigned to domains, active theme) — needed to survive a service worker restart during a still-active session; it is instead reset and regenerated from scratch when a new focus session starts (one city per session, see Section 2);
+  * the city of the **current, in-progress session**, which is only its **session id** (since CR6, persist version 4): the city plan (roads, lots, buildings, floors, colors) is derived from the id by `generateCityPlan` and the visible floors from `score.builtCharacters`, so no grid, layers, building index or domain palettes are stored. It is replaced when a new focus session starts (one city per session, see Section 2);
   * blocklist configuration, custom presets and their tags;
   * history of the last 5 completed sessions (score and, if applicable, city screenshot/reference — see M2.T19);
   * user preferences (e.g. Good/Bad thresholds if made configurable).

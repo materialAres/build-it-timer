@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { applyMalus } from '@/lib/score/apply-malus';
-import { seedFromSession } from '@/lib/city/growth-engine';
+import { seedFromSession } from '@/lib/city/plan/seed';
 import type {
   BuildingMeta,
   CityGrid,
@@ -49,9 +49,20 @@ export interface CityDependencies {
   readonly height: number;
 }
 
+/**
+ * The city of the current session. Since CR6.T5a the persisted city is only
+ * `sessionId` (version 4): the plan is derived from it (`selectCityPlan`) and
+ * the floors from the score (`selectVisibleFloors`, `city.selectors.ts`).
+ * `layers`, `buildings` and `themeId` are the ASCII model CR6 replaces: they
+ * stay in memory, **no longer persisted**, until the background stops using
+ * them (CR6.T5b) and they are deleted (CR6.T9a).
+ */
 export interface CityState {
+  /** Legacy ASCII model, in memory only; removed in CR6.T9a. */
   readonly layers: CityLayers;
+  /** Legacy, never filled; removed in CR6.T9a. */
   readonly buildings: Readonly<Record<string, BuildingMeta>>;
+  /** Legacy ASCII theme, in memory only; removed in CR6.T9a. */
   readonly themeId: string | null;
   readonly sessionId: string | null;
 }

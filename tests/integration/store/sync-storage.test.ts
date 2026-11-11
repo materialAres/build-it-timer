@@ -12,7 +12,7 @@ function serialize(state: {
   // Version 3 (CR4.T3): a matching version keeps hydration read-only. A legacy
   // version would make zustand write the migrated state back once (by design),
   // which would add a second `set` to the no-echo assertions below.
-  return JSON.stringify({ state, version: 3 });
+  return JSON.stringify({ state, version: 4 });
 }
 
 describe('attachStoreSync (M1.T8)', () => {

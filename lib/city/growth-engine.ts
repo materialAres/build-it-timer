@@ -8,7 +8,6 @@ import type {
   ComposedBuilding,
   SeededRandom,
 } from '@/components/city/city.types';
-import { hashString } from '@/utils/hash';
 import {
   STREET_PROPS,
   maxStreetPropRows,
@@ -587,10 +586,8 @@ export interface GrowthEngineOptions {
   readonly seed: number;
 }
 
-/** Deterministic session → growth seed mapping (M2.T15). */
-export function seedFromSession(sessionId: string | null): number {
-  return hashString(sessionId ?? '');
-}
+/** Moved to `lib/city/plan/seed.ts` (CR6.T5a); re-exported until this engine is removed (CR6.T9a). */
+export { seedFromSession } from './plan/seed';
 
 /** Convenience adapter that binds a fixed seed once. */
 export function createGrowthEngine(

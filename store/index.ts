@@ -17,6 +17,7 @@ import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
 import { sanitizeBlocklistState } from '@/lib/blocking/blocklist-state';
 import { migratePersistedBlocklist } from '@/lib/blocking/migrate-presets';
+import { migrateCity, sanitizeSessionId, type PersistedCity } from '@/lib/city/migrate-city';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
@@ -65,7 +66,7 @@ export type AppState =
 // adding an action to a slice never widens what ends up in storage.
 export interface PersistedState {
   readonly timer: TimerState;
-  readonly city: CitySlice['city'];
+  readonly city: PersistedCity;
   /**
    * The single-list blocklist shape (CR1.T3, collapsed in CR1.T5a): the
    * persisted payload is exactly the in-memory slice state, so no field can be
@@ -135,7 +136,7 @@ const createAppState =
 
 export const partialize = (state: AppState): PersistedState => ({
   timer: state.timer,
-  city: state.city,
+  city: { sessionId: state.city.sessionId },
   blocklist: {
     blocklist: state.blocklist.blocklist,
     appliedPresetIds: state.blocklist.appliedPresetIds,
@@ -229,17 +230,25 @@ function buildStore(
       // `{ blocklist, appliedPresetIds, userPresets }`, with source-tracked
       // entries. Older payloads (v1 two lists, v2 tags) are migrated on read
       // (`lib/blocking/migrate-presets.ts`).
-      version: 3,
+      // Version 4 (CR6.T5a): the persisted city is only `{ sessionId }`; the
+      // ASCII layers, building index and theme of v1–v3 are dropped on read.
+      version: 4,
       migrate: (persistedState: unknown, version: number): PersistedState => {
         const saved =
           typeof persistedState === 'object' && persistedState !== null
             ? (persistedState as Partial<PersistedState> & { blocklist?: unknown })
             : {};
-        // zustand calls `migrate` only on a version mismatch, so a version-3
+        // zustand calls `migrate` only on a version mismatch, so a version-4
         // payload is already in the current shape. `merge` sanitizes it anyway.
-        if (version >= 3) return saved as PersistedState;
+        const migrated = migrateCity((saved as { city?: unknown }).city);
+        if (!migrated.ok) {
+          logger.error('city migration rejected', migrated.error, { key: STORE_NAME, version });
+        }
+        const city = migrated.ok ? migrated.value : { sessionId: null };
+        if (version >= 3) return { ...saved, city } as PersistedState;
         return {
           ...saved,
+          city,
           blocklist: migratePersistedBlocklist(saved.blocklist, version),
         } as PersistedState;
       },
@@ -259,7 +268,11 @@ function buildStore(
           ...current,
           ...saved,
           timer: saved.timer ? { ...current.timer, ...saved.timer } : current.timer,
-          city: saved.city ? { ...current.city, ...saved.city } : current.city,
+          // Only the session id is persisted; the in-memory ASCII fields keep
+          // their current value (CR6.T5a, removed in CR6.T9a).
+          city: saved.city
+            ? { ...current.city, sessionId: sanitizeSessionId(saved.city.sessionId) }
+            : current.city,
           blocklist: saved.blocklist
             ? { ...current.blocklist, ...sanitizeBlocklistState(saved.blocklist) }
             : current.blocklist,
@@ -289,6 +302,7 @@ export const selectActiveTab = (state: UiSlice): PopupTab => state.ui.activeTab;
 export const selectLiveRemainingSeconds = (state: UiSlice): number =>
   state.ui.liveRemainingSeconds;
 
+export { selectCityPlan, selectVisibleFloors } from './city.selectors';
 export {
   createTimerSlice,
   DEFAULT_FOCUS_SECONDS,
