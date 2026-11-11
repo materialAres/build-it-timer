@@ -15,6 +15,12 @@ function hexToRgb(hex: string): Rgb {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/** `#rrggbb` as three 0–1 channels (for GPU color buffers). */
+export function hexToUnitRgb(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  return [r / 255, g / 255, b / 255];
+}
+
 const toHex = (channel: number): string =>
   Math.round(Math.min(255, Math.max(0, channel))).toString(16).padStart(2, '0');
 

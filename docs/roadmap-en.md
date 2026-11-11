@@ -1496,6 +1496,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `DESIGN.md` (color section and front-matter tokens: the fixed environment colors, and session palettes as the one sanctioned exception to the single-accent rule), `city-3d.md` palette section, `docs/testing-matrix.md` row.
 
 ##### CR6.T4 — Visible-floor derivation, damaged top floor and pure scene data
+* **Status**: done (2026-11-11). Scene data is a static `createScenePlan` plus a per-update `createSceneFrame`; `calculateFocusCharacters` was extracted from `lib/score/calculate-built-characters.ts` without a behavior change; `box-geometry.ts` was added.
 * **Objective**: turn a plan and the session progress into what the renderer draws, without any WebGL.
 * **Files to create/modify**: `lib/city/plan/visible-floors.ts` (complete floors and the damaged fraction), `lib/city/plan/scene-data.ts` (instance transforms, window colors, edge segments, label anchors as typed arrays, the damaged-floor marker), `lib/city/plan/plan-summary.ts` (text summary for screen readers), their unit tests (new).
 * **Dependencies**: CR6.T2b, CR6.T3

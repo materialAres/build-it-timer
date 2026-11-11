@@ -41,3 +41,10 @@ export const MAX_FIT_STEPS = 2000;
 
 /** Hue shift of a session palette, in degrees either way (CR6.T3). */
 export const MAX_HUE_SHIFT = 25;
+
+/** World units: one floor is this tall; its body fills `FLOOR_BODY_RATIO` of it (the rest is the seam). */
+export const FLOOR_HEIGHT = 0.35;
+export const FLOOR_BODY_RATIO = 0.94;
+
+/** A partly paid floor is drawn at least this fraction tall so it stays visible. */
+export const MIN_PARTIAL_HEIGHT = 0.15;

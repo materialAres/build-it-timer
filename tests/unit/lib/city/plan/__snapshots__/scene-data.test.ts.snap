@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`createScenePlan (CR6.T4) > matches the snapshot for a fixed seed 1`] = `
+{
+  "colorsSum": 676.647,
+  "edgesSum": 15083.652,
+  "firstColor": [
+    0.4353,
+    0.7686,
+    1,
+  ],
+  "firstMatrix": [
+    0.7,
+    0,
+    0,
+    0,
+    0,
+    0.329,
+    0,
+    0,
+    0,
+    0,
+    1.7,
+    0,
+    -5.5,
+    0.1645,
+    1,
+    1,
+  ],
+  "floorCount": 299,
+  "labels": [
+    {
+      "endFloor": 80,
+      "name": "KERNEL PLAZA",
+      "position": [
+        -1,
+        9.1,
+        0.5,
+      ],
+    },
+  ],
+  "matricesSum": 1673.977,
+  "windowColorsSum": 838.373,
+}
+`;

@@ -215,11 +215,25 @@ partial  = exact − complete                        // 0 ≤ partial < 1
   damaged. That would make every floor flash red while the city grows. The
   signature becomes `visibleFloors(plan, built, total, lostCharacters)` returning
   `{ complete, partialFraction, damaged }`; the card is updated in the roadmap.
-- **Scene data** (CR6.T4): typed arrays for instance matrices, per-instance
-  color and window color, edge segment positions and label anchors, all built
-  from the first `complete` floors plus the partial one. Counts equal the
-  visible floors; the arrays are sized for `MAX_TOTAL_FLOORS` once, so growth
-  writes into them and bumps an `instanceCount`, with no reallocation.
+- **As built (CR6.T4).** `visibleFloors(plan, built, total, lost)` and
+  `calculateLostCharacters(focusedMs, durationMs, built, total)`
+  (`visible-floors.ts`) implement the formula above; the focus part reuses the
+  new `calculateFocusCharacters` exported by `lib/score/calculate-built-characters.ts`
+  (no behavior change there). **Scene data** is split in two so growth does not
+  rebuild arrays: `createScenePlan(plan)` (`scene-data.ts`) builds, once per
+  plan, typed arrays for *every* floor in build order (16 floats per matrix, 3
+  per body and window color, 6 per edge segment, 12 segments per floor, plus the
+  landmark labels with the build-order index where their building is complete);
+  `createSceneFrame(scene, plan, visible)` is the cheap per-update result:
+  `instanceCount` (complete floors plus the partial one), `edgeSegmentCount`,
+  the `partial` floor with its own scaled matrix and edges and its `damaged`
+  flag, and the visible label indexes. The renderer uploads the static arrays
+  once and only changes the instance count and the partial slot. World units:
+  one floor is `FLOOR_HEIGHT` = 0.35 tall (body 94% of it), the city is centered
+  on the origin, a partly paid floor is at least 15% of a floor tall.
+  `summarizePlan` (`plan-summary.ts`) returns buildings standing, floors built
+  of total, the tallest building (levels and landmark name) and a milestone
+  0–10 that moves every 10% of the floors; the component words it.
 
 ## 5. Option A — the malus inside `builtCharacters`
 

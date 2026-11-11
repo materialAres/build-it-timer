@@ -4,12 +4,29 @@ function normalizeMs(ms: number): number {
 }
 
 /**
+ * Characters earned from focus alone, for `focusedMs` of focus in a session of
+ * `durationMs` worth `total` characters: `floor(focusedMs × total / durationMs)`,
+ * capped at `total`. Counted from the session duration, not from the rounded
+ * `tickMs`, so a full session gives exactly `total` for any preset. Total: any
+ * invalid input degrades to 0.
+ */
+export function calculateFocusCharacters(
+  focusedMs: number,
+  durationMs: number,
+  total: number,
+): number {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.min(
+    total,
+    Math.floor((normalizeMs(focusedMs) * total) / durationMs),
+  );
+}
+
+/**
  * Characters earned for `focusedMs` of focus and `distractedMs` on blocked
  * sites in a session of `durationMs` that is worth `total` characters (CR3).
  *
- * Characters are counted from the session duration, not from the rounded
- * `tickMs`: a full session gives `durationMs × total / durationMs = total` for
- * any total and any preset, so 100% stays reachable even when `tickMs` rounds.
  * Focus is capped at `total`; every whole distraction character takes one back
  * and the net count never goes below 0.
  *
@@ -25,10 +42,7 @@ export function calculateBuiltCharacters(
 ): number {
   if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
   if (!Number.isFinite(total) || total <= 0) return 0;
-  const focusCharacters = Math.min(
-    total,
-    Math.floor((normalizeMs(focusedMs) * total) / durationMs),
-  );
+  const focusCharacters = calculateFocusCharacters(focusedMs, durationMs, total);
   const distractionCharacters = Math.floor(
     (normalizeMs(distractedMs) * total) / durationMs,
   );
