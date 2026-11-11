@@ -20,7 +20,16 @@ export interface GlContext {
 }
 
 interface Disposable {
-  dispose?: () => void;
+  dispose(): void;
+}
+
+/**
+ * three.js keeps a `_listeners` object on a material whose `dispose` key holds
+ * an array of callbacks, so "has a `dispose` property" is not enough: only a
+ * function is something to call.
+ */
+function isDisposable(value: unknown): value is Disposable {
+  return typeof (value as { dispose?: unknown } | null)?.dispose === 'function';
 }
 
 /**
@@ -84,12 +93,12 @@ export function cameraAxes(
 /** Free the geometries, materials and textures of every object in the scene. */
 export function disposeScene(scene: Scene): void {
   scene.traverse((object) => {
-    const { geometry, material } = object as { geometry?: Disposable; material?: Disposable | Disposable[] };
-    geometry?.dispose?.();
-    for (const m of Array.isArray(material) ? material : [material]) {
-      if (m === undefined) continue;
-      for (const value of Object.values(m)) (value as Disposable | null)?.dispose?.();
-      m.dispose?.();
+    const { geometry, material } = object as { geometry?: unknown; material?: unknown };
+    if (isDisposable(geometry)) geometry.dispose();
+    for (const m of Array.isArray(material) ? (material as unknown[]) : [material]) {
+      if (typeof m !== 'object' || m === null) continue;
+      for (const value of Object.values(m)) if (isDisposable(value)) value.dispose();
+      if (isDisposable(m)) m.dispose();
     }
   });
 }

@@ -170,6 +170,40 @@ describe('CityView3D (CR6.T8a)', () => {
     expect(getCityCapture()).toBeNull();
   });
 
+  describe('debug hooks for the e2e (CR6.T12)', () => {
+    it('do nothing in a normal run', () => {
+      const { container } = render(<CityView3D />);
+      expect(created.options[0]?.debug).toBe(false);
+      expect(container.querySelector('.city-view')).not.toHaveAttribute('data-plan-hash');
+      expect('__buildItCapture' in globalThis).toBe(false);
+    });
+
+    it('turn on with ?debug=render: the render counters, the plan fingerprint and a capture hook', () => {
+      vi.stubGlobal('location', { search: '?debug=render' });
+      const { container, unmount } = render(<CityView3D />);
+      expect(created.options[0]?.debug).toBe(true);
+      expect(container.querySelector('.city-view')?.getAttribute('data-plan-hash')).toMatch(/^\d+$/);
+      const hook = (globalThis as unknown as Record<string, unknown>).__buildItCapture;
+      expect(typeof hook).toBe('function');
+      unmount();
+      expect('__buildItCapture' in globalThis).toBe(false);
+    });
+
+    it('give two sessions different fingerprints and one session the same one', () => {
+      vi.stubGlobal('location', { search: '?debug=render' });
+      const read = (): string | null => document.querySelector('.city-view')?.getAttribute('data-plan-hash') ?? null;
+      const { unmount } = render(<CityView3D />);
+      const a = read();
+      setCity('session-other-city', 0);
+      const b = read();
+      setCity('session-view', 0);
+      const again = read();
+      unmount();
+      expect(a).not.toBe(b);
+      expect(again).toBe(a);
+    });
+  });
+
   it('starts no renderer before there is a city', () => {
     setCity(null, 0);
     render(<CityView3D />);

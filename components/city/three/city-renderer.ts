@@ -12,6 +12,7 @@ import type { SceneFrame } from '@/lib/city/plan/scene-data';
 import { captureFrame } from './capture-frame';
 import { createCityScene, type CityScene } from './city-scene';
 import type { CityRenderer, CityRendererOptions, FrameSource } from './city-renderer.types';
+import { createDebugStats } from './debug-stats';
 import { createPostProcessing, type PostProcessing } from './post-processing';
 import { applyFraming, cameraAxes, createGlContext, disposeScene, type GlContext } from './renderer-context';
 
@@ -73,12 +74,21 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     const current = input();
     const decision = decideFrame(state, current);
     if (decision.draw) {
+      debug?.measure();
       drawScene(current.now);
       renderCount += 1;
+      debug?.onFrame(now() - current.now);
       state = frameDrawn(state, decision, current.now);
     }
     pump();
   }
+  const debug = options.debug
+    ? createDebugStats(options.host, () => {
+        gl.renderer.info.reset();
+        gl.renderer.render(gl.scene, gl.camera);
+        return gl.renderer.info.render.calls;
+      })
+    : null;
   const drawScene = (at: number): void => {
     city?.update(at);
     if (city) city.orient(...cameraAxes(gl.camera));

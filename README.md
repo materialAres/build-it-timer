@@ -83,7 +83,7 @@ To verify manually: load `.output/chrome-mv3` via `chrome://extensions` → "Loa
 bun run test          # unit + integration + component tests (Vitest)
 bun run test:watch    # watch mode
 bun run test:coverage # with coverage
-bun run e2e           # Playwright end-to-end suite
+bun run build && bun run e2e   # Playwright end-to-end suite on the built extension (E2E_GPU=1 for the real GPU)
 bun run compile       # tsc --noEmit
 bun run lint          # ESLint
 bun run format        # Prettier (write)

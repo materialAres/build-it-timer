@@ -19,6 +19,8 @@ export interface CityRendererOptions {
   readonly reducedMotion: boolean;
   /** The full-city page's free camera (CR6.T11); omitted means the popup's limited orbit. */
   readonly freeCamera?: boolean;
+  /** Write the render counters as `data-` attributes on the host (CR6.T12 e2e, `?debug=render`). */
+  readonly debug?: boolean;
   /** Whether an ambient layer exists (CR6.T7); false draws only real changes. */
   readonly ambient: boolean;
   /** Bloom and the CRT look; omitted means a plain render (no post-processing). */

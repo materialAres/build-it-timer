@@ -1644,6 +1644,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `README.md`, `docs/project-structure.md` (`entrypoints/city/`), `DESIGN.md` (page layout).
 
 ##### CR6.T12 — Performance verification and e2e
+* **Status**: done (2026-11-11). Measured numbers are in `docs/features-analysis/city-3d.md` §8: everything within budget except the **first City frame (about 490–740 ms against 200 ms), reported as over budget**. The e2e found and this task fixed a real bug (`disposeScene` crashed the popup when leaving the City tab since CR6.T8a). Beyond the card: `components/city/three/debug-stats.ts` and `components/city/use-city-debug.ts` (debug hooks behind `?debug=render`), the `E2E_GPU=1` switch in `tests/e2e/setup.ts`.
 * **Objective**: prove the budgets from CR6.T1 and cover the new view end to end.
 * **Files to create/modify**: `tests/e2e/city-3d.spec.ts` (new), a debug-only render counter exposed as a `data-` attribute on the view container, `docs/features-analysis/city-3d.md` (measured numbers).
 * **Dependencies**: CR6.T8b, CR6.T10

@@ -342,6 +342,7 @@ built = max(0, floor(focusCharacters − distractionCharacters))
 - **As built (CR6.T9b): the documentation points at the new model.** `CLAUDE.md` describes the plan from a seed in the S, D, DRY and KISS rows, the pure-function and seeding examples (`seedFromSession`, `lib/city/plan/`, `lib/city/ambient-plan.ts`), the naming and component examples, the UI-state example, the dependency list (TexturePacker is gone) and the testing note. The 15 Section 1 cards of §2.9.3 (M2.T10–M2.T16, M3.T5, M3.T8, M4.T1, M4.T2) carry a one-line "Superseded/Amended by CR6" note under their heading, in the style of the CR1/CR2 notes. `docs/timer-duration-plan.md`, `docs/Increase-poppu-screen-size.md`, `docs/issue/I002-scattered-city-draw.md` and `docs/issue/I009-malus-already-open-blocked-tab.md` carry the one-line banner under their title, bodies unchanged; the old rows of `docs/testing-matrix.md` are marked as history. Past changelog entries are untouched.
 - **As built (CR6.T10): export.** `captureFrame(width, height, format)` on the renderer (`components/city/three/capture-frame.ts`, with the renderer's types moved to `city-renderer.types.ts` to keep the renderer under 200 lines) draws one frame and reads it in the same call, so `preserveDrawingBuffer` stays off: pixel ratio 1, canvas, camera and composer fitted to the requested size without touching the on-screen box (`setSize(w, h, false)`), `draw`, `toDataURL` (JPEG at quality 0.92 through `JPEG_QUALITY` from `rasterize-image.ts`), then everything is put back in a `finally` and the view is redrawn (resizing clears the canvas). It is a `Result` boundary: sizes outside 1–4096 px, a lost context, a tainted canvas or an empty data URL are errors, never throws; the capture does not count as a rendered frame of the view (the e2e probe). `exportCityImage(rows, format, capture)` uses the capture at `EXPORT_WIDTH × EXPORT_HEIGHT` (1600 × 900, 16:9) when given one; with none, or when it returns an error or throws, it falls back to the text city SVG (the M3.T8 path). The lazy view and the non-lazy button are joined by `components/city/city-capture.ts`: `CityView3D` registers `renderer.captureFrame` while its renderer exists and removes it (only if still its own) when it goes away, `ExportCityButton` reads it at click time and hands it to the injected exporter. The 3D image includes bloom, the CRT pass and the camera orbit the user left; the HUD line and the summary are DOM and not part of it, the tower labels are in the scene and appear.
 - **As built (CR6.T11): the full-city page.** `entrypoints/city/` (`index.html`, `main.tsx`, `App.tsx`, `style.css`) builds `city.html` for Chrome and Firefox MV3 (both checked with `wxt build`); it is an unlisted page, so the manifest is unchanged and no permission was added. `main.tsx` is the popup's: `attachStoreSync(useAppStore)` and the `ErrorBoundary`; `useAppStore` is the read-only store, so the page follows what the background writes and cannot write (a test scans its sources for `setState` and action calls). `App.tsx` is a title, a hint and `<CityPanel full />`: `CityPanel` gained a `full` prop (class `city-stage--full`, `freeCamera` passed to `CityView3D`, `useCityRenderer` and the renderer's `freeCamera` option), so the page reuses the summary, the HUD, the fallback and the capture bridge. `FREE_ORBIT_LIMITS` (`lib/city/camera-framing.ts`): unlimited azimuth, polar 0.15–1.5 rad, zoom 0.5–4, plus pan; `createGlContext(host, free)` picks it. The stage styles moved from `entrypoints/popup/App.css` to `components/city/city-panel.css` (imported by `CityPanel`) so both entrypoints share them. The popup's City tab shows `OpenCityPageButton`, which calls `openExtensionPage('/city.html')` (`lib/browser/open-extension-page.ts`: injectable `getUrl`/`createTab`, a `Result`, so no browser API in a component). The ambient layer pauses with the tab through the renderer's existing `visibilitychange` handling. The build now splits a shared 530 KB chunk (store, React) between the popup (174 KB) and the page; `WebGLRenderer` still appears only in the `CityView3D` chunk. There is no keyboard alternative to the pointer camera on the page (OrbitControls' `listenToKeyEvents` was left out), and the page was never opened in a real browser.
+- **As built (CR6.T12): debug counters and the e2e.** Opening a page with `?debug=render` turns on debug-only hooks: `createDebugStats` (`components/city/three/debug-stats.ts`) writes `data-render-count`, `data-render-ms`, `data-draw-calls` (the scene's draw calls measured with a plain scene render on the first frame that has something to draw, composer passes excluded), `data-created-at` and `data-first-frame-at` on the view's host, and `use-city-debug.ts` adds `data-plan-hash` (a fingerprint of the plan) and `window.__buildItCapture` (the renderer's capture). A normal run touches none of this. The e2e (`tests/e2e/city-3d.spec.ts`, Chromium with the built extension in a fresh profile per test): the Timer tab never requests the chunk and the City tab does with a canvas and no console errors; reduced motion with nothing growing keeps the counter flat; the ambient layer draws at no more than 30 fps; ten tab switches leave one live WebGL context (counted by wrapping `getContext` and `isContextLost`); two sessions in a row give different plan fingerprints and a reopened one the same; a real-GPU capture is a 1600 × 900 PNG and JPEG with lit pixels; the full-city page draws and stops drawing when told it is hidden; and the budgets are measured and written. Where it differs from the card: a background tab is not reported hidden on this display (no window manager), so the page is told it is hidden through `document.hidden` and `visibilitychange`, which checks the renderer's real behavior but not the browser's own visibility; the budgets are checked with the whole city standing; the time budget fails the run only on a real GPU (`E2E_GPU=1`), software GL reports it as an annotation.
 - **Loading.** `CityView3D` is `React.lazy` + dynamic `import()`, so WXT/Vite
   emits a separate chunk. The Timer tab never loads it. CSP: three.js needs no
   `unsafe-eval`; CR6.T12 confirms it in the built extension for both browsers.
@@ -387,6 +388,46 @@ built = max(0, floor(focusCharacters − distractionCharacters))
 
 Planned draw calls: floors (1, instanced), window bands (1), edges (1), ground
 and grid (2), lamps (1), signs (1), beacons (1), rain (1), cars (1) = 10.
+
+### Measured (CR6.T12, 2026-11-11)
+
+`tests/e2e/city-3d.spec.ts` on the built Chrome extension, the whole city
+standing (the most draw calls it will ever need), written to
+`test-results/city-3d-metrics.json`. Two machines' worth of GL: the default run
+uses SwiftShader (software) so it works without a GPU; `E2E_GPU=1` uses the
+developer machine's NVIDIA GeForce RTX 3060 Laptop GPU.
+
+| Budget | Target | Measured (GPU) | Measured (software GL) | Verdict |
+|---|---|---|---|---|
+| three.js chunk, gzipped | ≤ 180 KB | 146.4 KB | 146.4 KB | within budget |
+| First City frame after opening the tab | ≤ 200 ms | 489–527 ms | 516–736 ms | **over budget** |
+| Renders per second, nothing changing, reduced motion | 0 | 0 (counter flat over 1.5 s) | 0 | within budget |
+| Ambient layer | ≤ 30 fps | 78 frames in 3 s (26 fps) | 62–73 frames in 3 s | within budget |
+| Draw calls for the city (scene render) | ≤ 12 | 11 | 11 | within budget (one to spare) |
+| Main-thread time per render (no budget) | — | about 1.0 ms | 0.9–1.3 ms | reported |
+| Live WebGL contexts after 10 tab switches | 1 | 1 (0 off the City tab) | same | within budget |
+
+**First frame is over budget, and it is not JavaScript.** From the page's own
+click to the renderer being created takes about 440 ms; from there to the first
+frame about 50 ms. A CPU profile of the click-to-first-frame window (about
+600 ms sampled) shows about 270 ms of main-thread idle (waiting for the chunk,
+the GPU process and the next animation frame), about 110 ms in one function of
+the shared chunk (not identified, a candidate is the WebGL2 probe of
+`hasWebGl2()` or React's first render; a first WebGL2 context costs about 67 ms
+here, later ones 11–15 ms), and only about 60 ms of JavaScript in the
+three.js chunk. Options for a later task, none done here: create the renderer
+and probe once instead of twice, build the scene before the first frame, or
+warm the chunk once the City tab is nearer (which conflicts with "the Timer tab
+never requests it"). The budget is a target for a reference machine; this one
+misses it by about 2.5×, so it is reported, not hidden.
+
+**A real bug found by the e2e, fixed here.** Leaving the City tab crashed the
+popup (`TypeError: t?.dispose is not a function`, caught by the error boundary,
+tabs gone) since CR6.T8a: `disposeScene` called `dispose` on every property of a
+material, and a rendered material has a `_listeners` object whose `dispose` key
+is an array of callbacks. The mocked unit tests could not see it. `disposeScene`
+now calls only what is a function, with a regression test on real three.js
+objects.
 
 ## 9. To delete in CR6.T9a
 

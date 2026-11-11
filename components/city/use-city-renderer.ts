@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
+import { isDebugRender } from './use-city-debug';
 import { createCityRenderer, type CityRenderer } from './three/city-renderer';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
@@ -32,6 +33,7 @@ export function useCityRenderer(
       reducedMotion: motion?.matches ?? false,
       ambient: true,
       freeCamera,
+      debug: isDebugRender(),
       effects: { bloom: true, crt: true },
     });
     if (!created.ok) {

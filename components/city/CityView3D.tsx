@@ -3,6 +3,7 @@ import type { FrameCapture } from '@/lib/city/export-image';
 import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
 import { createSceneFrame, createScenePlan } from '@/lib/city/plan/scene-data';
 import { clearCityCapture, setCityCapture } from './city-capture';
+import { useCityDebug } from './use-city-debug';
 import { useCityRenderer } from './use-city-renderer';
 
 /**
@@ -23,6 +24,7 @@ export default function CityView3D({ onUnavailable, freeCamera = false }: CityVi
   const visible = useAppStore(selectVisibleFloors);
   const host = useRef<HTMLDivElement>(null);
   const { renderer, failed } = useCityRenderer(host, plan !== null, freeCamera);
+  useCityDebug(host, plan, renderer);
   const scene = useMemo(() => (plan === null ? null : createScenePlan(plan)), [plan]);
 
   useEffect(() => {

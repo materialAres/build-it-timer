@@ -40,6 +40,7 @@ vi.mock('three', () => {
     }
     setPixelRatio(ratio: number): void { mocks.pixelRatios.push(ratio); }
     getPixelRatio(): number { return mocks.pixelRatios.at(-1) ?? 1; }
+    info = { reset(): void {}, render: { calls: 7 } };
     setSize(w: number, h: number): void { mocks.sizes.push([w, h]); }
     setClearColor(): void {}
     render(): void { mocks.renders += 1; }
@@ -351,6 +352,32 @@ describe('createCityRenderer (CR6.T6a)', () => {
         minZoom: ORBIT_LIMITS.minZoom,
         maxZoom: ORBIT_LIMITS.maxZoom,
       });
+    });
+  });
+
+  describe('debug counters (CR6.T12)', () => {
+    it('write nothing unless asked', () => {
+      create();
+      clock.flush(1_000);
+      expect(host.querySelector('[data-render-count]')).toBeNull();
+      expect(host.dataset.renderCount).toBeUndefined();
+    });
+
+    it('count frames and main-thread time on the host, and the scene draw calls once', () => {
+      create({ debug: true });
+      clock.flush(1_000);
+      expect(host.dataset.renderCount).toBe('1');
+      expect(host.dataset.drawCalls).toBe('7');
+      expect(host.dataset.renderMs).toMatch(/^\d+\.\d{2}$/);
+    });
+
+    it('keep counting with the real frames only (a capture is not one)', () => {
+      const r = create({ debug: true });
+      r.resize(480, 272);
+      clock.flush(1_000);
+      const before = host.dataset.renderCount;
+      r.captureFrame(800, 450, 'png');
+      expect(host.dataset.renderCount).toBe(before);
     });
   });
 
