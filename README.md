@@ -4,13 +4,13 @@ A browser extension which (hopefully) helps you stay focused on your work: the m
 
 ## How it works
 
-Start a focus session and every 2 seconds of undistracted work grows your city by one ASCII character, spread across three parallax layers (background, middleground, foreground). Give in to a distraction and the malus runs the growth engine in reverse, removing characters one at a time.
+Start a focus session and every stretch of undistracted work (one 600th of the session) builds one character of progress; the city shows that progress as floors rising in the order of a plan generated for the session. Time on a blocked site takes characters back, and the longer you stay the more each moment costs: the first five moments cost one character each, then two, then three. The score, the population and the city all lose the same amount, and a damaged top floor shows the loss at once.
 
 * **Timer** — start / pause / reset a countdown session. Remaining time is persisted and reconciled with the browser alarm clock, so it survives a service-worker restart.
 * **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session. Sites can be added at any time before the session ends, including while it is running or paused; removing a site or editing presets needs the timer to be idle (before Start or after Reset).
 * **Presets** — each built-in preset (Social, Video, …) is a toggle over the one list: switching it on adds its sites, switching it off removes only the sites nothing else asked for (a site you added by hand, or one from another active preset, stays). A preset can be switched on during a session but only off when the timer is idle. The current list can be saved as a named preset (up to 24 characters), renamed or deleted; deleting a preset never unblocks its sites.
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
-* **Score** — based on the percentage of the city built (focus characters minus distraction characters, never below 0): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
+* **Score** — based on the percentage of the city built (focus characters minus the escalating distraction cost, never below 0; 60 s on a blocked site in a 30-minute session costs 44 characters): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
 * **Population** — each character earns a rate by completion band (5 below 30%, 10 from 30%, 20 from 70%), and finishing the whole city adds a bonus of 7% of the population reached.
 * **ASCII city** — deterministic, seeded growth composed from a library of ASCII building modules, with a per-domain colour palette.
 

@@ -2,28 +2,21 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createAppStore } from '@/store';
 import { createMalusWiring } from '@/entrypoints/background';
-import { applyMalus, malusForDistractionTicks } from '@/lib/score/apply-malus';
-import {
-  DEFAULT_FOCUS_PRESET,
-  tickMsForDurationSeconds,
-} from '@/lib/timer/focus-presets';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
-import type { CityLayers } from '@/components/city/city.types';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
 
 const T0 = 1_700_000_000_000;
-/** Cadence of the default preset, which the store starts sessions with. */
-const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
+const proceed = (domain: string) =>
+  ({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain, choice: 'proceed' } }) as const;
 
-describe('malus wiring (M2.T16)', () => {
+/**
+ * The malus is part of `builtCharacters` since CR6.T5b (option A): the wiring
+ * only reports a drop that distraction time caused, once the user chose "Open
+ * anyway". The tests drive the store the way the background's accounting step
+ * does: the timer accumulators first, then the built count.
+ */
+describe('malus wiring (M2.T16, CR6.T5b)', () => {
   let alarmProvider: FakeAlarmProvider;
 
   beforeEach(() => {
@@ -35,176 +28,135 @@ describe('malus wiring (M2.T16)', () => {
     const store = createAppStore({
       dependencies: { alarmProvider, now: () => T0, random: () => 0.5 },
     });
-    let accumulatedMs = 0;
     const send = vi.fn<(message: RuntimeMessage) => void>();
-    const wiring = createMalusWiring({
-      store,
-      tracker: { getAccumulatedMs: () => accumulatedMs },
-      send,
-    });
-    return {
-      store,
-      wiring,
-      send,
-      /** Make `value` whole session ticks of weighted distraction time accrued. */
-      setTicks: (value: number) => {
-        accumulatedMs = value * TICK_MS;
-      },
+    const wiring = createMalusWiring({ store, send });
+    /** One accounting step: distraction time first, then the new built count. */
+    const account = (distractedMs: number, built: number): void => {
+      const { timer } = store.getState();
+      store.getState().recordProgress(timer.focusedMs, distractedMs, T0);
+      store.getState().setBuiltCharacters(built);
     };
+    return { store, wiring, send, account };
   }
 
-  async function startSessionWithCharacters(
-    store: ReturnType<typeof createAppStore>,
-    characterCount: number,
+  async function startRunning(
+    s: ReturnType<typeof setup>,
+    built = 300,
   ): Promise<void> {
-    await store.getState().startTimer();
-    store.getState().growCityByTicks(characterCount);
+    await s.store.getState().startTimer();
+    s.store.getState().setBuiltCharacters(built);
+    s.send.mockClear();
   }
 
-  it('destroys a character in the same update cycle as "proceed"', async () => {
-    const { store, wiring, setTicks } = setup();
-    await startSessionWithCharacters(store, 3);
-    const before = store.getState().city.layers;
-    setTicks(0);
+  it('removes nothing at "Open anyway": the score alone carries the malus', async () => {
+    const s = setup();
+    await startRunning(s);
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    expect(store.getState().city.layers).toEqual(applyMalus(before, 1));
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+    expect(s.store.getState().score.builtCharacters).toBe(300);
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('emits MALUS_APPLIED with the domain and the removed character count', async () => {
-    const { store, wiring, send } = setup();
-    await startSessionWithCharacters(store, 2);
+  it('reports the characters lost when distraction time lowers the count', async () => {
+    const s = setup();
+    await startRunning(s);
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    s.account(50_000, 256);
 
-    expect(send).toHaveBeenCalledWith({
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({
       type: 'MALUS_APPLIED',
-      payload: { domain: 'facebook.com', charactersRemoved: 1 },
+      payload: { domain: 'facebook.com', charactersRemoved: 44 },
     });
   });
 
-  it('ignores the "go-back" choice (no destruction, no message)', async () => {
-    const { store, wiring, send } = setup();
-    await startSessionWithCharacters(store, 2);
-    const before = store.getState().city.layers;
+  it('reports each further drop, with the escalated amount', async () => {
+    const s = setup();
+    await startRunning(s);
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'go-back' } });
+    s.account(10_000, 296);
+    s.account(50_000, 256);
 
-    expect(store.getState().city.layers).toBe(before);
-    expect(send).not.toHaveBeenCalled();
+    expect(s.send.mock.calls.map(([m]) => (m as { payload: { charactersRemoved: number } }).payload.charactersRemoved)).toEqual([4, 40]);
   });
 
-  it('does not double-apply on two malus events in close succession', async () => {
-    const { store, wiring, send } = setup();
-    await startSessionWithCharacters(store, 3);
+  it('ignores the "go-back" choice', async () => {
+    const s = setup();
+    await startRunning(s);
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    s.wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'go-back' } });
+    s.account(50_000, 256);
 
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('does not start the malus when the timer is not running', () => {
-    const { store, wiring, send } = setup();
-    // Grow without starting a session so the city has a character to lose.
-    store.getState().growCityByTicks(1);
-    const before = store.getState().city.layers;
+  it('does not double-report on two "proceed" events in close succession', async () => {
+    const s = setup();
+    await startRunning(s);
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    s.wiring.handleAttempt(proceed('facebook.com'));
+    s.wiring.handleAttempt(proceed('other.com'));
+    s.account(50_000, 256);
 
-    expect(store.getState().city.layers).toBe(before);
-    expect(send).not.toHaveBeenCalled();
+    expect(s.send).toHaveBeenCalledTimes(1);
+    expect(s.send).toHaveBeenCalledWith({
+      type: 'MALUS_APPLIED',
+      payload: { domain: 'facebook.com', charactersRemoved: 44 },
+    });
   });
 
-  it('removes one character per accrued distraction tick after "proceed"', async () => {
-    const { store, wiring, setTicks } = setup();
-    await startSessionWithCharacters(store, 5);
-    setTicks(0);
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    expect(countOccupied(store.getState().city.layers)).toBe(4);
+  it('does not start when the timer is not running', () => {
+    const s = setup();
+    s.store.getState().setBuiltCharacters(300);
 
-    setTicks(1);
-    wiring.handleTick();
-    expect(countOccupied(store.getState().city.layers)).toBe(3);
+    s.wiring.handleAttempt(proceed('facebook.com'));
+    s.account(50_000, 256);
 
-    setTicks(2);
-    wiring.handleTick();
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
-
-    // A tick sample without new whole ticks applies nothing.
-    wiring.handleTick();
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('escalates the malus with the time spent on the blocked site (M4.T1)', async () => {
-    const { store, wiring, setTicks } = setup();
-    await startSessionWithCharacters(store, 40);
-    setTicks(0);
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    const afterProceed = countOccupied(store.getState().city.layers);
-    expect(afterProceed).toBe(39);
+  it('does not report a drop that distraction did not cause (a reset)', async () => {
+    const s = setup();
+    await startRunning(s);
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    // 12 elapsed ticks cost more than one character each: the wiring removes the
-    // escalated amount in one go, not the linear `1 + 12`.
-    setTicks(12);
-    wiring.handleTick();
-    const removed = afterProceed - countOccupied(store.getState().city.layers);
-    expect(removed).toBe(malusForDistractionTicks(12));
-    expect(removed).toBeGreaterThan(12);
+    s.store.getState().setBuiltCharacters(0);
+
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('forgives the pre-"proceed" open time of the blocked tab', async () => {
-    const { store, wiring, setTicks } = setup();
-    await startSessionWithCharacters(store, 5);
-    // The blocked tab was already open for 10s (5 tracker ticks) before the
-    // user chose "proceed": only the proceed event itself is charged.
-    setTicks(5);
+  it('does not report characters gained by focus', async () => {
+    const s = setup();
+    await startRunning(s, 100);
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
+    s.account(0, 150);
 
-    expect(countOccupied(store.getState().city.layers)).toBe(4);
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('is a safe no-op when the city is already empty', async () => {
-    const { store, wiring, send } = setup();
-    await store.getState().startTimer();
+  it('forgets the choice when a new session starts', async () => {
+    const s = setup();
+    await startRunning(s);
+    s.wiring.handleAttempt(proceed('facebook.com'));
 
-    expect(() => {
-      wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    }).not.toThrow();
+    s.store.getState().resetCityForNewSession('session-2', 'default');
+    s.account(50_000, 256);
 
-    expect(send).not.toHaveBeenCalled();
+    expect(s.send).not.toHaveBeenCalled();
   });
 
-  it('resets the malus stretch when a new session starts', async () => {
-    const { store, wiring, setTicks } = setup();
-    await startSessionWithCharacters(store, 3);
-    setTicks(0);
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+  it('stops reporting after dispose', async () => {
+    const s = setup();
+    await startRunning(s);
+    s.wiring.handleAttempt(proceed('facebook.com'));
+    s.wiring.dispose();
 
-    // A new session resets the city and the stretch, so a fresh "proceed"
-    // applies to the new city instead of being ignored as a re-mount.
-    store.getState().resetCityForNewSession('session-2', 'default');
-    store.getState().growCityByTicks(1);
-    setTicks(0);
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'x.com', choice: 'proceed' } });
+    s.account(50_000, 256);
 
-    expect(countOccupied(store.getState().city.layers)).toBe(0);
-  });
-
-  it('stops reacting to session changes after dispose', async () => {
-    const { store, wiring } = setup();
-    await startSessionWithCharacters(store, 2);
-    wiring.handleAttempt({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain: 'facebook.com', choice: 'proceed' } });
-    wiring.dispose();
-
-    // Disposing must not throw even when the store changes afterwards.
-    expect(() => {
-      store.getState().resetCityForNewSession('session-3', 'default');
-    }).not.toThrow();
+    expect(s.send).not.toHaveBeenCalled();
   });
 });

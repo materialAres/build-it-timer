@@ -4,28 +4,22 @@ import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, selectPopulation, selectScoreLevel } from '@/store';
-import { growCityByTicks, seedFromSession } from '@/lib/city/growth-engine';
 import {
   DEFAULT_FOCUS_PRESET,
   tickMsForDurationSeconds,
 } from '@/lib/timer/focus-presets';
 import { ALARM_MIN_TICK_MS } from '@/lib/timer/alarm-adapter';
 import { TIMER_PROGRESS_ALARM } from '@/lib/timer/session';
-import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
 /** Cadence of the default preset: a session tick, not the legacy 2s constant. */
 const TICK_MS = tickMsForDurationSeconds(DEFAULT_FOCUS_PRESET.durationSeconds);
 
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
+/** Characters built so far: one per session tick of undistracted focus. */
+const built = (store: ReturnType<typeof createAppStore>): number =>
+  store.getState().score.builtCharacters;
 
-describe('growth linked to the timer tick (M2.T15)', () => {
+describe('progress linked to the timer tick (M2.T15, CR6.T5b: the city is derived from the score)', () => {
   let now: number;
   let alarmProvider: FakeAlarmProvider;
 
@@ -47,32 +41,26 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds } });
   }
 
-  it('grows the city by the undistracted elapsed delta on each tick while running', async () => {
+  it('builds one character per session tick of undistracted focus while running', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await store.getState().startTimer();
-    const empty = store.getState().city.layers;
-    const seed = seedFromSession(store.getState().city.sessionId);
 
     // First tick, one session tick of focus after the session started.
     now = T0 + TICK_MS;
     await tick();
-    let expected = growCityByTicks(empty, 1, seed);
-    expect(store.getState().city.layers).toEqual(expected);
-    expect(countOccupied(store.getState().city.layers)).toBe(1);
+    expect(built(store)).toBe(1);
 
     // Second tick: another single character, never a block.
     now = T0 + TICK_MS * 2;
     await tick();
-    expected = growCityByTicks(expected, 1, seed);
-    expect(store.getState().city.layers).toEqual(expected);
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+    expect(built(store)).toBe(2);
 
     handle.dispose();
   });
 
-  it('does not grow the city when a tick arrives while paused', async () => {
+  it('builds nothing when a tick arrives while paused', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
@@ -80,39 +68,37 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     now = T0 + TICK_MS;
     await tick();
     await store.getState().pauseTimer();
-    const frozen = store.getState().city.layers;
+    const frozen = built(store);
 
     // Ticks keep arriving (a naive emitter) but the paused interval is not focus.
     now = T0 + TICK_MS * 10;
     await tick();
 
-    expect(store.getState().city.layers).toBe(frozen);
+    expect(built(store)).toBe(frozen);
     handle.dispose();
   });
 
-  it('does not grow the city on a tick while idle', async () => {
+  it('builds nothing on a tick while idle', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
-    const before = store.getState().city.layers;
     now = T0 + TICK_MS * 3;
     await tick();
 
-    expect(store.getState().city.layers).toBe(before);
+    expect(built(store)).toBe(0);
     handle.dispose();
   });
 
-  it('does not grow for a sub-tick delta (less than one session tick of focus)', async () => {
+  it('builds nothing for a sub-tick delta (less than one session tick of focus)', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await store.getState().startTimer();
-    const empty = store.getState().city.layers;
 
     now = T0 + TICK_MS - 1;
     await tick();
 
-    expect(store.getState().city.layers).toBe(empty);
+    expect(built(store)).toBe(0);
     handle.dispose();
   });
 
@@ -121,8 +107,6 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     await handle.ready;
 
     await store.getState().startTimer();
-    const empty = store.getState().city.layers;
-    const seed = seedFromSession(store.getState().city.sessionId);
 
     now = T0 + TICK_MS;
     await tick();
@@ -135,9 +119,7 @@ describe('growth linked to the timer tick (M2.T15)', () => {
     await tick();
 
     // Only the two running stretches count, not the paused gap.
-    const expected = growCityByTicks(growCityByTicks(empty, 1, seed), 1, seed);
-    expect(store.getState().city.layers).toEqual(expected);
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+    expect(built(store)).toBe(2);
     handle.dispose();
   });
 });
@@ -395,7 +377,7 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     now = T0 + TICK_MS * 2;
     await tick();
     expect(selectPopulation(store.getState())).toBe(10);
-    const cityBefore = store.getState().city.layers;
+    const builtBefore = built(store);
 
     // Navigate to the blocked site: the elapsed stretch is now distraction.
     reflectTabUpdate('https://x.com/feed');
@@ -407,8 +389,8 @@ describe('population linked to the timer tick (M2.T18 live update)', () => {
     await tick();
     expect(selectPopulation(store.getState())).toBe(0);
 
-    // The city did not grow during the distracted stretch.
-    expect(store.getState().city.layers).toBe(cityBefore);
+    // Nothing was built during the distracted stretch: the count only fell.
+    expect(built(store)).toBeLessThanOrEqual(builtBefore);
 
     handle.dispose();
   });
@@ -520,13 +502,13 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
     // One sampled tick, then the popup is closed: no TIMER_TICK for 10 ticks.
     now = T0 + TICK_MS;
     await tick();
-    expect(countOccupied(store.getState().city.layers)).toBe(1);
+    expect(built(store)).toBe(1);
 
     now = T0 + TICK_MS * 11;
     await tick();
 
     // The next wake-up credits the entire gap instead of restarting at "now".
-    expect(countOccupied(store.getState().city.layers)).toBe(11);
+    expect(built(store)).toBe(11);
     expect(store.getState().timer.focusedMs).toBe(TICK_MS * 11);
     expect(selectPopulation(store.getState())).toBe(11 * 5);
 
@@ -556,10 +538,7 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
     });
     await restarted.ready;
 
-    // CR6.T5a: the ASCII layers are no longer persisted, so only the four
-    // catch-up characters are redrawn; the score and population (derived from
-    // the persisted timer) still count all five. Removed with CR6.T5b/T9a.
-    expect(countOccupied(restartedStore.getState().city.layers)).toBe(4);
+    expect(built(restartedStore)).toBe(5);
     expect(selectPopulation(restartedStore.getState())).toBe(before + 4 * 5);
 
     restarted.dispose();
@@ -576,7 +555,7 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
 
     expect(store.getState().timer.focusedMs).toBe(now - T0);
     expect(store.getState().timer.lastAccountedAt).toBeNull();
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
+    expect(built(store)).toBe(2);
     expect(selectPopulation(store.getState())).toBe(10);
 
     // Paused time is still never credited.
@@ -604,7 +583,7 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
     expect(selectScoreLevel(store.getState())).toBe('excellent');
     // The city may saturate before the tick target (its grid is finite), but it
     // must never grow past what the capped focus time is worth.
-    const occupied = countOccupied(store.getState().city.layers);
+    const occupied = built(store);
     expect(occupied).toBeGreaterThan(0);
     expect(occupied).toBeLessThanOrEqual(Math.floor(sessionMs / TICK_MS));
 
@@ -622,7 +601,7 @@ describe('wall-clock catch-up (closed popup / worker restart)', () => {
     expect(fired).toContain(TIMER_PROGRESS_ALARM);
 
     const completedTicks = Math.floor(ALARM_MIN_TICK_MS / TICK_MS);
-    expect(countOccupied(store.getState().city.layers)).toBe(completedTicks);
+    expect(built(store)).toBe(completedTicks);
     expect(selectPopulation(store.getState())).toBe(completedTicks * 5);
     // Re-armed for the next minute while the session keeps running.
     expect(alarmProvider.getScheduledWhen(TIMER_PROGRESS_ALARM)).toBe(

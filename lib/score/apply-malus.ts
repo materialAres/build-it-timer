@@ -9,58 +9,9 @@ const MALUS_LAYER_ORDER = ['middleground', 'background', 'foreground'] as const;
 
 const EMPTY_CELL: CityCell = { char: null };
 
-/**
- * How the malus escalates with the time spent on a blocked site (M4.T1). Each
- * rule means: from `fromTicks` whole distraction ticks onwards, every further
- * tick costs `charactersPerTick` characters instead of one. The tick length is
- * the session cadence (user-selectable duration), the same clock the growth
- * uses, so the two stay in step at every preset. The schedule
- * is data (Open/Closed, §1.1): making the penalty harder or softer is an array
- * edit, never a change to the calculation below. Its first stage weighs the same
- * as the M2.T10 base cadence (one character per tick), so short stays keep the
- * previous behaviour and only longer stays become harsher.
- */
-export interface MalusEscalationRule {
-  readonly fromTicks: number;
-  readonly charactersPerTick: number;
-}
-
-export const MALUS_ESCALATION_SCHEDULE: ReadonlyArray<MalusEscalationRule> = [
-  { fromTicks: 1, charactersPerTick: 1 },
-  { fromTicks: 6, charactersPerTick: 2 },
-  { fromTicks: 12, charactersPerTick: 3 },
-];
-
 function normalizeTicks(ticksOfDistraction: number): number {
   if (!Number.isFinite(ticksOfDistraction)) return 0;
   return Math.max(0, Math.floor(ticksOfDistraction));
-}
-
-function tickCost(tickNumber: number): number {
-  let cost = 0;
-  for (const rule of MALUS_ESCALATION_SCHEDULE) {
-    if (tickNumber >= rule.fromTicks) cost = rule.charactersPerTick;
-  }
-  return cost;
-}
-
-/**
- * Proportional malus (M4.T1): the *additional* characters owed for
- * `ticksOfDistraction` whole distraction ticks spent on a blocked site, on top
- * of the single character removed the moment the user chooses to proceed ("the malus
- * grows as a function of time spent", not just the single event). The value is
- * cumulative and **monotonic non-decreasing** — more time can never yield a
- * smaller malus — because every tick contributes a non-negative cost. Pure and
- * total (non-finite/negative input is normalized to zero, mirroring
- * `applyMalus`), so it is unit-testable in isolation.
- */
-export function malusForDistractionTicks(ticksOfDistraction: number): number {
-  const ticks = normalizeTicks(ticksOfDistraction);
-  let total = 0;
-  for (let tick = 1; tick <= ticks; tick += 1) {
-    total += tickCost(tick);
-  }
-  return total;
 }
 
 function clearCell(

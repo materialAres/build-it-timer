@@ -272,6 +272,7 @@ built = max(0, floor(focusCharacters − distractionCharacters))
 - **Module split.** `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks`
   move to `lib/score/malus-escalation.ts` (CR6.T5b); `apply-malus.ts` has
   nothing left and is deleted in CR6.T9a.
+- **As built (CR6.T5b).** `lib/score/malus-escalation.ts` holds `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks` (moved out of `apply-malus.ts`, whose ASCII `applyMalus` stays until CR6.T9a); `calculateBuiltCharacters` charges `malusForDistractionTicks(floor(distractedMs × total / durationMs))`. `advanceProgress` no longer returns `targetTicks` nor takes `tickMs`: the background's progress tick records the accumulators and `builtCharacters` and never grows or erases layers. `createMalusWiring` no longer takes the distraction tracker: it subscribes to the store and, once the user chose "Open anyway", sends `MALUS_APPLIED { domain, charactersRemoved }` when an accounting step that added distraction time lowers `builtCharacters` (the drop); a drop with no new distraction time (a reset) and a new session send nothing. Session-completion tests whose expected tiers moved are named for the escalation.
 - **Effect on the CR3 bands.** Escalation makes stays beyond ~1% of the session
   noticeably harsher. `d` = fraction of the session spent on blocked sites, the
   rest focused (600 characters):

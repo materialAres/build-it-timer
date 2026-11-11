@@ -7,7 +7,6 @@ import { startBackground } from '@/entrypoints/background';
 import { useAppStore, attachStoreSync, DEFAULT_FOCUS_SECONDS } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
 import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
-import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
 /** Cadence of the default preset the sessions start on. */
@@ -18,14 +17,6 @@ const flushAsync = (): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
-
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
 
 /**
  * M3.T4 — popup composition. The real background runs in-process with
@@ -316,12 +307,12 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-valuenow', '30');
   });
 
-  it('grows the city after a simulated tick while the session runs', async () => {
+  it('builds a character after a simulated tick while the session runs (the city is derived from the score)', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
     await flushAsync();
-    const empty = useAppStore.getState().city.layers;
+    expect(useAppStore.getState().score.builtCharacters).toBe(0);
 
     // The singleton store stamps the session start with its own clock (the
     // real one), so the tick is placed one session tick after that instant.
@@ -334,8 +325,7 @@ describe('popup App composition (M3.T4)', () => {
       });
     });
 
-    expect(countOccupied(useAppStore.getState().city.layers)).toBe(1);
-    expect(useAppStore.getState().city.layers).not.toBe(empty);
+    expect(useAppStore.getState().score.builtCharacters).toBe(1);
   });
 
   it('hides the export button during the session and shows it once completed', async () => {

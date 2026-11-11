@@ -1,3 +1,5 @@
+import { malusForDistractionTicks } from './malus-escalation';
+
 /** Clamp untrusted time (§1.4): non-finite or negative values count as 0. */
 function normalizeMs(ms: number): number {
   return Number.isFinite(ms) && ms > 0 ? ms : 0;
@@ -27,8 +29,11 @@ export function calculateFocusCharacters(
  * Characters earned for `focusedMs` of focus and `distractedMs` on blocked
  * sites in a session of `durationMs` that is worth `total` characters (CR3).
  *
- * Focus is capped at `total`; every whole distraction character takes one back
- * and the net count never goes below 0.
+ * Focus is capped at `total`. Distraction is charged on the escalation schedule
+ * (`malusForDistractionTicks`, M4.T1; option A of CR6): the whole distraction
+ * ticks (`distractedMs × total / durationMs`, the same clock as focus) cost 1
+ * character each for the first five, then 2, then 3, so a long stay costs more
+ * than its length. The net count never goes below 0.
  *
  * Pure and total: no `Date.now()`/`Math.random()`, no hard-coded total, and any
  * invalid input (`NaN`, `±Infinity`, non-positive `durationMs` or `total`)
@@ -43,8 +48,8 @@ export function calculateBuiltCharacters(
   if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
   if (!Number.isFinite(total) || total <= 0) return 0;
   const focusCharacters = calculateFocusCharacters(focusedMs, durationMs, total);
-  const distractionCharacters = Math.floor(
-    (normalizeMs(distractedMs) * total) / durationMs,
+  const distractionCharacters = malusForDistractionTicks(
+    Math.floor((normalizeMs(distractedMs) * total) / durationMs),
   );
   return Math.max(0, Math.floor(focusCharacters - distractionCharacters));
 }

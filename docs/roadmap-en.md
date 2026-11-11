@@ -1520,6 +1520,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `CLAUDE.md` §1.3 (the persisted city state is the plan's seed, no grid/layers/domain palettes); `docs/store-analysis.md`; `.serena/memories/core.md` (city derived from seed + `builtCharacters`, persistence v4); `docs/testing-matrix.md` row.
 
 ##### CR6.T5b — Background and score: progress-only growth tick, escalating malus in `builtCharacters`
+* **Status**: done (2026-11-11). `advanceProgress` also lost its `tickMs` option and `targetTicks` result; the ASCII `growCityByTicks`/`applyMalusToCity` store actions and `applyMalus` stay, unused by the background, until CR6.T9a.
 * **Objective**: the background stops growing and erasing layers, and the escalating malus (option A) becomes part of the score, so the city and the score lose the same amount.
 * **Files to create/modify**: `lib/score/calculate-built-characters.ts` (escalated distraction cost), `lib/score/malus-escalation.ts` (new: `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks` moved out of `apply-malus.ts`), `lib/timer/session-progress.ts`, `entrypoints/background.ts` (growth tick keeps progress only; malus wiring without `applyMalusToCity`; `MALUS_APPLIED` computed from the `builtCharacters` drop), their unit and integration tests (score, session progress, background growth, malus).
 * **Dependencies**: CR6.T5a
