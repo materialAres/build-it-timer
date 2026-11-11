@@ -256,7 +256,7 @@ Compare against 17/40 and close the snapshot.
 
 **Acceptance criteria**
 - A quiet tier legend on the Score tab (factual: `Good from 30%, Great from 70%, Excellent at 100%`), data-driven from `COMPLETION_BANDS`, not hard-coded.
-- The empty-city hint moves into or directly under the 3D view (CR6.T8a); it still disappears once a session runs or a city exists.
+- The empty-city hint moves into or directly under the 3D view (CR6.T8a); it still disappears once a session runs or a city exists. *As built by CR6.T8a:* the 3D stage (`components/city/CityPanel.tsx`, 17rem tall, full tab width) is followed by `CityEmptyHint`, unchanged; to put the hint inside the stage, absolutely position it over `.city-view__message`'s layer.
 - The `STARTING` state is visibly a status, not a control (shape or treatment differs from the pills that act); keep it neutral.
 - EN and IT; no number that depends on the session length (the cadence is `duration ÷ 600`).
 
@@ -270,7 +270,7 @@ Compare against 17/40 and close the snapshot.
 
 **Acceptance criteria**
 - While `running`/`paused`, the Timer tab shows a compact read-only **text** strip (the score badge plus population) under the clock. No city rendering on the Timer tab: three.js loads only with the City tab (CR6).
-- The City tab shows the remaining time in one quiet line next to the 3D view while a session is active, within the 600px height cap measured after CR6.T8a.
+- The City tab shows the remaining time in one quiet line next to the 3D view while a session is active, within the 600px height cap measured after CR6.T8a. *As built by CR6.T8a:* the popup is 32rem wide, the stage 17rem tall with a HUD line (`> floors/total FLOORS`) at its bottom left; the remaining-time line can join that HUD or sit beside the summary, and the visually hidden `role="status"` summary must stay untouched.
 - Presentation only: values come from existing selectors; no new store state; the Timer tab stays under the 600px popup cap.
 - Idle layout does not change.
 

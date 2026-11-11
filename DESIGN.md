@@ -151,7 +151,7 @@ components:
 
 **Creative North Star: "The Phosphor Skyline"**
 
-The CRT glow and the city are one image. The popup is a dark night sky (`crt-black`), and the ASCII skyline lights it up one character at a time, drawn in phosphor green with a faint glow. Every other part of the interface (tabs, timer, controls, score) belongs to that same sky. It is dim, monospace and flat, so the skyline stays the brightest thing on screen.
+The CRT glow and the city are one image. The popup is a dark night sky (`crt-black`), and the 3D skyline lights it up one floor at a time: neon edges on dark bodies over a black ground, with a faint bloom and a CRT scanline. Every other part of the interface (tabs, timer, controls, score) belongs to that same sky. It is dim, monospace and flat, so the skyline stays the brightest thing on screen.
 
 The popup is dense and small. Users open it for a few seconds, read the state and close it. Hierarchy comes from brightness and glow, not size. Uppercase, letter-spaced labels name the sections, body text sits at a quiet 0.8rem, and the phosphor glow (`text-shadow: 0 0 4px currentColor`) appears only on text that is active, earned or alarming. The tone follows PRODUCT.md: neutral and minimal. The skyline shows progress and loss, and the interface stays out of its way.
 
@@ -163,7 +163,7 @@ The blocked-site overlay carries the same world onto a page that isn't the exten
 - Phosphor green (`#7dfba0`) is the one interface accent. Glow marks emphasis.
 - Thin 1px rules and outlines carry structure. Nothing is filled or raised.
 - Pills (999px) for actions and status, 4px corners for frames and tabs.
-- The city fades and scales each character in and out over 0.25s, with an ease-out.
+- The city grows floor by floor: a new floor drops in over 360ms, a removed floor glitches out in red (see City 3D motion).
 
 ## Colors
 
@@ -222,7 +222,7 @@ Only the buildings change. Each session draws one palette from `lib/city/plan/ci
 
 ## Layout
 
-The popup sizes itself to its content and never scrolls. Its width is set by the city canvas (60 columns × 0.85rem `ch`, 20 rows). It is one column with 0.6rem padding and 0.6rem gaps between the tab bar, the section and the rows inside it. Rows use a 0.35–0.4rem gap, and tight lists use 0.2rem. The Timer tab is centered, while the City, Blocklist and Score tabs align left. Timer tab order, top to bottom: the Duration Drum (idle) or the countdown (in session) in the same slot, then Start/Pause/Reset. You choose the duration, then you start. Spacing steps are small (0.15 to 0.75rem). The blocked-site overlay is the one generous layout: a centered panel up to 30rem wide with 1.5rem padding.
+The popup never scrolls. Its width is fixed at 32rem, and the City tab's view fills it (CR6.T8a). It is one column with 0.6rem padding and 0.6rem gaps between the tab bar, the section and the rows inside it. Rows use a 0.35–0.4rem gap, and tight lists use 0.2rem. The Timer tab is centered, while the City, Blocklist and Score tabs align left. Timer tab order, top to bottom: the Duration Drum (idle) or the countdown (in session) in the same slot, then Start/Pause/Reset. You choose the duration, then you start. Spacing steps are small (0.15 to 0.75rem). The blocked-site overlay is the one generous layout: a centered panel up to 30rem wide with 1.5rem padding.
 
 ## Elevation & Depth
 
@@ -267,7 +267,17 @@ Quiet, labeled like a terminal.
 - **Session history row:** 4px corners, a 20% white border, 0.15rem 0.5rem padding, the score in its tier color.
 
 ### City Canvas (signature)
-The city is the product. It is a `night-sky` box with a 1px `moss-frame` border and 4px corners, holding three absolutely positioned `pre` layers. The content box must equal exactly 60ch × 20 rows (`box-sizing: content-box`). Each glyph renders in its building's palette color (phosphor green by default) with a 4px glow. A new glyph fades in from opacity 0 and scale 0.4 over 0.25s (ease-out), and a removed glyph reverses that animation. The city doesn't animate on first paint.
+The city is the product. Since CR6 it is a 3D view, not an ASCII grid. The **stage** (`.city-stage`) is a black box (`city-floor`, `#000000`) with a 1px `moss-frame` border and 4px corners, the full width of the tab and 17rem (272px) tall, so the popup stays under the 600px height cap. The three.js canvas fills it, loaded only when the City tab opens; while it loads (and if it cannot start) the stage keeps its size and says so in a quiet 0.75rem line, so the tab never jumps. The camera is a fixed isometric view from above that can be orbited a quarter turn with the pointer (no pan, limited zoom); orbiting is optional, nothing in the stage takes keyboard focus, and the stage itself is a labelled image.
+
+**HUD line:** at the stage's bottom left, `> 120/240 FLOORS` in `city-hud` (`#7dfba0`), 0.7rem, 0.08em tracking, with the standard 4px glow, not interactive (`aria-hidden`). It follows every floor.
+
+**Tower labels:** `> NAME` on landmark towers, drawn inside the 3D view (see City 3D motion).
+
+**Screen-reader summary:** below the stage there is a visually hidden `role="status"` line (`aria-live="polite"`): floors built of total, buildings standing and the tallest building. It changes at milestones (every 10% of the floors) and when a new city starts, not once per floor. EN and IT.
+
+**Order in the tab:** stage, empty-city hint (only while idle and nothing is built), export button (only once completed).
+
+The ASCII layers (`CityCanvas`) remain in the code only until CR6.T9a; CR6.T8b brings an ASCII fallback built from the plan for browsers without WebGL.
 
 #### City 3D motion (CR6.T7)
 The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader and colors are tuned by eye in CR6.T8a.

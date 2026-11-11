@@ -12,11 +12,11 @@ General knowledge workers and students who install the extension from the Chrome
 
 ## Product Purpose
 
-Build-it! Timer Focus is a browser extension that helps people stay focused. It pairs a countdown focus timer with an ASCII-art city that grows while they work. It blocks distracting sites during a session, and giving in to a distraction costs them part of the city. Success means people finish their sessions with as much of the city built as possible, and they come back for the next session.
+Build-it! Timer Focus is a browser extension that helps people stay focused. It pairs a countdown focus timer with a 3D neon city that grows while they work. It blocks distracting sites during a session, and giving in to a distraction costs them part of the city. Success means people finish their sessions with as much of the city built as possible, and they come back for the next session.
 
 ## Positioning
 
-Focus time becomes something you can see. Every 2 seconds of undistracted work adds one ASCII character to a deterministic, seeded city drawn on three parallax layers. A distraction (the malus) runs the growth engine in reverse and removes characters. Each session gets its own new city, and the result is kept as a score, a population and a city image.
+Focus time becomes something you can see. Every few seconds of undistracted work (the pace follows the session length) pays for a bit more of a floor, and floors stack into a city seen from above at an angle. A distraction (the malus) takes part of that back, and the top floor shows the damage. Each session gets its own new city from a seed, with its own streets, buildings and colors, and the result is kept as a score, a population and a city image. Where WebGL is unavailable the city falls back to ASCII text.
 
 ## Operating Context
 
@@ -40,7 +40,7 @@ Focus time becomes something you can see. Every 2 seconds of undistracted work a
 
 - Working name "Build-it! Timer Focus" (the docs also say "BuildIt"). The user has not said this name is final.
 - Voice: neutral and minimal. Copy is factual and quiet and stays out of the way. The city communicates progress and loss, so text does not scold, cheer or coach, including on the malus overlay and the score.
-- The ASCII city is the core of the product's identity.
+- The city is the core of the product's identity: a glowing phosphor skyline on a black ground.
 
 ## Evidence on Hand
 

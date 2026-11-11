@@ -31,6 +31,13 @@ city:
   exportJpeg: Export JPEG
   exportError: Could not export the city image.
   emptyHint: Your city grows while you focus. Start a session to build it.
+  loading: LOADING CITY…
+  viewUnavailable: The 3D city could not start in this browser.
+  hud: '> $1/$2 FLOORS'
+  summaryEmpty: 'City: nothing built yet.'
+  summary: 'City: $1 of $2 floors built. Buildings standing: $3.'
+  summaryTallestNamed: 'Tallest: $1, levels: $2.'
+  summaryTallest: 'Tallest building, levels: $1.'
 
 score:
   excellent: Excellent

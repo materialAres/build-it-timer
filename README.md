@@ -1,6 +1,6 @@
 # Build-it! Timer Focus
 
-A browser extension which (hopefully) helps you stay focused on your work: the more you focus, the more your ASCII art city grows!
+A browser extension which (hopefully) helps you stay focused on your work: the more you focus, the more your neon 3D city grows!
 
 ## How it works
 
@@ -12,7 +12,7 @@ Start a focus session and every stretch of undistracted work (one 600th of the s
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
 * **Score** — based on the percentage of the city built (focus characters minus the escalating distraction cost, never below 0; 60 s on a blocked site in a 30-minute session costs 44 characters): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
 * **Population** — each character earns a rate by completion band (5 below 30%, 10 from 30%, 20 from 70%), and finishing the whole city adds a bonus of 7% of the population reached.
-* **ASCII city** — deterministic, seeded growth composed from a library of ASCII building modules, with a per-domain colour palette.
+* **3D city** — a new city every session from a seed (streets, buildings, palette), drawn with three.js in the City tab only (a separate lazy chunk, about 148 KB gzipped) with rain, cars and tower names. It grows floor by floor from your focus, a distraction takes floors back and damages the top one, `prefers-reduced-motion` turns the motion off, and the view keeps a text summary for screen readers.
 
 ## Tech stack
 

@@ -32,6 +32,13 @@ city:
   exportJpeg: Esporta JPEG
   emptyHint: La tua città cresce mentre ti concentri. Avvia una sessione per costruirla.
   exportError: Impossibile esportare l'immagine della città.
+  loading: CARICAMENTO CITTÀ…
+  viewUnavailable: La città 3D non è partita in questo browser.
+  hud: '> $1/$2 PIANI'
+  summaryEmpty: 'Città: ancora nulla di costruito.'
+  summary: 'Città: $1 piani costruiti su $2. Edifici in piedi: $3.'
+  summaryTallestNamed: 'Più alto: $1, piani: $2.'
+  summaryTallest: 'Edificio più alto, piani: $1.'
 
 score:
   excellent: Eccellente

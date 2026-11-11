@@ -27,7 +27,11 @@ timer-focus/
 │   │   │   ├── ambient-motion.ts   # the rain and cars meshes (CR6.T7)
 │   │   │   ├── city-labels.ts      # `> NAME` tags on landmark towers, one texture, one mesh (CR6.T7)
 │   │   │   └── post-processing.ts / crt-pass.ts  # half-size bloom and the switchable CRT pass (CR6.T6b)
-│   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground)
+│   │   ├── CityPanel.tsx        # CR6.T8a: the City tab's stage, HUD line and screen-reader summary; lazy-loads CityView3D
+│   │   ├── CityView3D.tsx       # CR6.T8a: mounts the renderer and wires the selectors (the lazy three.js chunk)
+│   │   ├── use-city-renderer.ts # CR6.T8a: renderer lifecycle (size, visibility, reduced motion, dispose)
+│   │   ├── use-city-summary.ts  # CR6.T8a: live summary for the HUD, milestone summary for screen readers
+│   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground); removed in CR6.T9a
 │   │   ├── CityLayer.tsx        # a single layer positioned absolute/overlay
 │   │   ├── CityCell.tsx
 │   │   ├── ThemeProvider.tsx    # applies the current session's color theme/biome

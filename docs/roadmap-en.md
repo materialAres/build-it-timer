@@ -1566,6 +1566,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `DESIGN.md` motion section (ambient layer, floor drop, glitch-out, damaged floor, reduced-motion behavior, the 30 fps cap).
 
 ##### CR6.T8a — Popup City tab: lazy 3D view and accessible summary
+* **Status**: done (2026-11-11). Beyond the card: `CityPanel.tsx` (the non-lazy stage, HUD line and summary), `use-city-renderer.ts` and `use-city-summary.ts` (hooks, so `CityView3D.tsx` stays small). `wxt build` confirms the chunk split (three in `CityView3D` only, 148 KB gzipped). Drag-to-rotate stays optional (no keyboard alternative); `ExportCityButton` still exports the old ASCII layers and is reworked by CR6.T10. Nothing was judged by eye in a real browser.
 * **Objective**: replace the ASCII canvas in the City tab with the 3D view, loaded only when the tab opens.
 * **Files to create/modify**: `components/city/CityView3D.tsx` (mounts the renderer, wires selectors, cleans up), `entrypoints/popup/App.tsx` or the City section component (`React.lazy` + `Suspense` placeholder sized like the view), `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml`, component tests (renderer mocked).
 * **Dependencies**: CR6.T5b, CR6.T7
