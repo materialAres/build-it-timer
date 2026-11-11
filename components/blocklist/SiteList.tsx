@@ -79,7 +79,7 @@ export function SiteList({ quickAdd }: SiteListProps) {
     };
   }, [feedback]);
 
-  const title = i18n.t('blocklist.blockedSites');
+  const title = i18n.t('tabs.blocklist');
   const listName = i18n.t('blocklist.blocklistName');
   const preview = normalizeEntry(value.trim());
   const previewDomain = preview.ok ? preview.value : null;

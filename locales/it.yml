@@ -11,6 +11,8 @@ timer:
   timeRemaining: Tempo rimanente
   start: Avvia
   pause: Pausa
+  resume: Riprendi
+  paused: In pausa
   reset: Reimposta
   durationLabel: Durata della sessione
   durationOption: '$1 min'
@@ -67,7 +69,6 @@ blocklist:
   deletePresetConfirm: 'Eliminare $1? I suoi siti restano bloccati.'
   keepPreset: Mantieni
   sites: Siti
-  blockedSites: Siti bloccati
   blocklistName: lista dei bloccati
   addTo: 'Aggiungi a $1'
   entriesAriaLabel: '$1 voci'
@@ -84,8 +85,9 @@ blocklist:
   invalidIp: Gli indirizzi IP non possono essere bloccati. Inserisci un nome di dominio.
   locked: La lista è bloccata. Reimposta il timer per modificarla.
   addOnly: Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.
-  summarySites: 'Blocca $1 siti · solo aggiunte durante una sessione'
-  summarySite: 'Blocca 1 sito · solo aggiunte durante una sessione'
+  summarySites: 'Blocca $1 siti'
+  summarySite: Blocca 1 sito
+  summaryAddOnly: '$1 · solo aggiunte durante una sessione'
   summaryEmpty: Nessun sito bloccato
 
 overlay:

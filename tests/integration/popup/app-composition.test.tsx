@@ -103,7 +103,7 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'facebook.com',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -123,7 +123,7 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeEnabled();
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'instagram.com',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -160,7 +160,7 @@ describe('popup App composition (M3.T4)', () => {
     useAppStore.getState().addSite('facebook.com');
     expect(
       await screen.findByRole('button', {
-        name: 'Blocks 1 site · add-only during a session',
+        name: 'Blocks 1 site',
       }),
     ).toBeInTheDocument();
 
@@ -172,7 +172,7 @@ describe('popup App composition (M3.T4)', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('region', { name: 'Blocked sites' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Blocklist' })).toBeVisible();
   });
 
   it('keeps the blocklist fully locked when the session completes', async () => {
@@ -239,7 +239,7 @@ describe('popup App composition (M3.T4)', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('group', { name: 'Presets' })).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'Blocked sites' }),
+      screen.getByRole('region', { name: 'Blocklist' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('region', { name: 'Allowed sites' }),
@@ -260,9 +260,9 @@ describe('popup App composition (M3.T4)', () => {
     });
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 
-    const input = screen.getByLabelText('Add to Blocked sites');
+    const input = screen.getByLabelText('Add to Blocklist');
     const presets = screen.getByRole('group', { name: 'Presets' });
-    const list = screen.getByRole('list', { name: 'Blocked sites entries' });
+    const list = screen.getByRole('list', { name: 'Blocklist entries' });
     expect(
       input.compareDocumentPosition(presets) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

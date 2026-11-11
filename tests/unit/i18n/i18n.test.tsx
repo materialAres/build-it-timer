@@ -41,9 +41,12 @@ describe('i18n shared instance (M3.T9)', () => {
     expect(i18n.t('blocklist.addOnly')).toBe(
       'Sites can be added during a session. Removing them needs a timer reset.',
     );
-    expect(i18n.t('blocklist.summarySites', ['3'])).toBe(
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe('Blocks 3 sites');
+    expect(i18n.t('blocklist.summaryAddOnly', ['Blocks 3 sites'])).toBe(
       'Blocks 3 sites · add-only during a session',
     );
+    expect(i18n.t('timer.resume')).toBe('Resume');
+    expect(i18n.t('timer.paused')).toBe('Paused');
     expect(i18n.t('blocklist.summaryEmpty')).toBe('No sites blocked');
   });
 
@@ -102,9 +105,12 @@ describe('IT locale rendering (M3.T10)', () => {
     expect(i18n.t('blocklist.addOnly')).toBe(
       'Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.',
     );
-    expect(i18n.t('blocklist.summarySites', ['3'])).toBe(
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe('Blocca 3 siti');
+    expect(i18n.t('blocklist.summaryAddOnly', ['Blocca 3 siti'])).toBe(
       'Blocca 3 siti · solo aggiunte durante una sessione',
     );
+    expect(i18n.t('timer.resume')).toBe('Riprendi');
+    expect(i18n.t('timer.paused')).toBe('In pausa');
     expect(i18n.t('blocklist.summaryEmpty')).toBe('Nessun sito bloccato');
   });
 

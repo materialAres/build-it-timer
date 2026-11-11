@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BlocklistSummary } from '@/components/blocklist/BlocklistSummary';
 import { useAppStore } from '@/store';
-import type { BlocklistEntry } from '@/store/store.types';
+import type { BlocklistEntry, TimerState } from '@/store/store.types';
 
 const entry = (value: string): BlocklistEntry => ({
   domain: { value },
@@ -17,9 +17,16 @@ const seed = (entries: ReadonlyArray<BlocklistEntry>): void => {
   });
 };
 
+const setStatus = (status: TimerState['status']): void => {
+  useAppStore.setState({
+    timer: { ...useAppStore.getState().timer, status },
+  });
+};
+
 describe('BlocklistSummary (UI.T4)', () => {
   beforeEach(() => {
     seed([]);
+    setStatus('idle');
     useAppStore.getState().setActiveTab('timer');
   });
 
@@ -40,22 +47,44 @@ describe('BlocklistSummary (UI.T4)', () => {
     render(<BlocklistSummary />);
 
     expect(
-      screen.getByRole('button', {
-        name: 'Blocks 1 site · add-only during a session',
-      }),
+      screen.getByRole('button', { name: 'Blocks 1 site' }),
     ).toBeInTheDocument();
   });
 
-  it('counts the sites and says the list is add-only during a session', () => {
+  it('only counts the sites while idle: removal is allowed again (UI.T10)', () => {
     seed([entry('a.com'), entry('b.com'), entry('c.com')]);
     render(<BlocklistSummary />);
 
     expect(
-      screen.getByRole('button', {
-        name: 'Blocks 3 sites · add-only during a session',
-      }),
+      screen.getByRole('button', { name: 'Blocks 3 sites' }),
     ).toBeInTheDocument();
   });
+
+  it.each(['running', 'paused'] as const)(
+    'adds that the list is add-only while the session is %s (UI.T10)',
+    (status) => {
+      seed([entry('a.com'), entry('b.com'), entry('c.com')]);
+      setStatus(status);
+      render(<BlocklistSummary />);
+
+      expect(
+        screen.getByRole('button', {
+          name: 'Blocks 3 sites · add-only during a session',
+        }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each(['idle', 'completed'] as const)(
+    'drops the add-only note when the status is %s (UI.T10)',
+    (status) => {
+      seed([entry('a.com')]);
+      setStatus(status);
+      render(<BlocklistSummary />);
+
+      expect(screen.getByRole('button')).toHaveTextContent(/^Blocks 1 site$/);
+    },
+  );
 
   it('follows the list as it changes', () => {
     render(<BlocklistSummary />);
@@ -74,6 +103,17 @@ describe('BlocklistSummary (UI.T4)', () => {
     await userEvent.click(screen.getByRole('button'));
 
     expect(useAppStore.getState().ui.activeTab).toBe('blocklist');
+  });
+
+  it('has a target at least 24px tall in the shared outline style (UI.T10)', () => {
+    const { container } = render(<BlocklistSummary />);
+
+    const css = container.querySelector('style')?.textContent ?? '';
+    // 1.5rem = 24px at the popup's 16px root; the pill border/background come
+    // from the shared `:where(.popup) button` rule, not from this component.
+    expect(css).toMatch(/min-height:\s*1\.5rem/);
+    expect(css).not.toMatch(/border:\s*0/);
+    expect(css).not.toMatch(/text-decoration:\s*underline/);
   });
 
   it('carries its own monospace style', () => {

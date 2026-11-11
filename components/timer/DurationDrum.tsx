@@ -81,7 +81,9 @@ export function DurationDrum() {
 
   return (
     <div
-      className={`duration-drum${locked ? ' duration-drum--clock' : ''}`}
+      className={`duration-drum${locked ? ' duration-drum--clock' : ''}${
+        status === 'paused' ? ' duration-drum--paused' : ''
+      }`}
       data-reduced={reducedMotion ? '' : undefined}
     >
       <style>{DURATION_DRUM_STYLES}</style>
@@ -112,6 +114,9 @@ export function DurationDrum() {
       <span className="duration-drum__hairline duration-drum__hairline--bottom" />
       <div className="duration-drum__clock">
         <TimerDisplay />
+        {status === 'paused' ? (
+          <span className="duration-drum__paused">{i18n.t('timer.paused')}</span>
+        ) : null}
       </div>
     </div>
   );

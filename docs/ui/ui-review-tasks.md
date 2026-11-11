@@ -228,6 +228,8 @@ Compare against 17/40 and close the snapshot.
 #### UI.T10 — Status copy and affordances
 **Priority**: P2 · **Command**: `/impeccable clarify` · **Dependencies**: UI.T8
 
+**Status**: done (2026-11-11). Implemented directly, without running the impeccable command. While `paused`, the first control reads `Resume` (`timer.resume`, EN `Resume`, IT `Riprendi`; same `requestStartTimer`, only the label moves) and the clock carries a `Paused` / `In pausa` label (`timer.paused`) in `DurationDrum` with the digits dimmed (`duration-drum--paused`), positioned absolutely so nothing shifts. `BlocklistSummary` shows `Blocks N sites` when idle or completed and adds ` · add-only during a session` (`blocklist.summaryAddOnly`, which takes the count text as `$1`) only while `running` or `paused`; it now takes the shared outline pill with `min-height: 1.5rem` (24px) instead of the dotted-underline link. The list has one name: the `SiteList` heading reads `tabs.blocklist` (`Blocklist` / `Blocchi`) and the `blocklist.blockedSites` key is gone. 14 new tests; the old summary and `Blocked sites` assertions were updated. Not checked visually in the built extension yet.
+
 **Problem** (critique 26/40)
 - While `paused` the main button still says `Start` (the locale has only `timer.start` and `timer.pause`) and nothing marks the pause.
 - `BlocklistSummary` keeps `Blocks N sites · add-only during a session` after Reset (idle), when removal is allowed again.

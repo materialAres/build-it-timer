@@ -128,6 +128,21 @@ export const DURATION_DRUM_STYLES = `
     font-variant-numeric: tabular-nums;
     text-shadow: 0 0 6px rgba(125, 251, 160, 0.6);
   }
+  .duration-drum--paused .timer-display {
+    opacity: 0.55;
+    text-shadow: none;
+  }
+  .duration-drum__paused {
+    position: absolute;
+    bottom: 1.4rem;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #8a948e;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
   @media (prefers-reduced-motion: reduce) {
     .duration-drum__wheel,
     .duration-drum__clock { transition: none; }

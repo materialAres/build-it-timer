@@ -208,7 +208,7 @@ The palette is a phosphor monitor at night: a near-black ground, one green beam,
 - **Title** (700, 1.1rem): the population number, the one bold numeral.
 - **Body** (400, 0.8rem, 1.5): list rows, session history and helper text. The overlay message runs larger at 0.95rem because it sits on a full page.
 - **Tab** (400, 0.75rem, 0.1em, uppercase): popup tabs.
-- **Label** (400, 0.7–0.75rem, 0.14em, uppercase, 80–85% opacity): section titles ("Last sessions", "Blocked sites") and the population unit.
+- **Label** (400, 0.7–0.75rem, 0.14em, uppercase, 80–85% opacity): section titles ("Last sessions", "Blocklist") and the population unit.
 - **City** (400, 0.85rem, line-height 1): the ASCII grid. One `ch` per column, and the line height must stay at 1 so the rows tile.
 
 ### Named Rules

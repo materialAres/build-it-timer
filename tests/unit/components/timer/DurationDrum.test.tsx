@@ -295,6 +295,40 @@ describe('DurationDrum (UI.T9)', () => {
     },
   );
 
+  describe('the paused marker (UI.T10)', () => {
+    it('labels the clock Paused and dims the digits while paused', () => {
+      setTimer({ status: 'paused' });
+
+      const { container } = render(<DurationDrum />);
+
+      expect(screen.getByText('Paused')).toBeInTheDocument();
+      expect(container.querySelector('.duration-drum')).toHaveClass(
+        'duration-drum--paused',
+      );
+    });
+
+    it.each(['idle', 'running', 'completed'] as const)(
+      'shows no marker while %s',
+      (status: TimerStatus) => {
+        setTimer({ status });
+
+        const { container } = render(<DurationDrum />);
+
+        expect(screen.queryByText('Paused')).not.toBeInTheDocument();
+        expect(container.querySelector('.duration-drum')).not.toHaveClass(
+          'duration-drum--paused',
+        );
+      },
+    );
+
+    it('takes no room: the label is positioned out of the flow', () => {
+      const { container } = render(<DurationDrum />);
+
+      const css = container.querySelector('style')?.textContent ?? '';
+      expect(css).toMatch(/\.duration-drum__paused\s*\{[^}]*position:\s*absolute/);
+    });
+  });
+
   it('keeps the same frame height idle and in a session', () => {
     const { container } = render(<DurationDrum />);
     const frame = container.querySelector('.duration-drum');

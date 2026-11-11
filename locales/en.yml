@@ -10,6 +10,8 @@ timer:
   timeRemaining: Time remaining
   start: Start
   pause: Pause
+  resume: Resume
+  paused: Paused
   reset: Reset
   durationLabel: Focus duration
   durationOption: '$1 min'
@@ -66,7 +68,6 @@ blocklist:
   deletePresetConfirm: 'Delete $1? Its sites stay blocked.'
   keepPreset: Keep
   sites: Sites
-  blockedSites: Blocked sites
   blocklistName: blocklist
   addTo: 'Add to $1'
   entriesAriaLabel: '$1 entries'
@@ -83,8 +84,9 @@ blocklist:
   invalidIp: IP addresses cannot be blocked. Enter a domain name.
   locked: The blocklist is locked. Reset the timer to edit it.
   addOnly: Sites can be added during a session. Removing them needs a timer reset.
-  summarySites: 'Blocks $1 sites · add-only during a session'
-  summarySite: 'Blocks 1 site · add-only during a session'
+  summarySites: 'Blocks $1 sites'
+  summarySite: Blocks 1 site
+  summaryAddOnly: '$1 · add-only during a session'
   summaryEmpty: No sites blocked
 
 overlay:

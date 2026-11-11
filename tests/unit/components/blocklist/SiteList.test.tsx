@@ -58,7 +58,7 @@ describe('SiteList (M3.T3)', () => {
     render(<SiteList />);
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'https://m.facebook.com/something',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -72,7 +72,7 @@ describe('SiteList (M3.T3)', () => {
     render(<SiteList />);
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'https://m.facebook.com/x',
     );
 
@@ -84,7 +84,7 @@ describe('SiteList (M3.T3)', () => {
     render(<SiteList />);
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'facebook.com',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -99,7 +99,7 @@ describe('SiteList (M3.T3)', () => {
     render(<SiteList />);
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'co.uk',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -125,7 +125,7 @@ describe('SiteList (M3.T3)', () => {
     render(<SiteList />);
 
     expect(
-      screen.getByRole('region', { name: 'Blocked sites' }),
+      screen.getByRole('region', { name: 'Blocklist' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('region', { name: 'Allowed sites' }),
@@ -164,7 +164,7 @@ describe.each(['running', 'paused'] as const)(
     it('keeps the add form enabled and the remove buttons disabled', () => {
       render(<SiteList />);
 
-      expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
+      expect(screen.getByLabelText('Add to Blocklist')).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
       expect(
         screen.getByRole('button', { name: 'Remove a.com' }),
@@ -173,7 +173,7 @@ describe.each(['running', 'paused'] as const)(
 
     it('adds a site with its preview and feedback', () => {
       const { container } = render(<SiteList />);
-      const input = screen.getByLabelText('Add to Blocked sites');
+      const input = screen.getByLabelText('Add to Blocklist');
 
       fireEvent.change(input, {
         target: { value: 'https://m.facebook.com/x' },
@@ -224,7 +224,7 @@ describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
   it('disables the add form and the remove buttons', () => {
     render(<SiteList />);
 
-    expect(screen.getByLabelText('Add to Blocked sites')).toBeDisabled();
+    expect(screen.getByLabelText('Add to Blocklist')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remove a.com' })).toBeDisabled();
   });
@@ -237,7 +237,7 @@ describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
 
   it('hides the preview and the add feedback and never mutates the list', () => {
     const { container } = render(<SiteList />);
-    const input = screen.getByLabelText('Add to Blocked sites');
+    const input = screen.getByLabelText('Add to Blocklist');
 
     fireEvent.change(input, {
       target: { value: 'https://m.facebook.com/x' },
@@ -257,7 +257,7 @@ describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
       setStatus('idle');
     });
 
-    expect(screen.getByLabelText('Add to Blocked sites')).toBeEnabled();
+    expect(screen.getByLabelText('Add to Blocklist')).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Remove a.com' })).toBeEnabled();
   });
@@ -277,7 +277,7 @@ describe('SiteList layout (UI.T1)', () => {
     resetBlocklist([entry('a.com'), entry('b.com'), entry('c.com')]);
     render(<SiteList />);
 
-    const heading = screen.getByRole('heading', { name: /Blocked sites/ });
+    const heading = screen.getByRole('heading', { name: /Blocklist/ });
     expect(heading).toHaveTextContent('3');
   });
 
@@ -335,7 +335,7 @@ describe('SiteList layout (UI.T1)', () => {
     render(<SiteList />);
 
     await userEvent.type(
-      screen.getByLabelText('Add to Blocked sites'),
+      screen.getByLabelText('Add to Blocklist'),
       'x.com',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -348,7 +348,7 @@ describe('SiteList layout (UI.T1)', () => {
     resetBlocklist([entry('a.com')]);
     render(<SiteList quickAdd={<div data-testid="quick-add" />} />);
 
-    const input = screen.getByLabelText('Add to Blocked sites');
+    const input = screen.getByLabelText('Add to Blocklist');
     const quickAdd = screen.getByTestId('quick-add');
     const list = screen.getByRole('list');
 
@@ -373,7 +373,7 @@ describe('SiteList error feedback (UI.T6)', () => {
   });
 
   const submit = (container: HTMLElement, text: string): HTMLElement => {
-    const input = screen.getByLabelText('Add to Blocked sites');
+    const input = screen.getByLabelText('Add to Blocklist');
     fireEvent.change(input, { target: { value: text } });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
     return input;
@@ -431,7 +431,7 @@ describe('SiteList transient feedback and live updates (UI.T6)', () => {
   });
 
   const addByForm = (container: HTMLElement, text: string): void => {
-    fireEvent.change(screen.getByLabelText('Add to Blocked sites'), {
+    fireEvent.change(screen.getByLabelText('Add to Blocklist'), {
       target: { value: text },
     });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
