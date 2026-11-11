@@ -1578,6 +1578,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `DESIGN.md` (City tab layout, HUD line, labels); `PRODUCT.md` (wherever it describes the ASCII city); `README.md` (feature description); `docs/ui/ui-review-tasks.md` (UI.T11 and UI.T12 point at the new view).
 
 ##### CR6.T8b — ASCII fallback from the plan, switch on missing or lost WebGL
+* **Status**: done (2026-11-11). Beyond the card: `components/city/webgl-support.ts` (the capability check) and a `city.fallbackNote` line replacing T8a's `city.viewUnavailable`. The fallback is a front view (not a top view) at 60 × 20, monochrome. It was never seen in a real browser without WebGL; happy-dom stands in for "no WebGL".
 * **Objective**: keep the City tab working where WebGL2 is unavailable or the context is lost.
 * **Files to create/modify**: `lib/city/plan/plan-skyline.ts` (pure: plan + visible floors → ASCII rows) with its unit test, `components/city/CityFallback.tsx`, `components/city/CityView3D.tsx` (capability check and switch on context loss), component tests.
 * **Dependencies**: CR6.T8a

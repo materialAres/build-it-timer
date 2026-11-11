@@ -5,7 +5,7 @@ const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 export interface CityRendererState {
   readonly renderer: CityRenderer | null;
-  /** WebGL could not start, or its context was lost; the view says so (CR6.T8b adds a fallback). */
+  /** WebGL could not start, or its context was lost; the panel then shows the text fallback (CR6.T8b). */
   readonly failed: boolean;
 }
 

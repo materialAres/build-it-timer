@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { err, ok } from '@/utils/result';
 import { useAppStore } from '@/store';
 import type { CityRenderer, CityRendererOptions } from '@/components/city/three/city-renderer';
@@ -158,15 +158,23 @@ describe('CityView3D (CR6.T8a)', () => {
     expect(motionListeners).toHaveLength(0);
   });
 
-  it('says so, and throws nothing, when WebGL cannot start', () => {
+  it('asks its parent for the fallback, and throws nothing, when WebGL cannot start', () => {
     created.fail = true;
-    render(<CityView3D />);
-    expect(screen.getByText('The 3D city could not start in this browser.')).toBeInTheDocument();
+    const onUnavailable = vi.fn<() => void>();
+    expect(() => { render(<CityView3D onUnavailable={onUnavailable} />); }).not.toThrow();
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
   });
 
-  it('says so when the GPU context is lost', () => {
-    render(<CityView3D />);
+  it('asks for the fallback when the GPU context is lost', () => {
+    const onUnavailable = vi.fn<() => void>();
+    render(<CityView3D onUnavailable={onUnavailable} />);
+    expect(onUnavailable).not.toHaveBeenCalled();
     act(() => { created.options[0]?.onContextLost(); });
-    expect(screen.getByText('The 3D city could not start in this browser.')).toBeInTheDocument();
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
+  });
+
+  it('works without a parent callback', () => {
+    created.fail = true;
+    expect(() => { render(<CityView3D />); }).not.toThrow();
   });
 });

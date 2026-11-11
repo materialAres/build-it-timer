@@ -32,7 +32,7 @@ city:
   exportError: Could not export the city image.
   emptyHint: Your city grows while you focus. Start a session to build it.
   loading: LOADING CITY…
-  viewUnavailable: The 3D city could not start in this browser.
+  fallbackNote: 3D view unavailable here, showing a text version.
   hud: '> $1/$2 FLOORS'
   summaryEmpty: 'City: nothing built yet.'
   summary: 'City: $1 of $2 floors built. Buildings standing: $3.'

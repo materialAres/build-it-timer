@@ -76,6 +76,30 @@
   letter-spacing: 0.08em;
 }
 
+.city-fallback {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  /* Top-aligned: the last 1rem of the stage stays free for the HUD line. */
+  align-items: flex-start;
+  justify-content: center;
+  color: #7dfba0;
+  text-shadow: 0 0 4px currentColor;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* 60 columns of 0.6em fit the 32rem popup with room to spare. */
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: pre;
+}
+
+.city-note {
+  margin: 0;
+  color: #8a948e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+}
+
 .city-hud {
   position: absolute;
   left: 0.5rem;

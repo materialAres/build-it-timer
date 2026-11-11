@@ -33,7 +33,7 @@ city:
   emptyHint: La tua città cresce mentre ti concentri. Avvia una sessione per costruirla.
   exportError: Impossibile esportare l'immagine della città.
   loading: CARICAMENTO CITTÀ…
-  viewUnavailable: La città 3D non è partita in questo browser.
+  fallbackNote: Vista 3D non disponibile qui, mostro una versione testuale.
   hud: '> $1/$2 PIANI'
   summaryEmpty: 'Città: ancora nulla di costruito.'
   summary: 'Città: $1 piani costruiti su $2. Edifici in piedi: $3.'

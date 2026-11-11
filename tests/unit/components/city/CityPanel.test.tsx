@@ -3,8 +3,14 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { CityPanel } from '@/components/city/CityPanel';
 import { selectCityPlan, useAppStore } from '@/store';
 
+const mocks = vi.hoisted(() => ({ webgl: true, onUnavailable: null as (() => void) | null }));
+
+vi.mock('@/components/city/webgl-support', () => ({ hasWebGl2: () => mocks.webgl }));
 vi.mock('@/components/city/CityView3D', () => ({
-  default: () => <div data-testid="view-3d" />,
+  default: ({ onUnavailable }: { onUnavailable?: () => void }) => {
+    mocks.onUnavailable = onUnavailable ?? null;
+    return <div data-testid="view-3d" />;
+  },
 }));
 
 function setCity(sessionId: string | null, built: number): void {
@@ -18,7 +24,11 @@ function setCity(sessionId: string | null, built: number): void {
 const summary = (): string => screen.getByRole('status').textContent;
 
 describe('CityPanel (CR6.T8a)', () => {
-  beforeEach(() => { setCity(null, 0); });
+  beforeEach(() => {
+    mocks.webgl = true;
+    mocks.onUnavailable = null;
+    setCity(null, 0);
+  });
   afterEach(cleanup);
 
   it('is a stage with a label that holds the 3D view, loaded lazily', async () => {
@@ -81,5 +91,42 @@ describe('CityPanel (CR6.T8a)', () => {
     const first = summary();
     setCity('session-b', 120);
     expect(summary()).not.toBe(first);
+  });
+
+  describe('without the 3D view (CR6.T8b)', () => {
+    it('shows the text city and never requests the 3D chunk when WebGL2 is missing', () => {
+      mocks.webgl = false;
+      setCity('session-a', 300);
+      const { container } = render(<CityPanel />);
+      expect(screen.queryByTestId('view-3d')).not.toBeInTheDocument();
+      expect(container.querySelector('.city-fallback')?.textContent).toMatch(/#/);
+      expect(screen.getByText(/3D view unavailable here/)).toBeInTheDocument();
+    });
+
+    it('keeps the label, the HUD line and the same summary', () => {
+      mocks.webgl = false;
+      setCity('session-a', 300);
+      render(<CityPanel />);
+      expect(screen.getByRole('img', { name: /city/i })).toBeInTheDocument();
+      expect(screen.getByText(/FLOORS$/)).toBeInTheDocument();
+      expect(summary()).toMatch(/^City: \d+ of \d+ floors built/);
+    });
+
+    it('switches to the text city when the view reports that WebGL failed or the context was lost', async () => {
+      setCity('session-a', 300);
+      const { container } = render(<CityPanel />);
+      await screen.findByTestId('view-3d');
+      expect(container.querySelector('.city-fallback')).toBeNull();
+      act(() => { mocks.onUnavailable?.(); });
+      expect(screen.queryByTestId('view-3d')).not.toBeInTheDocument();
+      expect(container.querySelector('.city-fallback')).not.toBeNull();
+      expect(screen.getByText(/3D view unavailable here/)).toBeInTheDocument();
+    });
+
+    it('shows no note while the 3D view works', async () => {
+      render(<CityPanel />);
+      await screen.findByTestId('view-3d');
+      expect(screen.queryByText(/3D view unavailable here/)).not.toBeInTheDocument();
+    });
   });
 });

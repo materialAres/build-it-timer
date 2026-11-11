@@ -29,6 +29,8 @@ timer-focus/
 │   │   │   └── post-processing.ts / crt-pass.ts  # half-size bloom and the switchable CRT pass (CR6.T6b)
 │   │   ├── CityPanel.tsx        # CR6.T8a: the City tab's stage, HUD line and screen-reader summary; lazy-loads CityView3D
 │   │   ├── CityView3D.tsx       # CR6.T8a: mounts the renderer and wires the selectors (the lazy three.js chunk)
+│   │   ├── CityFallback.tsx     # CR6.T8b: the plan as text where WebGL2 is missing or lost
+│   │   ├── webgl-support.ts     # CR6.T8b: `hasWebGl2()` capability check
 │   │   ├── use-city-renderer.ts # CR6.T8a: renderer lifecycle (size, visibility, reduced motion, dispose)
 │   │   ├── use-city-summary.ts  # CR6.T8a: live summary for the HUD, milestone summary for screen readers
 │   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground); removed in CR6.T9a
@@ -72,6 +74,7 @@ timer-focus/
 │   │   ├── plan/                # CR6: the seeded city plan, pure (roads, lots, buildings, floors, colors, scene data)
 │   │   ├── render-scheduler.ts  # CR6: when a frame is due (pure)
 │   │   ├── camera-framing.ts    # CR6: fixed isometric framing and orbit limits (pure)
+│   │   ├── plan/plan-skyline.ts # CR6.T8b: plan + visible floors → ASCII rows (the fallback), in `plan/`
 │   │   ├── ambient-plan.ts      # CR6.T7: seeded car routes, flicker schedule, rain; time → position/level (pure)
 │   │   ├── floor-motion.ts      # CR6.T7: timeline of the floor animations (drop, glitch, crack), ends at rest (pure)
 │   │   ├── migrate-city.ts      # CR6: persist v1–v3 city → `{ sessionId }`
