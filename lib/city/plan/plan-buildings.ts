@@ -2,7 +2,7 @@ import type {
   Archetype,
   GroundPlan,
   Lot,
-  PlanBuilding,
+  BuildingShape,
   TowerNameParts,
 } from './city-plan.types';
 import { eligibleArchetypes, rangeOf } from './building-archetypes';
@@ -51,7 +51,7 @@ export function placeBuildings(
   rng: SeededRandom,
   archetypes: ReadonlyArray<Archetype>,
   names: TowerNameParts,
-): PlanBuilding[] {
+): BuildingShape[] {
   const parks = pickParks(ground.lots, rng);
   const landmarks = pickLandmarks(
     ground.lots.filter((lot) => !parks.has(lot.id)),

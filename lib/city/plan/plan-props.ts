@@ -1,11 +1,11 @@
-import type { GroundPlan, PlanBuilding, PlanProp } from './city-plan.types';
+import type { BuildingShape, GroundPlan, PropShape } from './city-plan.types';
 import { MAX_BEACONS, MAX_LAMPS, MAX_SIGNS } from './limits';
 import { shuffled, type SeededRandom } from './rng';
 
 const LAMP_CHANCE = 0.3;
 const SIGN_CHANCE = 1 / 3;
 
-function lamps(ground: GroundPlan, rng: SeededRandom): PlanProp[] {
+function lamps(ground: GroundPlan, rng: SeededRandom): PropShape[] {
   const cells = new Map<string, { x: number; z: number }>();
   for (const road of ground.roads) {
     for (let x = road.x; x < road.x + road.w; x += 1) {
@@ -22,9 +22,9 @@ function lamps(ground: GroundPlan, rng: SeededRandom): PlanProp[] {
 
 function signs(
   ground: GroundPlan,
-  buildings: ReadonlyArray<PlanBuilding>,
+  buildings: ReadonlyArray<BuildingShape>,
   rng: SeededRandom,
-): PlanProp[] {
+): PropShape[] {
   return shuffled(rng, buildings)
     .filter(() => rng.next() < SIGN_CHANCE)
     .slice(0, MAX_SIGNS)
@@ -38,8 +38,8 @@ function signs(
 
 function beacons(
   ground: GroundPlan,
-  buildings: ReadonlyArray<PlanBuilding>,
-): PlanProp[] {
+  buildings: ReadonlyArray<BuildingShape>,
+): PropShape[] {
   return buildings
     .filter((b) => b.landmark || b.archetypeId === 'spire')
     .sort((a, b) => Number(b.landmark) - Number(a.landmark))
@@ -57,8 +57,8 @@ function beacons(
  */
 export function placeProps(
   ground: GroundPlan,
-  buildings: ReadonlyArray<PlanBuilding>,
+  buildings: ReadonlyArray<BuildingShape>,
   rng: SeededRandom,
-): PlanProp[] {
+): PropShape[] {
   return [...lamps(ground, rng), ...signs(ground, buildings, rng), ...beacons(ground, buildings)];
 }

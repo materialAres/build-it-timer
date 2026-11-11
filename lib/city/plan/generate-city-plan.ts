@@ -7,7 +7,9 @@ import type {
   PlanOptions,
   RoadSegment,
 } from './city-plan.types';
+import { colorBuildings, colorProps, chooseStyle } from './assign-colors';
 import { ARCHETYPES } from './building-archetypes';
+import { CITY_PALETTES } from './city-palettes';
 import { orderFloors } from './build-order';
 import { placeBuildings } from './plan-buildings';
 import { placeProps } from './plan-props';
@@ -69,11 +71,12 @@ function generateGroundPlan(
 }
 
 /**
- * The city plan of a session (CR6.T2a/T2b): the ground plan, a building on
- * every lot that is not a park, the floors in build order, and the props. Pure:
- * everything random comes from `seed` (§1.4), so the same seed always gives the
- * same plan. Layouts, footprints, archetypes and tower names are data; pass
- * others through `options` or edit their files.
+ * The city plan of a session (CR6.T2a/T2b/T3): the ground plan, a building on
+ * every lot that is not a park, the floors in build order, the props, and the
+ * session palette with its hue shift. Pure: everything random comes from `seed`
+ * (§1.4), so the same seed always gives the same plan. Layouts, footprints,
+ * archetypes, tower names and palettes are data; pass others through `options`
+ * or edit their files.
  */
 export function generateCityPlan(
   seed: number,
@@ -81,18 +84,23 @@ export function generateCityPlan(
 ): CityPlan {
   const rng = createRng(seed);
   const ground = generateGroundPlan(seed, rng, options);
-  const buildings = placeBuildings(
+  const shapes = placeBuildings(
     ground,
     rng,
     options.archetypes ?? ARCHETYPES,
     options.towerNames ?? TOWER_NAME_PARTS,
   );
-  const floors = orderFloors(buildings, rng);
+  const floors = orderFloors(shapes, rng);
+  const propShapes = placeProps(ground, shapes, rng);
+  const style = chooseStyle(rng, options.palettes ?? CITY_PALETTES);
+  const buildings = colorBuildings(ground, shapes, style, rng);
   return {
     ...ground,
+    paletteId: style.palette.id,
+    hueShift: style.hueShift,
     buildings,
     floors,
-    props: placeProps(ground, buildings, rng),
+    props: colorProps(propShapes, buildings, style),
     totalFloors: floors.length,
   };
 }

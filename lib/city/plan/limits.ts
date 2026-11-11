@@ -38,3 +38,6 @@ export const MAX_BEACONS = 4;
 
 /** Height adjustments before the floor fit gives up (custom data only). */
 export const MAX_FIT_STEPS = 2000;
+
+/** Hue shift of a session palette, in degrees either way (CR6.T3). */
+export const MAX_HUE_SHIFT = 25;

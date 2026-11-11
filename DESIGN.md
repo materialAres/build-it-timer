@@ -8,6 +8,10 @@ colors:
   phosphor-wash-hover: "rgba(125, 251, 160, 0.15)"
   crt-black: "#050805"
   night-sky: "#000000"
+  city-floor: "#000000"
+  city-grid: "#7dfba0"
+  city-rain: "#7dfba0"
+  city-hud: "#7dfba0"
   ink-field: "#0b0f14"
   moss-frame: "#1f3d2b"
   overlay-panel: "#0b1410"
@@ -172,7 +176,7 @@ The palette is a phosphor monitor at night: a near-black ground, one green beam,
 
 ### Neutral
 - **CRT Black** (`crt-black`): the popup ground, with a slight green tint.
-- **Night Sky** (`night-sky`): the city canvas backdrop when no theme supplies one.
+- **Night Sky** (`night-sky`): the city canvas backdrop.
 - **Ink Field** (`ink-field`): the background of text inputs.
 - **Moss Frame** (`moss-frame`): the 1px frame around the city canvas.
 - **Screen White** (`screen-white`): the default text color. `#e9ecef` in the blocklist components is a near-duplicate and should merge into this.
@@ -187,11 +191,13 @@ The palette is a phosphor monitor at night: a near-black ground, one green beam,
 ### Score tiers
 `score-excellent`, `score-great`, `score-good` and `score-bad` color only the score badge and the session-history rows. Their only job is to tell the four tiers apart. `score-great` is blue, and that's allowed only here.
 
-### City palettes
-`lib/city/theme-registry.ts` and `lib/city/palette.ts` define the building palettes per theme (Neon Metropolis, Sunset Strip, Arctic Dawn, CRT Phosphor). They are data for the city's contents, not interface tokens, and stay outside this system's accent rules.
+### City environment and session palettes
+The city's environment is fixed (`lib/city/plan/environment-colors.ts`): a black floor (`city-floor`), a phosphor-green grid (`city-grid`), rain (`city-rain`) and HUD text (`city-hud`). They never change with the session and are not part of any palette.
+
+Only the buildings change. Each session draws one palette from `lib/city/plan/city-palettes.ts` (Neon City, Sunset Strip, Arctic Dawn, Toxic Grid, Synthwave, Amber Terminal), turns its hues by up to 25° either way, and gives every building a color from it, so no two buildings that share an edge match. Every building, window, lamp and sign color keeps a contrast ratio of at least 4.5:1 on the black floor. Session palettes are the one sanctioned exception to the One Beam Rule: they are the city's contents, not interface tokens, and they never reach a button, tab or text.
 
 ### Named Rules
-**The One Beam Rule.** Phosphor green is the only accent color the interface uses. Blue, amber and red appear only as signals (score tier, lock, alarm), never as decoration for an area of the interface.
+**The One Beam Rule.** Phosphor green is the only accent color the interface uses. Blue, amber and red appear only as signals (score tier, lock, alarm), never as decoration for an area of the interface. The one exception is the session palette inside the city view.
 
 **The Earned Glow Rule.** Glow (`text-shadow: 0 0 4px currentColor`, or 6px for a selected tab or a title) is reserved for text that is active, selected, earned or alarming. Resting body text never glows.
 

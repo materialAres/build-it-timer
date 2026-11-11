@@ -1,4 +1,4 @@
-import type { PlanBuilding, PlanFloor } from './city-plan.types';
+import type { BuildingShape, PlanFloor } from './city-plan.types';
 import { shuffled, type SeededRandom } from './rng';
 
 /**
@@ -8,7 +8,7 @@ import { shuffled, type SeededRandom } from './rng';
  * before the one below it.
  */
 export function orderFloors(
-  buildings: ReadonlyArray<PlanBuilding>,
+  buildings: ReadonlyArray<BuildingShape>,
   rng: SeededRandom,
 ): PlanFloor[] {
   const floors: PlanFloor[] = [];

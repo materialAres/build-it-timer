@@ -148,6 +148,20 @@ Rules:
   signs on about a third of the buildings (≤ 12), beacons on landmarks first,
   then spires (≤ 4). `generateCityPlan(seed, options)` accepts `archetypes` and
   `towerNames` besides the ground options. Colors and palettes are CR6.T3.
+- **Colors as built (CR6.T3).** `chooseStyle` (`assign-colors.ts`) draws a
+  palette and an integer hue shift in [−25, 25] from the seed; the palette's
+  colors are turned in HSL (`color-math.ts`: lightness and saturation are kept,
+  greys are unchanged). `colorBuildings` gives each building a random color not
+  used by the buildings already colored that share an edge with its lot (not
+  across a road, not at a corner), or the least used among them if all are
+  taken. Windows take the palette's `window`, lamps its `lamp`, beacons its
+  `beacon`, and a sign wears its building's color. **Minimum luminance (set
+  here, CR6.T1 had left it open):** every building, window, lamp, sign and
+  beacon color has a WCAG contrast ratio of at least **4.5:1** on the floor
+  (`MIN_COLOR_CONTRAST`); a test checks every palette color at every shift from
+  −25° to +25°. The environment (`environment-colors.ts`: floor `#000000`, grid,
+  rain and HUD `#7dfba0`) is constant. The plan gains `paletteId`, `hueShift`,
+  `PlanBuilding.color`/`windowColor` and `PlanProp.color`.
 - **Variation sets (data, Open/Closed).** Adding one is an array entry:
   - *Road layouts* (4, `road-layouts.ts`): `grid` (one avenue, two streets),
     `crossroads`, `comb` (one avenue with three side streets), `ring` (a loop
@@ -162,11 +176,9 @@ Rules:
     drawn from `tower`, `stepped` and `spire` with their own range (16–26).
     Each entry holds its weight, ranges, minimum lot area and a pure section
     builder.
-  - *Palettes* (≥ 6, ≥ 6 neon hues each): `data` in `lib/city/plan/palettes.ts`.
-    Hue shift ∈ [−25°, +25°], applied in HSL so a palette never drifts out of
-    the neon range. Neighbouring lots (sharing an edge) never share a color:
-    greedy assignment in lot order; CR6.T3 verifies it with a property test over
-    a few hundred seeds.
+  - *Palettes* (6, `city-palettes.ts`): Neon City, Sunset Strip, Arctic Dawn,
+    Toxic Grid, Synthwave, Amber Terminal; each with six distinct neon colors and
+    the accents of windows, lamps and beacons. See "Colors as built".
   - *Props*: lamps along roads, signs on about a third of the buildings,
     beacons on landmarks and spires; placed with the same seeded generator.
   - *Names*: prefix × suffix word lists in `lib/city/plan/names.ts`

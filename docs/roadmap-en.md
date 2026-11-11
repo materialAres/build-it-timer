@@ -1484,6 +1484,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `city-3d.md` buildings section, `docs/testing-matrix.md` (CR6.T2b row).
 
 ##### CR6.T3 — Session palettes and color assignment
+* **Status**: done (2026-11-11). The minimum luminance CR6.T1 left open is set here as a 4.5:1 contrast ratio on the floor; two helper files were added (`color-math.ts`, `environment-colors.ts`).
 * **Objective**: give each session a random neon palette and assign colors to buildings, windows and props.
 * **Files to create/modify**: `lib/city/plan/city-palettes.ts` (data: at least 5 palettes), `lib/city/plan/assign-colors.ts`, `lib/city/plan/generate-city-plan.ts` (call site), `tests/unit/lib/city/plan/assign-colors.test.ts` (new); docs below.
 * **Dependencies**: CR6.T2b

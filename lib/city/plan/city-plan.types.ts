@@ -89,7 +89,10 @@ export interface TowerNameParts {
   readonly suffixes: ReadonlyArray<string>;
 }
 
-/** `id` is the index in `CityPlan.buildings`; `height` is in levels. */
+/**
+ * `id` is the index in `CityPlan.buildings`; `height` is in levels. `color`
+ * tints the body and edges, `windowColor` the lit windows (CR6.T3).
+ */
 export interface PlanBuilding {
   readonly id: number;
   readonly lotId: number;
@@ -98,6 +101,21 @@ export interface PlanBuilding {
   readonly landmark: boolean;
   readonly name: string | null;
   readonly sections: ReadonlyArray<Section>;
+  readonly color: string;
+  readonly windowColor: string;
+}
+
+/** A building before its colors are assigned. */
+export type BuildingShape = Omit<PlanBuilding, 'color' | 'windowColor'>;
+
+/** A session palette (data, Open/Closed) with the accents of windows, lamps and beacons. */
+export interface CityPalette {
+  readonly id: string;
+  readonly name: string;
+  readonly colors: ReadonlyArray<string>;
+  readonly window: string;
+  readonly lamp: string;
+  readonly beacon: string;
 }
 
 /** One floor in build order: a level of a section of a building. */
@@ -116,14 +134,21 @@ export interface PlanProp {
   readonly z: number;
   readonly level: number;
   readonly building: number | null;
+  readonly color: string;
 }
+
+/** A prop before its color is assigned. */
+export type PropShape = Omit<PlanProp, 'color'>;
 
 export interface PlanOptions extends GroundOptions {
   readonly archetypes?: ReadonlyArray<Archetype>;
   readonly towerNames?: TowerNameParts;
+  readonly palettes?: ReadonlyArray<CityPalette>;
 }
 
 export interface CityPlan extends GroundPlan {
+  readonly paletteId: string;
+  readonly hueShift: number;
   readonly buildings: ReadonlyArray<PlanBuilding>;
   readonly floors: ReadonlyArray<PlanFloor>;
   readonly props: ReadonlyArray<PlanProp>;
