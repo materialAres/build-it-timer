@@ -18,7 +18,15 @@ timer-focus/
 │   ├── city/
 │   │   ├── three/               # the 3D view's renderer shell (CR6): lifecycle, camera, meshes; no store, no browser APIs
 │   │   │   ├── city-renderer.ts    # create / resize / invalidate / dispose, draws only when the scheduler says
-│   │   │   └── renderer-context.ts # WebGL renderer, orthographic camera, limited orbit controls
+│   │   │   ├── renderer-context.ts # WebGL renderer, orthographic camera, limited orbit controls
+│   │   │   ├── city-scene.ts       # the whole city for the renderer: meshes + animations + ambient layer + labels (CR6.T7)
+│   │   │   ├── city-meshes.ts      # ground, grid, roads, instanced floors and windows, edge lines (CR6.T6b)
+│   │   │   ├── floor-slots.ts      # draws one floor slot: resting, partly paid, shifted, glitching (CR6.T7)
+│   │   │   ├── floor-animations.ts # a new floor drops in, a removed one glitches out, damaged floor flickers (CR6.T7)
+│   │   │   ├── ambient-layer.ts    # lamps, signs, beacons, flicker, rain and cars as four draw calls (CR6.T7)
+│   │   │   ├── ambient-motion.ts   # the rain and cars meshes (CR6.T7)
+│   │   │   ├── city-labels.ts      # `> NAME` tags on landmark towers, one texture, one mesh (CR6.T7)
+│   │   │   └── post-processing.ts / crt-pass.ts  # half-size bloom and the switchable CRT pass (CR6.T6b)
 │   │   ├── CityCanvas.tsx       # composes the three layers (background/middleground/foreground)
 │   │   ├── CityLayer.tsx        # a single layer positioned absolute/overlay
 │   │   ├── CityCell.tsx
@@ -60,6 +68,8 @@ timer-focus/
 │   │   ├── plan/                # CR6: the seeded city plan, pure (roads, lots, buildings, floors, colors, scene data)
 │   │   ├── render-scheduler.ts  # CR6: when a frame is due (pure)
 │   │   ├── camera-framing.ts    # CR6: fixed isometric framing and orbit limits (pure)
+│   │   ├── ambient-plan.ts      # CR6.T7: seeded car routes, flicker schedule, rain; time → position/level (pure)
+│   │   ├── floor-motion.ts      # CR6.T7: timeline of the floor animations (drop, glitch, crack), ends at rest (pure)
 │   │   ├── migrate-city.ts      # CR6: persist v1–v3 city → `{ sessionId }`
 │   │   ├── tile-library.ts      # library of composable ASCII modules (bases, floors, tops)
 │   │   ├── building-composer.ts # composes a building from modules based on unlocked time/minutes

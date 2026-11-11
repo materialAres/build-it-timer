@@ -50,3 +50,20 @@ export function roadVertices(plan: Pick<CityPlan, 'roads' | 'bounds'>): Float32A
 export function scaleColors(colors: Float32Array, factor: number): Float32Array {
   return colors.map((channel) => channel * factor);
 }
+
+/**
+ * Corners of a label quad as 12 floats (bottom-left, bottom-right, top-right,
+ * top-left): its bottom center sits on `anchor`, and it spreads along the
+ * camera's `right` and `up` so it always faces the view.
+ */
+export function labelQuad(
+  anchor: readonly [number, number, number],
+  width: number,
+  height: number,
+  right: readonly [number, number, number],
+  up: readonly [number, number, number],
+): number[] {
+  const corner = (sx: number, sy: number): number[] =>
+    [0, 1, 2].map((i) => (anchor[i] ?? 0) + (right[i] ?? 0) * sx * (width / 2) + (up[i] ?? 0) * sy * height);
+  return [...corner(-1, 0), ...corner(1, 0), ...corner(1, 1), ...corner(-1, 1)];
+}

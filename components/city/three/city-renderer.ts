@@ -10,9 +10,9 @@ import {
 } from '@/lib/city/render-scheduler';
 import type { CityPlan } from '@/lib/city/plan/city-plan.types';
 import type { SceneFrame, ScenePlan } from '@/lib/city/plan/scene-data';
-import { createCityMeshes, type CityMeshes } from './city-meshes';
+import { createCityScene, type CityScene } from './city-scene';
 import { createPostProcessing, type PostProcessing, type PostProcessingOptions } from './post-processing';
-import { applyFraming, createGlContext, disposeScene, type GlContext } from './renderer-context';
+import { applyFraming, cameraAxes, createGlContext, disposeScene, type GlContext } from './renderer-context';
 
 /** A source of animation frames, injectable so tests drive time by hand. */
 export interface FrameSource {
@@ -91,7 +91,7 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
   let disposed = false;
   let lost = false;
   const post: PostProcessing | null = options.effects ? createPostProcessing(gl, options.effects) : null;
-  let meshes: CityMeshes | null = null;
+  let city: CityScene | null = null;
   let lastFrame: SceneFrame | null = null;
 
   const input = (): SchedulerInput => ({
@@ -99,6 +99,7 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     visible: hostVisible && !document.hidden,
     reducedMotion,
     ambient: options.ambient,
+    animating: city?.animating ?? false,
   });
   const pump = (): void => {
     if (disposed || lost || frameId !== null || !needsLoop(state, input())) return;
@@ -110,6 +111,8 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     const current = input();
     const decision = decideFrame(state, current);
     if (decision.draw) {
+      city?.update(current.now);
+      if (city) city.orient(...cameraAxes(gl.camera));
       if (post) post.render();
       else gl.renderer.render(gl.scene, gl.camera);
       renderCount += 1;
@@ -145,19 +148,19 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     },
     setScene(scene, plan): void {
       if (disposed) return;
-      if (meshes) {
-        gl.scene.remove(meshes.group);
-        meshes.dispose();
+      if (city) {
+        gl.scene.remove(city.group);
+        city.dispose();
       }
-      meshes = createCityMeshes({ scene, plan });
-      gl.scene.add(meshes.group);
-      if (lastFrame) meshes.applyFrame(lastFrame);
+      city = createCityScene({ scene, plan, ambient: options.ambient, reducedMotion });
+      gl.scene.add(city.group);
+      if (lastFrame) city.setFrame(lastFrame, now());
       change('floors');
     },
     setFrame(frame): void {
       lastFrame = frame;
-      if (disposed || meshes === null) return;
-      meshes.applyFrame(frame);
+      if (disposed || city === null) return;
+      city.setFrame(frame, now());
       change('floors');
     },
     setCrt(enabled): void {
@@ -171,7 +174,8 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     },
     setReducedMotion(value): void {
       reducedMotion = value;
-      pump();
+      city?.setReducedMotion(value);
+      change('floors');
     },
     registerDisposable(cleanup): void { cleanups.push(cleanup); },
     dispose(): void {
@@ -182,7 +186,7 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
       document.removeEventListener('visibilitychange', onVisibilityChange);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       for (const cleanup of cleanups.reverse()) cleanup();
-      meshes?.dispose();
+      city?.dispose();
       post?.dispose();
       gl.controls.dispose();
       disposeScene(gl.scene);

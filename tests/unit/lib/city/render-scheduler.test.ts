@@ -133,3 +133,24 @@ describe('render scheduler (CR6.T6a)', () => {
     });
   });
 });
+
+describe('animation frames (CR6.T7)', () => {
+  const idle = { now: 1000, visible: true, reducedMotion: false, ambient: false } as const;
+
+  it('draws every frame while a floor animation runs, then stops', () => {
+    const state = createSchedulerState();
+    const running = { ...idle, animating: true };
+    expect(decideFrame(state, running)).toEqual({ draw: true, reasons: ['animation'] });
+    expect(needsLoop(state, running)).toBe(true);
+    expect(decideFrame(state, idle).draw).toBe(false);
+    expect(needsLoop(state, idle)).toBe(false);
+  });
+
+  it('draws nothing for an animation under reduced motion or while hidden', () => {
+    const state = createSchedulerState();
+    expect(decideFrame(state, { ...idle, animating: true, reducedMotion: true }).draw).toBe(false);
+    expect(needsLoop(state, { ...idle, animating: true, reducedMotion: true })).toBe(false);
+    expect(decideFrame(state, { ...idle, animating: true, visible: false }).draw).toBe(false);
+    expect(needsLoop(state, { ...idle, animating: true, visible: false })).toBe(false);
+  });
+});

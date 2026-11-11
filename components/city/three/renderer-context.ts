@@ -69,6 +69,15 @@ export function applyFraming(camera: OrthographicCamera, width: number, height: 
   camera.updateProjectionMatrix();
 }
 
+/** The camera's right and up axes in world space, for billboards that face it. */
+export function cameraAxes(
+  camera: OrthographicCamera,
+): [right: [number, number, number], up: [number, number, number]] {
+  camera.updateMatrixWorld();
+  const e = camera.matrixWorld.elements;
+  return [[e[0], e[1], e[2]], [e[4], e[5], e[6]]];
+}
+
 /** Free the geometries, materials and textures of every object in the scene. */
 export function disposeScene(scene: Scene): void {
   scene.traverse((object) => {

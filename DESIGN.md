@@ -269,6 +269,17 @@ Quiet, labeled like a terminal.
 ### City Canvas (signature)
 The city is the product. It is a `night-sky` box with a 1px `moss-frame` border and 4px corners, holding three absolutely positioned `pre` layers. The content box must equal exactly 60ch × 20 rows (`box-sizing: content-box`). Each glyph renders in its building's palette color (phosphor green by default) with a 4px glow. A new glyph fades in from opacity 0 and scale 0.4 over 0.25s (ease-out), and a removed glyph reverses that animation. The city doesn't animate on first paint.
 
+#### City 3D motion (CR6.T7)
+The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader and colors are tuned by eye in CR6.T8a.
+
+- **Ambient layer:** rain streaks in `city-rain` falling over the whole ground, cars (small boxes in the palette's lamp color) driving along the roads, about one window in ten flickering (mostly lit with short dips), and beacons on landmarks and spires pulsing slowly, each out of step. Lamps and signs are scenery, not motion.
+- **Floor drop:** a floor that is added falls 2.4 world units into place in 360ms with an ease-out cubic and lands exactly.
+- **Glitch-out:** a floor that is removed stays for 320ms, flickering in `alarm-red` with blink-outs and a tiny sideways shake, and then it is gone. A burst of removals ends with the exact final count.
+- **Damaged floor:** the partly paid top floor after a loss has `alarm-red` edges that flicker with sharp dropouts on a 1.7s cycle.
+- **Tower labels:** `> NAME` in `city-hud` on landmark towers, shown once the tower is complete, always facing the camera.
+- **The 30 fps cap:** the ambient layer updates at most 30 times a second. It pauses when the tab or the document is hidden and stops drawing when nothing moves; floor animations draw at the display rate for their few hundred milliseconds only.
+- **Reduced motion:** under `prefers-reduced-motion: reduce` there is no rain, no cars, no flicker, no pulse and no floor animation. Growth, removals and the damaged state still appear, as instant static changes (the damaged floor stays steady red).
+
 ### Duration Drum (signature)
 A vertical scroll-wheel for picking the session length, drawn like a terminal readout. **Reference for the motion and composition only:** `docs/ui/references/duration-drum-reference.png` (an iOS-style time wheel). Take its structure: a centered selected value, faded neighbors above and below, ruler ticks on both edges, and snapping vertical motion. Leave out its look: no white card, no grey shading, no soft 3D cylinder, no hour/minute pair.
 

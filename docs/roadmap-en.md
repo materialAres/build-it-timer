@@ -1555,6 +1555,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `city-3d.md` (meshes and post-processing as built).
 
 ##### CR6.T7 — Ambient layer, floor animations and damaged-floor effect
+* **Status**: done (2026-11-11). Beyond the card: `lib/city/floor-motion.ts` (pure timeline), `floor-slots.ts` (extracted from `city-meshes.ts`), `city-scene.ts` (the renderer's single entry to the city), `ambient-motion.ts` (rain and cars) and a `labelQuad` helper in `lib/city/plan/scene-geometry.ts`; the scheduler gained an `animating` input and an `animation` reason. Lamps, signs and beacons are scenery and also show under reduced motion; only motion (rain, cars, flicker, pulse, animations) stops. The HUD line is a DOM element and belongs to CR6.T8a.
 * **Objective**: the life of sketch D — rain, cars, lamps, window flicker, beacons, tower labels, the HUD line — plus the growth and malus effects, within the performance rules.
 * **Files to create/modify**: `components/city/three/ambient-layer.ts` (rain, cars, flicker, beacons), `components/city/three/city-labels.ts` (`> NAME` sprites on landmark towers), `components/city/three/floor-animations.ts` (new floor drops in; removed floor glitches out in red; damaged top floor cracks and flickers), `lib/city/ambient-plan.ts` (pure, seeded: car routes, flicker schedule) with its unit test.
 * **Dependencies**: CR6.T6b

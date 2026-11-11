@@ -5,6 +5,7 @@ import { createScenePlan } from '@/lib/city/plan/scene-data';
 import {
   BAND_HEIGHT_RATIO,
   BAND_OUTSET,
+  labelQuad,
   roadVertices,
   scaleColors,
   windowBandMatrices,
@@ -89,5 +90,18 @@ describe('scaleColors (CR6.T6b)', () => {
     const dim = scaleColors(colors, 0.5);
     expect(Array.from(dim)).toEqual([0.5, 0.25, 0.125]);
     expect(Array.from(colors)).toEqual([1, 0.5, 0.25]);
+  });
+});
+
+describe('labelQuad (CR6.T7)', () => {
+  it('stands on its anchor and spreads along the camera axes', () => {
+    const quad = labelQuad([2, 5, 3], 2, 0.5, [1, 0, 0], [0, 1, 0]);
+    expect(quad).toEqual([1, 5, 3, 3, 5, 3, 3, 5.5, 3, 1, 5.5, 3]);
+  });
+
+  it('turns with the camera: a right axis along z spreads the quad along z', () => {
+    const quad = labelQuad([0, 1, 0], 4, 1, [0, 0, 1], [0, 1, 0]);
+    expect(quad.slice(0, 3)).toEqual([0, 1, -2]);
+    expect(quad.slice(3, 6)).toEqual([0, 1, 2]);
   });
 });

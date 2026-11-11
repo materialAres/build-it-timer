@@ -17,7 +17,16 @@ const mocks = vi.hoisted(() => {
     failConstruct: false,
     lastControls: null as Record<string, unknown> | null,
     fx: [] as Array<{ options: unknown; render: Mock<() => void>; resize: Mock<(w: number, h: number) => void>; setCrt: Mock<(on: boolean) => void>; dispose: Mock<() => void> }>,
-    meshes: [] as Array<{ group: unknown; applyFrame: Mock<(f: unknown) => void>; dispose: Mock<() => void> }>,
+    meshes: [] as Array<{
+      group: unknown;
+      animating: boolean;
+      setFrame: Mock<(f: unknown, now: number) => void>;
+      update: Mock<(now: number) => void>;
+      orient: Mock<(right: unknown, up: unknown) => void>;
+      setReducedMotion: Mock<(reduced: boolean) => void>;
+      dispose: Mock<() => void>;
+      input: unknown;
+    }>,
   };
   return log;
 });
@@ -46,7 +55,9 @@ vi.mock('three', () => {
     position = { set: vi.fn(), x: 0, y: 0, z: 0, copy: vi.fn() };
     zoom = 1;
     left = 0; right = 0; top = 0; bottom = 0;
+    matrixWorld = { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] };
     lookAt(): void {}
+    updateMatrixWorld(): void {}
     updateProjectionMatrix(): void {}
   }
   class Color { constructor(public value?: unknown) {} }
@@ -80,9 +91,18 @@ vi.mock('@/components/city/three/post-processing', () => ({
     return fx;
   },
 }));
-vi.mock('@/components/city/three/city-meshes', () => ({
-  createCityMeshes: () => {
-    const m = { group: { id: `group-${String(mocks.meshes.length)}` }, applyFrame: vi.fn<(f: unknown) => void>(), dispose: vi.fn<() => void>() };
+vi.mock('@/components/city/three/city-scene', () => ({
+  createCityScene: (input: unknown) => {
+    const m = {
+      group: { id: `group-${String(mocks.meshes.length)}` },
+      animating: false,
+      setFrame: vi.fn<(f: unknown, now: number) => void>(),
+      update: vi.fn<(now: number) => void>(),
+      orient: vi.fn<(right: unknown, up: unknown) => void>(),
+      setReducedMotion: vi.fn<(reduced: boolean) => void>(),
+      dispose: vi.fn<() => void>(),
+      input,
+    };
     mocks.meshes.push(m);
     return m;
   },
@@ -437,7 +457,7 @@ describe('createCityRenderer (CR6.T6a)', () => {
       clock.flush(1_000);
       const f = frame(300);
       r.setFrame(f);
-      expect(mocks.meshes[0]?.applyFrame).toHaveBeenCalledWith(f);
+      expect(mocks.meshes[0]?.setFrame).toHaveBeenCalledWith(f, time);
       clock.flush(1_100);
       expect(mocks.renders).toBe(2);
       clock.flush(1_200);
@@ -455,7 +475,7 @@ describe('createCityRenderer (CR6.T6a)', () => {
       const r = create();
       r.setFrame(frame(300));
       r.setScene(scene, plan);
-      expect(mocks.meshes[0]?.applyFrame).toHaveBeenCalledWith(frame(300));
+      expect(mocks.meshes[0]?.setFrame).toHaveBeenCalledWith(frame(300), time);
     });
 
     it('frees the previous meshes when the scene is replaced', () => {
@@ -472,6 +492,70 @@ describe('createCityRenderer (CR6.T6a)', () => {
       r.dispose();
       expect(mocks.meshes[0]?.dispose).toHaveBeenCalledTimes(1);
       expect(mocks.fx[0]?.dispose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ambient layer and animations (CR6.T7)', () => {
+    const plan = generateCityPlan(hashString('session-motion'));
+    const scene = createScenePlan(plan);
+    const frame = (built: number) => createSceneFrame(scene, plan, visibleFloors(plan, built, 600, 0));
+    const city = () => {
+      const found = mocks.meshes[0];
+      if (found === undefined) throw new Error('no scene');
+      return found;
+    };
+
+    it('tells the scene whether an ambient layer exists and whether motion is reduced', () => {
+      const r = create({ ambient: true, reducedMotion: true });
+      r.setScene(scene, plan);
+      expect(city().input).toMatchObject({ ambient: true, reducedMotion: true });
+    });
+
+    it('advances the scene to the frame time just before drawing, and turns the labels to the camera', () => {
+      const r = create();
+      r.setScene(scene, plan);
+      clock.flush(1_000);
+      expect(city().update).toHaveBeenCalledWith(time);
+      expect(city().orient).toHaveBeenCalledWith([1, 0, 0], [0, 1, 0]);
+      expect(city().update).toHaveBeenCalledTimes(mocks.renders);
+    });
+
+    it('keeps asking for frames while a floor animation runs, then stops', () => {
+      const r = create();
+      r.setScene(scene, plan);
+      r.setFrame(frame(100));
+      clock.flush(1_000);
+      expect(clock.size).toBe(0);
+      city().animating = true;
+      r.invalidate('floors');
+      clock.flush(1_016);
+      expect(clock.size).toBe(1);
+      clock.flush(1_032);
+      expect(mocks.renders).toBeGreaterThanOrEqual(3);
+      city().animating = false;
+      clock.flush(1_048);
+      expect(clock.size).toBe(0);
+    });
+
+    it('draws no animation frame under reduced motion', () => {
+      const r = create({ reducedMotion: true });
+      r.setScene(scene, plan);
+      clock.flush(1_000);
+      city().animating = true;
+      r.invalidate('floors');
+      clock.flush(1_016);
+      expect(clock.size).toBe(0);
+    });
+
+    it('hands a change of the reduced-motion preference to the scene and draws the settled picture', () => {
+      const r = create();
+      r.setScene(scene, plan);
+      clock.flush(1_000);
+      const before = mocks.renders;
+      r.setReducedMotion(true);
+      expect(city().setReducedMotion).toHaveBeenCalledWith(true);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(before + 1);
     });
   });
 
