@@ -69,7 +69,7 @@ Facts that shape the decisions:
 ## 3. The `CityPlan`
 
 All in `lib/city/plan/` (pure, no DOM, no three.js). Types in
-`lib/city/plan/plan.types.ts`.
+`lib/city/plan/city-plan.types.ts` (CR6.T2a built `GroundPlan` = seed, layout id, offset, bounds, roads, lots; CR6.T2b extends it to the `CityPlan` below).
 
 ```ts
 interface CityPlan {
@@ -110,7 +110,7 @@ Rules:
   | Limit | Value |
   |---|---|
   | Ground | 12 × 10 cells |
-  | Lots per plan | 24–40 (`MIN_LOTS`, `MAX_LOTS`) |
+  | Lots per plan | **30–48** (`MIN_LOTS`, `MAX_LOTS`; measured, see "Ground plan as built") |
   | Empty lots (parks) | ≤ 10% of lots |
   | Floors per building | 2–28; landmarks 22–32 (`MAX_BUILDING_FLOORS` = 32) |
   | Total floors | **120–180** (`MIN_TOTAL_FLOORS`, `MAX_TOTAL_FLOORS`) |
@@ -122,12 +122,27 @@ Rules:
   plan always has between 3.3 and 5 characters per floor (`600 / totalFloors`).
   The tallest building is `32 × 0.35 = 11.2` world units against a 12-unit
   ground, so the camera frame (CR6.T6a) is one constant for every plan.
+- **Ground plan as built (CR6.T2a).** `generateCityPlan(seed, options?)`
+  (`generate-city-plan.ts`) draws a layout and an offset (`planRoads`), then
+  `packLots` scans the land row by row and covers every free cell with a lot:
+  the footprint is drawn by weight and, where it does not fit, the largest one
+  that does is used (1×1 always fits), so lots and roads tile the 12 × 10 ground
+  exactly. Measured over 1,000 seeds with the shipped data, the packing gives
+  32–54 lots (means 41–46 per layout), so the plan range is **30–48**, not the
+  24–40 first guessed; `packWithinBounds` retries up to 12 times and keeps the
+  closest attempt, which stays deterministic. `layouts` and `footprints` can be
+  passed as options. **Consequence for CR6.T2b:** with 30–48 lots the total
+  floors bound of 120–180 below gives only 2.5–6 floors per building, too low
+  for the archetype ranges; CR6.T2b re-derives `MIN_TOTAL_FLOORS` and
+  `MAX_TOTAL_FLOORS` (about 200–300, 2–3 characters per floor) and updates this
+  table. A lost character still changes the visible output.
 - **Variation sets (data, Open/Closed).** Adding one is an array entry:
-  - *Road layouts* (4): `grid` (2 avenues + 3 streets), `crossroads`, `comb`
-    (one avenue with side streets), `ring` (a loop road around a core); each
-    with a random offset of ±1 cell, clamped inside the ground.
-  - *Lot footprints*: 1×1 (50%), 2×1 and 1×2 (20% each), 2×2 (10%), chosen by
-    merging neighbouring cells of a block.
+  - *Road layouts* (4, `road-layouts.ts`): `grid` (one avenue, two streets),
+    `crossroads`, `comb` (one avenue with three side streets), `ring` (a loop
+    road around a core); the whole layout moves rigidly by an offset of ±1 cell
+    on each axis and is clipped to the ground, so it stays connected.
+  - *Lot footprints* (`LOT_FOOTPRINTS`): 1×1 (10%), 2×1 and 1×2 (30% each),
+    2×2 (30%), packed over the land cells.
   - *Archetypes* (6): `tower` (one box, 8–20 floors), `slab` (wide, 4–10),
     `stepped` (2–3 setbacks, 10–24), `twin` (two boxes on a base, 8–18),
     `spire` (box plus a thin spire section, 10–22), `lowBlock` (2–5). Each

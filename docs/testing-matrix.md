@@ -61,6 +61,7 @@
 | M5.T1 (message bus hardening) | Integration | vitest + `wxt/testing` | Malformed/forged message (unknown type, missing fields, wrong types) → no crash and no mutation; `tabId` in the payload ignored and derived from `sender.tab.id`; sender with `id !== browser.runtime.id` rejected. |
 | M5.T2 (domain hardening) | Unit + Integration | vitest | Non-http schemes (`ftp://`, `file://`, `javascript:`, `data:`) → `{ ok: false }`; trailing dot and uppercase canonicalized; userinfo trick (`https://facebook.com@evil.com`) → real host; IDN/homograph → punycode; hostile corpus with no exceptions. |
 | M5.T3 (DNR urlFilter) | Unit | vitest | Entry with `*` does not become a wildcard (no over-blocking); `||` prefix does not alter the anchoring; non-canonical entry rejected/neutralized. |
+| CR6.T2a (ground plan: roads and lots) | Unit | vitest | Same seed → deep-equal plan; no `Math.random()`; over 1,000 seeds: roads and lots inside the 12 × 10 frame, no lot on a road or on another lot, roads and lots tile the ground exactly, one connected road network, lot count inside `MIN_LOTS`–`MAX_LOTS`, lot ids 0..n−1; over 100 seeds: ≥ 3 layouts, ≥ 5 offsets, ≥ 4 distinct 2×2 counts, all four footprint kinds, ≥ 95 distinct plans; a custom layout array is honoured (Open/Closed). PRNG: same seed same sequence, range [0, 1), non-finite seed → 0, `nextInt` inclusive bounds, `pickWeighted` never picks weight 0. |
 
 ### 3.4 Priority on critical logic
 

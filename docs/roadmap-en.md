@@ -1459,6 +1459,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 * **Notes/decisions**: no production code in this task. Adding `three` is an approved exception to the minimal-dependency rule (§1.4), recorded here.
 
 ##### CR6.T2a — Plan generator, part 1: seeded road layouts and lots
+* **Status**: done (2026-11-11). Built `GroundPlan` with four layouts; lot bounds measured as 30–48 (not 24–40), which CR6.T2b follows with a re-derived total-floors bound (`city-3d.md` §3).
 * **Objective**: the first half of `generateCityPlan(seed, options)`: the ground plan — roads and lots — that differs from session to session.
 * **Files to create/modify**: `lib/city/plan/city-plan.types.ts`, `lib/city/plan/generate-city-plan.ts` (entry point), `lib/city/plan/plan-lots.ts` (road placement, lot merging), `lib/city/plan/road-layouts.ts` (data), `tests/unit/lib/city/plan/plan-lots.test.ts` (all new).
 * **Dependencies**: CR6.T1
