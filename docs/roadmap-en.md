@@ -1383,6 +1383,272 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 | CR2.T3a | `SiteList` input and Add disabled outside `idle` | enabled in `running`/`paused`; × still disabled (CR5.T3) |
 | CR2.T3c | notice says the list is locked and Reset unlocks it | during a session it says sites can be added and removal needs Reset (CR5.T3) |
 
+### 2.9 Change request CR6 — Three.js city with a new shape every session
+
+**Origin.** The city-tab exploration of 2026-11-10/11 (sketches A, B, B′, C, D in the private artifact "City Render Options"). Developer decision: adopt sketch **D** — a three.js city with the terminal/neon look (black floor, phosphor-green grid and rain, site-colored edges and windows, bloom, CRT pass) — and give the city more room. The city must look different every session: layout, building sizes and colors change at random, while staying stable within one session. Second decision (2026-11-11): the escalating malus of M4.T1 moves into the score (option A), so the city and the score always show the same loss.
+
+**Goal.** Today the city is a 60 × 20 character grid (`components/city/city.types.ts`) filled one character per tick by `lib/city/growth-engine.ts` and stored in `city.layers`; the malus erases characters from those layers (`lib/score/apply-malus.ts`) with an escalating cost that never reaches the score. After the change the city is a **plan** generated from the session seed — lots, buildings, floors, colors, props — and what is on screen is **derived** from the plan and the session's `builtCharacters`. It is drawn with three.js in the popup's City tab, with an ASCII fallback when WebGL is unavailable.
+
+**Behavioral rule after the change.**
+- **One plan per session, different every session.** `generateCityPlan(seed)` is pure and seeded (§1.4: the PRNG is injected, never `Math.random()`). The seed comes from the session id, which is already random per session. The same seed always gives the same plan, so the city survives service-worker and popup restarts without storing geometry.
+- **Variation is data-driven (Open/Closed, §1.1).** Each session picks at random:
+  - a road layout from a set of layouts (data), with random offsets;
+  - lot footprints (1×1, 2×1, 1×2, 2×2 merged lots);
+  - a building archetype per lot from an archetype list (data: tower, slab, stepped setbacks, twin, spire, low block), with random height inside the archetype's range and 1–3 landmark towers placed at random;
+  - a neon palette from a palette list (data) plus a small per-session hue shift, assigned so that neighbors never share a color;
+  - prop placement (lamps, signs, beacons) and generated tower names for the labels.
+  The environment stays fixed so the popup keeps its identity: black floor, phosphor-green grid, rain and HUD text (`#7dfba0`, DESIGN.md).
+- **Growth is derived, not stored.** Each plan lists its floors in build order (shuffled building order, each building bottom-up). The visible part is `builtCharacters / TOTAL_CHARACTERS_PER_SESSION × plan.totalFloors`: the whole part is the number of complete floors, the remainder is a partly paid floor.
+- **The malus damages the city through the score (option A).** The M4.T1 escalation (1 character per distraction tick, then 2, then 3 as the stay lengthens) moves into `builtCharacters`, so the score, the tiers, the population and the city all lose the same amount. In the city, the newest floors disappear first, with a glitch-out animation; when focus resumes the city grows again from where it is.
+- **Every lost character is visible.** A floor is worth several characters (about 4 for a 150-floor plan), so a partly paid top floor is drawn in a **damaged** state (cracked, flickering red edges) instead of waiting for a whole floor to vanish.
+- **Rendering stays light** (decisions from the exploration):
+  - three.js is loaded only when the City tab opens (a separate chunk); the Timer tab never loads it;
+  - render on demand: a frame is drawn only when the visible floors change, the camera moves or the view resizes; the ambient layer (rain, cars, window flicker, beacons) runs at most 30 fps and stops when the view is hidden;
+  - instanced meshes: all floor bodies in one draw call, all window bands in another; edges in one line mesh rebuilt only when the count changes;
+  - pixel ratio capped at 1.5, `powerPreference: 'low-power'`, no MSAA, bloom at reduced resolution;
+  - everything disposed when the view unmounts; context loss falls back to the ASCII view;
+  - `prefers-reduced-motion`: no ambient layer, no drop or removal animation, no auto-rotate.
+- **Fallback and accessibility.** Without WebGL2 (or after a lost context) the City tab shows an ASCII skyline derived from the same plan. Both views carry a text summary for screen readers (buildings, floors built of total, tallest building), updated at milestones, not on every floor.
+- The background stays the single writer and never touches three.js: it keeps advancing session progress; it no longer grows or erases layers.
+- Persistence `version` goes from 3 to 4: `city.layers` and `city.buildings` are dropped; the city keeps only what the plan needs (session id, plus any palette override decided in CR6.T1).
+- **Documentation is part of every task.** CR6 changes the paradigm — from an ASCII grid filled one character per tick to a seeded plan drawn in 3D — so a task is done only when every **living** document that describes the part it changes describes the new model. CR6.T1 inventories those documents; each card below names the ones it owns in a **Docs** criterion; CR6.T13 checks that no living document still presents the old model as current. **Historical** records (changelog entries, closed issues, past plans and analyses) are not rewritten: they get a one-line "Superseded by CR6 (§2.9)" note where they describe the old city as current. Each task also adds its own changelog entry through the `changelog` skill (CLAUDE.md §4).
+
+**Sequencing note.** Analysis first (`CR6.T1`). Pure plan, colors and derivation with their tests (`CR6.T2a`, `CR6.T2b`, `CR6.T3`, `CR6.T4`, red/green §3.1). Then the store (`CR6.T5a`) and the background with the score change (`CR6.T5b`); in parallel the renderer core (`CR6.T6a`, `CR6.T6b`) and its ambient layer (`CR6.T7`). Then the popup view (`CR6.T8a`) and its fallback (`CR6.T8b`), removal of the ASCII engine (`CR6.T9a`) and of its documentation (`CR6.T9b`), export (`CR6.T10`), the optional full-city page (`CR6.T11`), performance verification (`CR6.T12`) and the final documentation consistency pass (`CR6.T13`). Documentation is not deferred to the end: each task updates the documents that describe what it changes. Each task touches at most about six production files. UI.T11's empty-city hint and UI.T12 land after CR6.T8a (see `docs/ui/ui-review-tasks.md`). The UI.T8 decision not to fix the 492 px City canvas overflow is superseded: the new view fills the tab width.
+
+#### 2.9.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR6.T1 | Analysis: city plan model, derivation, renderer, budgets, migration, docs inventory | — |
+| CR6.T2a | Plan generator, part 1: seeded road layouts and lots | CR6.T1 |
+| CR6.T2b | Plan generator, part 2: archetypes, heights, landmarks, build order, names | CR6.T2a |
+| CR6.T3 | Session palettes and color assignment | CR6.T2b |
+| CR6.T4 | Visible-floor derivation, damaged top floor and pure scene data | CR6.T2b, CR6.T3 |
+| CR6.T5a | Store and persistence v4: derived city instead of layers | CR6.T4 |
+| CR6.T5b | Background and score: progress-only growth tick, escalating malus in `builtCharacters` | CR6.T5a |
+| CR6.T6a | Add three.js; renderer lifecycle and pure render scheduler | CR6.T4 |
+| CR6.T6b | City meshes from scene data, bloom and CRT pass | CR6.T6a |
+| CR6.T7 | Ambient layer, floor animations and damaged-floor effect | CR6.T6b |
+| CR6.T8a | Popup City tab: lazy 3D view and accessible summary | CR6.T5b, CR6.T7 |
+| CR6.T8b | ASCII fallback from the plan, switch on missing or lost WebGL | CR6.T8a |
+| CR6.T9a | Remove the ASCII growth engine, its components and tests | CR6.T8b |
+| CR6.T9b | Retire the old model in the documentation | CR6.T9a |
+| CR6.T10 | Export the city image from the 3D view | CR6.T8b |
+| CR6.T11 | *(Optional)* Full-city extension page | CR6.T8a |
+| CR6.T12 | Performance verification and e2e | CR6.T8b, CR6.T10 |
+| CR6.T13 | Documentation consistency pass and final verification | CR6.T1–CR6.T12 |
+
+#### 2.9.2 Task cards
+
+##### CR6.T1 — Analysis: city plan model, derivation, renderer, budgets, migration, docs inventory
+* **Objective**: write `docs/features-analysis/city-3d.md` mapping the current city paths and recording the decisions the later tasks implement.
+* **Files to create/modify**: `docs/features-analysis/city-3d.md` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - Maps every write and read path of `city.layers`, `city.buildings`, `city.themeId`, `growCityByTicks`, `applyMalus`/`applyMalusToCity`, `malusForDistractionTicks`, `MALUS_APPLIED`, `seedFromSession`, `getBuildingColor`, `selectThemeId`, `buildCityImage` and `calculateBuiltCharacters` (store, background growth and malus ticks, overlay feedback, components, export, persistence, tests, docs).
+  - Decides the `CityPlan` shape (lots, buildings, floors in build order, props, names), the seed source and its entropy (confirms `generateSessionId` is random per session), and the variation sets (road layouts, footprints, archetypes, palettes, hue shift range) with their limits so a plan always fits the frame and its total floors stay within fixed bounds.
+  - Specifies the option A malus: how the escalation schedule (`MALUS_ESCALATION_SCHEDULE`) enters `calculateBuiltCharacters` (which distraction time it counts, from the "proceed" baseline as today), what `MALUS_APPLIED` reports once there are no layers, and the effect on the CR3 bands (expected: harsher scores for long stays; recorded with an example).
+  - Specifies the visible-floor formula and the damaged top floor (when a floor counts as damaged, how it is shown).
+  - Decides the v3→v4 migration (fields dropped, an in-progress session at upgrade keeps its score and gets its plan from its session id).
+  - Decides the three.js version and import paths (`three` and `three/addons`), the module split under `components/city/three/`, the fallback (ASCII skyline from the plan), the export method and the test strategy (no WebGL in happy-dom: pure scene data in `lib/`, renderer mocked in component tests, real rendering in Playwright).
+  - Sets the performance budgets CR6.T12 checks: three.js chunk size (target ≤ 180 KB gzipped), first City frame after opening the tab (target ≤ 200 ms on the reference machine), 0 renders per second when nothing changes and motion is reduced, ambient layer ≤ 30 fps, draw calls for the city ≤ 12.
+  - Lists the modules, components and tests to delete in CR6.T9a.
+  - **Documentation inventory**: every document that describes the current city, each classified as *living* (updated, with the CR6 task that owns it) or *historical* (banner note only). At least: `CLAUDE.md` (overview stack line, §1.1 KISS/DRY rows, §1.3 persisted city state, §1.4 pure-function and dependency examples, the "two clocks" technical note), `DESIGN.md`, `PRODUCT.md`, `README.md`, `docs/project-structure.md`, `docs/testing-matrix.md`, `docs/features-analysis/score-population.md`, `docs/store-analysis.md`, `docs/ui/ui-review-tasks.md`, the Section 1 cards of this roadmap listed in §2.9.3, `.serena/memories/core.md` and `tech_stack.md`, the JSDoc of code that stays; historical: `docs/timer-duration-plan.md`, `docs/Increase-poppu-screen-size.md`, `docs/issue/I002-scattered-city-draw.md`, `docs/issue/I009-malus-already-open-blocked-tab.md`, past changelog entries.
+  - A short **reference description of the new model** (plan from seed, floors derived from `builtCharacters`, malus through the score, 3D view with ASCII fallback, fixed green environment with session palettes) that the other documents reuse, so they all say the same thing.
+* **Notes/decisions**: no production code in this task. Adding `three` is an approved exception to the minimal-dependency rule (§1.4), recorded here.
+
+##### CR6.T2a — Plan generator, part 1: seeded road layouts and lots
+* **Objective**: the first half of `generateCityPlan(seed, options)`: the ground plan — roads and lots — that differs from session to session.
+* **Files to create/modify**: `lib/city/plan/city-plan.types.ts`, `lib/city/plan/generate-city-plan.ts` (entry point), `lib/city/plan/plan-lots.ts` (road placement, lot merging), `lib/city/plan/road-layouts.ts` (data), `tests/unit/lib/city/plan/plan-lots.test.ts` (all new).
+* **Dependencies**: CR6.T1
+* **Acceptance criteria**:
+  - Tests written first. Same seed → deep-equal ground plan; the PRNG is injected (§1.4).
+  - Invariants hold for 1,000 seeds: every lot off the roads, no overlapping footprints, every road connected, the plan inside the frame.
+  - Variation is measurable: over 100 seeds, the layouts, road offsets and footprint mixes are not all equal (the test asserts a minimum number of distinct values for each).
+  - Adding a road layout is an array edit, never a change to the generator.
+  - Files ≤ 200 lines, functions ≤ 40 lines, explicit return types.
+  - **Docs**: `docs/features-analysis/city-3d.md` (ground-plan section updated to what was built), `docs/testing-matrix.md` (CR6.T2a row: seeds, invariants, variation checks).
+
+##### CR6.T2b — Plan generator, part 2: archetypes, heights, landmarks, build order, names
+* **Objective**: complete the plan: a building on every lot, its floors in build order, landmarks, props and tower names.
+* **Files to create/modify**: `lib/city/plan/plan-buildings.ts` (archetype choice, heights, landmarks, props), `lib/city/plan/build-order.ts` (shuffled building order, each bottom-up), `lib/city/plan/building-archetypes.ts` (data), `lib/city/plan/tower-names.ts` (data), `lib/city/plan/generate-city-plan.ts` (wiring), `tests/unit/lib/city/plan/generate-city-plan.test.ts` (new).
+* **Dependencies**: CR6.T2a
+* **Acceptance criteria**:
+  - Same seed → deep-equal plan.
+  - Invariants hold for 1,000 seeds: every height inside its archetype range and the frame, total floors inside the bounds set in CR6.T1, at least one landmark tower, the build order lists every floor exactly once and never a floor before the one below it.
+  - Variation is measurable: over 100 seeds, archetype mixes, height profiles and landmark positions are not all equal.
+  - Adding an archetype or a name is an array edit.
+  - **Docs**: `city-3d.md` buildings section, `docs/testing-matrix.md` (CR6.T2b row).
+
+##### CR6.T3 — Session palettes and color assignment
+* **Objective**: give each session a random neon palette and assign colors to buildings, windows and props.
+* **Files to create/modify**: `lib/city/plan/city-palettes.ts` (data: at least 5 palettes), `lib/city/plan/assign-colors.ts`, `lib/city/plan/generate-city-plan.ts` (call site), `tests/unit/lib/city/plan/assign-colors.test.ts` (new); docs below.
+* **Dependencies**: CR6.T2b
+* **Acceptance criteria**:
+  - The palette and the hue shift come from the seed; same seed → same colors.
+  - No two adjacent buildings share a color; every building color stays readable against the black floor (minimum luminance set in CR6.T1).
+  - Environment colors (floor, grid, rain, HUD) are constants, not part of the palette.
+  - The domain-hash coloring (`getBuildingColor`) is no longer used by the city; its removal is CR6.T9a.
+  - **Docs**: `DESIGN.md` (color section and front-matter tokens: the fixed environment colors, and session palettes as the one sanctioned exception to the single-accent rule), `city-3d.md` palette section, `docs/testing-matrix.md` row.
+
+##### CR6.T4 — Visible-floor derivation, damaged top floor and pure scene data
+* **Objective**: turn a plan and the session progress into what the renderer draws, without any WebGL.
+* **Files to create/modify**: `lib/city/plan/visible-floors.ts` (complete floors and the damaged fraction), `lib/city/plan/scene-data.ts` (instance transforms, window colors, edge segments, label anchors as typed arrays, the damaged-floor marker), `lib/city/plan/plan-summary.ts` (text summary for screen readers), their unit tests (new).
+* **Dependencies**: CR6.T2b, CR6.T3
+* **Acceptance criteria**:
+  - `visibleFloors(plan, builtCharacters, total)` returns `{ complete, damagedFraction }` per the CR6.T1 formula: nothing at 0, every floor complete at `total`, monotonic, invalid input → nothing.
+  - Lowering `builtCharacters` removes the newest floors first; a partly paid top floor is reported as damaged, so a loss of a single character always changes the output.
+  - `sceneData` output for a fixed seed matches a snapshot; instance and edge counts equal the visible floors.
+  - Pure: no `Date.now()`, no browser or three.js imports.
+  - **Docs**: `city-3d.md` derivation section, `docs/testing-matrix.md` row.
+
+##### CR6.T5a — Store and persistence v4: derived city instead of layers
+* **Objective**: the store holds only what the plan needs.
+* **Files to create/modify**: `store/city.slice.ts` (state reduced to the session id and any CR6.T1 field; memoized `selectCityPlan`, `selectVisibleFloors`), `store/store.types.ts`, `store/index.ts` (version 4 and migration), `lib/city/migrate-city.ts` (new), tests for the slice and the migration.
+* **Dependencies**: CR6.T4
+* **Acceptance criteria**:
+  - `resetCityForNewSession` still runs only on `idle → running`, never on resume; a new session gets a new plan.
+  - Version 4: v3 snapshots migrate with `city.layers`/`city.buildings` dropped; malformed data is rejected with a `Result`, never a throw (§1.4); fixtures for v2 and v3.
+  - Granular selectors only (§1.3); the plan is computed once per session id, not on every render.
+  - Blocklist, timer and history tests stay green unmodified.
+  - **Docs**: `CLAUDE.md` §1.3 (the persisted city state is the plan's seed, no grid/layers/domain palettes); `docs/store-analysis.md`; `.serena/memories/core.md` (city derived from seed + `builtCharacters`, persistence v4); `docs/testing-matrix.md` row.
+
+##### CR6.T5b — Background and score: progress-only growth tick, escalating malus in `builtCharacters`
+* **Objective**: the background stops growing and erasing layers, and the escalating malus (option A) becomes part of the score, so the city and the score lose the same amount.
+* **Files to create/modify**: `lib/score/calculate-built-characters.ts` (escalated distraction cost), `lib/score/malus-escalation.ts` (new: `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks` moved out of `apply-malus.ts`), `lib/timer/session-progress.ts`, `entrypoints/background.ts` (growth tick keeps progress only; malus wiring without `applyMalusToCity`; `MALUS_APPLIED` computed from the `builtCharacters` drop), their unit and integration tests (score, session progress, background growth, malus).
+* **Dependencies**: CR6.T5a
+* **Acceptance criteria**:
+  - Tests written first for the score: a long stay costs more than a short one by the escalation schedule; the result stays an integer in `[0, total]`; a full undistracted session still reaches 100%.
+  - The background never writes city geometry; the city view reflects a malus within the same store update as the score.
+  - `MALUS_APPLIED` still reaches the overlay with the characters lost (now the `builtCharacters` drop).
+  - CR3 band and population tests are updated where the escalation changes expected values, with the change explained in the test names; nothing else changes.
+  - **Docs**: `CLAUDE.md` "two clocks" technical note (the fine tick advances progress; the view derives floors); `docs/features-analysis/score-population.md` (escalation now in the score, worked example from CR6.T1); `README.md` (how the city grows and how distractions damage it); `.serena/memories/core.md` (malus through `builtCharacters`; background never touches rendering); `docs/testing-matrix.md` row.
+
+##### CR6.T6a — Add three.js; renderer lifecycle and pure render scheduler
+* **Objective**: a framework-free renderer shell that starts, resizes, stops and cleans up correctly, and draws a frame only when one is due.
+* **Files to create/modify**: `package.json` (`three`, `@types/three`, exact versions), `components/city/three/city-renderer.ts` (WebGL renderer, orthographic camera, limited orbit controls, resize, `dispose()`, context loss), `lib/city/render-scheduler.ts` (pure: decides when a frame is due), `tests/unit/lib/city/render-scheduler.test.ts`, a renderer test with three.js mocked.
+* **Dependencies**: CR6.T4
+* **Acceptance criteria**:
+  - Frames only on: visible-floor change, camera move, resize, or a due ambient frame; the scheduler is unit-tested for each case and for "nothing changed → no frame".
+  - Pixel ratio ≤ 1.5, `powerPreference: 'low-power'`, no MSAA.
+  - `dispose()` frees every GPU resource and the context; `webglcontextlost` is reported to the caller so the view can fall back.
+  - No `chrome.*`/`browser.*` calls and no store access inside the renderer (§1.3).
+  - **Docs**: `CLAUDE.md` overview stack line and §1.4 minimal-dependencies list (three.js added, with the reason and the lazy-loading rule); `.serena/memories/tech_stack.md`; `docs/project-structure.md` (`components/city/three/`, `lib/city/plan/`); `city-3d.md` renderer section.
+
+##### CR6.T6b — City meshes from scene data, bloom and CRT pass
+* **Objective**: draw the city with the sketch D look.
+* **Files to create/modify**: `components/city/three/city-meshes.ts` (instanced bodies and window bands, edge lines, ground, grid, roads), `components/city/three/post-processing.ts` (bloom at half resolution), `components/city/three/crt-pass.ts` (scanlines, vignette, phosphor floor), `components/city/three/city-renderer.ts` (wiring), a test that the meshes follow the scene data (three.js mocked).
+* **Dependencies**: CR6.T6a
+* **Acceptance criteria**:
+  - City bodies and windows are two instanced meshes; edges one line mesh rebuilt only when the visible floors change; instance counts equal the scene data.
+  - Bloom runs at half resolution; the CRT pass can be disabled without other changes.
+  - **Docs**: `city-3d.md` (meshes and post-processing as built).
+
+##### CR6.T7 — Ambient layer, floor animations and damaged-floor effect
+* **Objective**: the life of sketch D — rain, cars, lamps, window flicker, beacons, tower labels, the HUD line — plus the growth and malus effects, within the performance rules.
+* **Files to create/modify**: `components/city/three/ambient-layer.ts` (rain, cars, flicker, beacons), `components/city/three/city-labels.ts` (`> NAME` sprites on landmark towers), `components/city/three/floor-animations.ts` (new floor drops in; removed floor glitches out in red; damaged top floor cracks and flickers), `lib/city/ambient-plan.ts` (pure, seeded: car routes, flicker schedule) with its unit test.
+* **Dependencies**: CR6.T6b
+* **Acceptance criteria**:
+  - Ambient updates are capped at 30 fps and pause when the view is hidden (`visibilitychange`, element out of view, tab switch).
+  - With `prefers-reduced-motion`: no ambient layer, no animations; growth, removals and the damaged state still show, as static changes.
+  - Animations end in the rest state; a burst of malus removals never leaves a floor half-drawn.
+  - **Docs**: `DESIGN.md` motion section (ambient layer, floor drop, glitch-out, damaged floor, reduced-motion behavior, the 30 fps cap).
+
+##### CR6.T8a — Popup City tab: lazy 3D view and accessible summary
+* **Objective**: replace the ASCII canvas in the City tab with the 3D view, loaded only when the tab opens.
+* **Files to create/modify**: `components/city/CityView3D.tsx` (mounts the renderer, wires selectors, cleans up), `entrypoints/popup/App.tsx` or the City section component (`React.lazy` + `Suspense` placeholder sized like the view), `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml`, component tests (renderer mocked).
+* **Dependencies**: CR6.T5b, CR6.T7
+* **Acceptance criteria**:
+  - The three.js chunk is requested only when the City tab is shown; the Timer tab bundle does not include it.
+  - The view fills the tab width with no horizontal overflow and keeps the popup under the 600 px height cap.
+  - The screen-reader summary is localized (EN/IT) and updates at milestones; the canvas is not a keyboard trap; drag-to-rotate has a keyboard alternative or is optional.
+  - `CityEmptyHint` keeps working (idle, nothing built); i18n drift test green.
+  - **Docs**: `DESIGN.md` (City tab layout, HUD line, labels); `PRODUCT.md` (wherever it describes the ASCII city); `README.md` (feature description); `docs/ui/ui-review-tasks.md` (UI.T11 and UI.T12 point at the new view).
+
+##### CR6.T8b — ASCII fallback from the plan, switch on missing or lost WebGL
+* **Objective**: keep the City tab working where WebGL2 is unavailable or the context is lost.
+* **Files to create/modify**: `lib/city/plan/plan-skyline.ts` (pure: plan + visible floors → ASCII rows) with its unit test, `components/city/CityFallback.tsx`, `components/city/CityView3D.tsx` (capability check and switch on context loss), component tests.
+* **Dependencies**: CR6.T8a
+* **Acceptance criteria**:
+  - Without WebGL2, or after `webglcontextlost`, the fallback shows the same plan and the same visible floors; no error reaches the error boundary.
+  - The fallback stays within the tab width and carries the same screen-reader summary.
+  - **Docs**: `DESIGN.md` (fallback view), `city-3d.md` (fallback as built).
+
+##### CR6.T9a — Remove the ASCII growth engine, its components and tests
+* **Objective**: delete the code the plan replaced, so only one city model exists.
+* **Files to create/modify**: delete `lib/city/growth-engine.ts`, `tile-library.ts`, `building-composer.ts`, `decoration-engine.ts`, `street-props.ts`, `palette.ts`, `theme-registry.ts`, `city-size.ts` (as listed in CR6.T1), what remains of `lib/score/apply-malus.ts`, `components/city/CityCanvas.tsx`, `CityLayer.tsx`, `CityCell.tsx`, the layer types in `city.types.ts`, and their tests.
+* **Dependencies**: CR6.T8b
+* **Acceptance criteria**:
+  - No import of the removed modules remains; `bun run compile`, lint and tests green.
+  - Score, population, malus timing and history tests unchanged by this task.
+  - **Docs**: JSDoc in code that stays no longer references removed modules; `docs/project-structure.md` (removed files).
+
+##### CR6.T9b — Retire the old model in the documentation
+* **Objective**: the project rules and the historical record point at the new model.
+* **Files to create/modify**: `CLAUDE.md` (§1.1 KISS row about the tile library, DRY row about the domain-hash palette, §1.4 pure-function examples naming `building-composer.ts` and `decoration-engine.ts`, rewritten for the plan generator), the Section 1 cards of this roadmap listed in §2.9.3, the historical documents from the CR6.T1 inventory.
+* **Dependencies**: CR6.T9a
+* **Acceptance criteria**:
+  - Every Section 1 card in §2.9.3 carries a "Superseded/Amended by CR6 (§2.9)" note in the style of the CR1/CR2 notes.
+  - Every historical document in the inventory carries the one-line banner note; its body is unchanged.
+  - The rewritten `CLAUDE.md` rows use the reference description from CR6.T1.
+
+##### CR6.T10 — Export the city image from the 3D view
+* **Objective**: keep the JPEG/PNG export (M3.T8) working with the new view.
+* **Files to create/modify**: `lib/city/export-image.ts` (frame capture and the fallback path), `lib/city/rasterize-image.ts`, `components/city/ExportCityButton.tsx`, `components/city/three/city-renderer.ts` (`captureFrame(width, height)`), their tests.
+* **Dependencies**: CR6.T8b
+* **Acceptance criteria**:
+  - The export renders one frame at the chosen size and reads it in the same task (no `preserveDrawingBuffer` kept on).
+  - Without WebGL the export uses the ASCII fallback.
+  - Errors stay inside the existing export boundary (M4.T3e).
+  - **Docs**: `README.md` (export), `DESIGN.md` if it describes the exported image.
+
+##### CR6.T11 — *(Optional)* Full-city extension page
+* **Objective**: a "View full city" page with a large canvas and free camera, as in sketch C. Can be dropped without affecting the other tasks.
+* **Files to create/modify**: `entrypoints/city/index.html`, `entrypoints/city/main.tsx`, `entrypoints/city/App.tsx` (new), a link in the City tab, `locales/en.yml`, `locales/it.yml`.
+* **Dependencies**: CR6.T8a
+* **Acceptance criteria**:
+  - Reads the same persisted state as the popup and updates live; read-only (the background stays the single writer).
+  - Ambient layer pauses when the tab is hidden; the page works in Chrome and Firefox builds.
+  - **Docs**: `README.md`, `docs/project-structure.md` (`entrypoints/city/`), `DESIGN.md` (page layout).
+
+##### CR6.T12 — Performance verification and e2e
+* **Objective**: prove the budgets from CR6.T1 and cover the new view end to end.
+* **Files to create/modify**: `tests/e2e/city-3d.spec.ts` (new), a debug-only render counter exposed as a `data-` attribute on the view container, `docs/features-analysis/city-3d.md` (measured numbers).
+* **Dependencies**: CR6.T8b, CR6.T10
+* **Acceptance criteria**:
+  - e2e (Chromium): opening the popup on the Timer tab does not request the three.js chunk; the City tab renders a canvas with no console errors; with reduced motion emulated and no growth, the render counter stays flat; switching tabs ten times leaves one live WebGL context.
+  - Measured and recorded: chunk size, first City frame time, main-thread time per render, draw calls. Values over budget are reported, not hidden.
+  - Two sessions started in a row produce visibly different cities (different plan hash), and one session reopened produces the same city.
+  - **Docs**: `city-3d.md` (measured numbers next to the budgets), `docs/testing-matrix.md` (e2e row).
+
+##### CR6.T13 — Documentation consistency pass and final verification
+* **Objective**: prove that the whole documentation describes one model — the new one — and that the gate is green. The per-task **Docs** criteria did the writing; this task checks and closes the gaps.
+* **Files to create/modify**: any document from the CR6.T1 inventory still out of date; `docs/features-analysis/city-3d.md` (marked implemented); `.serena/memories/core.md` (final check); `docs/changelog.md` (verification only).
+* **Dependencies**: CR6.T1–CR6.T12
+* **Acceptance criteria**:
+  - Every living document in the CR6.T1 inventory describes the plan/3D model; a search of living documents for the old terms (`growth-engine`, `tile-library`, `CityCanvas`, `city.layers`, `getBuildingColor`, `theme-registry`, `applyMalusToCity`, "character grid") finds only explanations of the change, never the old model presented as current. Historical documents carry the banner note.
+  - `CLAUDE.md`, `DESIGN.md`, `PRODUCT.md`, `README.md` and the Serena memories agree with each other and with `city-3d.md` (same reference description).
+  - Every CR6 task has its changelog entry, including the v4 migration and the score change; `Commit: —` until committed.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, `bun run build:firefox` and `bun run e2e` green.
+
+#### 2.9.3 Amended acceptance criteria in Section 1
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M2.T10 | the malus deletes characters from the city, separately from the score | the malus lowers `builtCharacters`; the city follows (CR6.T5b) |
+| M2.T11 | `citySlice` stores the grid/layers of the session | stores only what the plan needs; the plan is derived from the session seed (CR6.T5a) |
+| M2.T11b / M2.T11c | ASCII module library and composer | replaced by data-driven archetypes in the plan generator (CR6.T2b) |
+| M2.T12 | growth engine fills three character layers | visible floors are derived from `builtCharacters` (CR6.T4) |
+| M2.T12b | decoration engine (windows, trees, cars, clouds) | ambient layer of the 3D view (CR6.T7) |
+| M2.T13 / M2.T13b | domain hash → color within a session theme | random session palette with hue shift (CR6.T3) |
+| M2.T14 | multi-layer ASCII render with CRT glow | three.js view with bloom and CRT pass; ASCII only as fallback (CR6.T6a/T6b/T8a/T8b) |
+| M2.T15 | the growth tick inserts characters | the growth tick advances session progress; the view derives floors (CR6.T5b) |
+| M2.T16 | the malus wiring erases characters from the layers | the malus wiring lowers the score; the newest floors disappear, a partly paid floor shows as damaged (CR6.T4/T5b) |
+| M3.T5 | `framer-motion` animations on growth/deletion of characters | floor drop, glitch-out and damaged-floor effects in the renderer (CR6.T7) |
+| M3.T8 | export from the ASCII layers | export from a captured 3D frame, ASCII as fallback (CR6.T10) |
+| M4.T1 | the escalating malus erases extra characters from the city only | the escalation is part of `builtCharacters`, so it lowers the score and the city alike (CR6.T5b) |
+| M4.T2 | TexturePacker / building sprite sheet | superseded: the 3D view needs no sprite sheet |
+
 ---
 
 ## 3. PR Reviews

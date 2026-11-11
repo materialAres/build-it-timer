@@ -23,6 +23,12 @@ Tasks are meant to be tackled one at a time, following **Execution order** below
 
 - Follow-ups UI.T10–UI.T13 cover the critique's findings except the **City canvas overflow** (P1), which the user chose not to take on. Revisit it only if the popup is seen clipped in real Chrome. Re-run the critique after UI.T10–UI.T13 to compare against 26/40.
 
+## Decisions taken (2026-11-11, CR6 three.js city)
+
+- The City tab is rebuilt by **CR6** (roadmap §2.9): a three.js city from a per-session plan, with an ASCII fallback. The City canvas overflow decision above is **superseded**: the new view is sized to the tab width.
+- Order: **UI.T10** first (no city impact), then **CR6.T1–CR6.T8a**, then **UI.T11** and **UI.T12** built on the new view, **UI.T13** whenever (no city impact). UI.T11's tier legend and `STARTING` treatment do not touch the city and may be done earlier; its empty-city hint waits for CR6.T8a.
+- UI.T12's Timer-tab strip is **text only** (score badge and population): showing the 3D city there would load three.js on the Timer tab and break CR6's lazy-loading rule.
+
 ## Execution order
 
 The IDs reflect the order findings were recorded, not the order of work. Follow this sequence; it is derived from the **Dependencies** fields here and in the roadmap cards for CR4 (§2.7) and CR5 (§2.8).
@@ -41,9 +47,10 @@ The IDs reflect the order findings were recorded, not the order of work. Follow 
 | 10 | **UI.T7**: minor items | Copy and small polish, last. |
 | 11 | **UI.T8**: re-run the critique | Done: 26/40. Findings became UI.T10–UI.T13. |
 | 12 | **UI.T10**: status copy and affordances | First follow-up: small, copy-only, no layout risk. |
-| 13 | **UI.T11**: explain the score and the empty city | Needs the final copy voice from UI.T10. |
-| 14 | **UI.T12**: live strip on the Timer tab | Largest change; builds on settled copy and score legend. |
-| 15 | **UI.T13**: undo after Reset, whole-domain hint | P3, last. |
+| 13 | **CR6.T1 → CR6.T8a**: three.js city up to the popup view (roadmap §2.9) | Replaces the City tab; the city-related UI work below is built on it. CR6.T8b–CR6.T13 may continue in parallel with steps 14–16. |
+| 14 | **UI.T11**: explain the score and the empty city | Needs the final copy voice from UI.T10; the empty-city hint needs CR6.T8a's view (legend and `STARTING` may go earlier). |
+| 15 | **UI.T12**: live strip on the Timer tab | Needs CR6.T8a (City-tab height known); text-only strip. |
+| 16 | **UI.T13**: undo after Reset, whole-domain hint | P3; no city impact, can run any time after UI.T10. |
 
 Notes:
 - **Gap between steps 1 and 3.** UI.T1 removes the tag checkbox grid before CR4 replaces tags, so tags can't be assigned from the popup in between. This is harmless: tags don't affect blocking, persisted tag data is untouched, and CR4.T3 migrates it.
@@ -238,7 +245,7 @@ Compare against 17/40 and close the snapshot.
 ---
 
 #### UI.T11 — Explain the score and the empty city
-**Priority**: P2 · **Command**: `/impeccable onboard` · **Dependencies**: UI.T10
+**Priority**: P2 · **Command**: `/impeccable onboard` · **Dependencies**: UI.T10; the empty-city hint part: CR6.T8a
 
 **Problem**
 - The Score tab never says what the tiers mean (30/70/100% of the city) or what population counts.
@@ -247,21 +254,21 @@ Compare against 17/40 and close the snapshot.
 
 **Acceptance criteria**
 - A quiet tier legend on the Score tab (factual: `Good from 30%, Great from 70%, Excellent at 100%`), data-driven from `COMPLETION_BANDS`, not hard-coded.
-- The empty-city hint moves into or directly under the frame; it still disappears once a session runs or a city exists.
+- The empty-city hint moves into or directly under the 3D view (CR6.T8a); it still disappears once a session runs or a city exists.
 - The `STARTING` state is visibly a status, not a control (shape or treatment differs from the pills that act); keep it neutral.
 - EN and IT; no number that depends on the session length (the cadence is `duration ÷ 600`).
 
 ---
 
 #### UI.T12 — Live strip on the Timer tab
-**Priority**: P1 · **Command**: `/impeccable layout` · **Dependencies**: UI.T10, UI.T11
+**Priority**: P1 · **Command**: `/impeccable layout` · **Dependencies**: UI.T10, UI.T11, CR6.T8a
 
 **Problem**
 - Time, city and score live on three tabs, so the feedback loop is split: the running Timer tab is a clock in an empty frame, and the City tab cannot show the time left.
 
 **Acceptance criteria**
-- While `running`/`paused`, the Timer tab shows a compact read-only strip (the score badge plus population, or the last columns of the city; decide in the card's shape step) under the clock.
-- The City tab shows the remaining time in one quiet line while a session is active.
+- While `running`/`paused`, the Timer tab shows a compact read-only **text** strip (the score badge plus population) under the clock. No city rendering on the Timer tab: three.js loads only with the City tab (CR6).
+- The City tab shows the remaining time in one quiet line next to the 3D view while a session is active, within the 600px height cap measured after CR6.T8a.
 - Presentation only: values come from existing selectors; no new store state; the Timer tab stays under the 600px popup cap.
 - Idle layout does not change.
 
