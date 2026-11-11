@@ -8,7 +8,8 @@
  * city costs nothing.
  */
 
-export type DirtyReason = 'floors' | 'camera' | 'resize';
+/** `look` is a change of style (the CRT pass on or off) with the same floors. */
+export type DirtyReason = 'floors' | 'camera' | 'resize' | 'look';
 export type FrameReason = DirtyReason | 'ambient';
 
 /** The ambient layer never draws more often than this (30 fps). */

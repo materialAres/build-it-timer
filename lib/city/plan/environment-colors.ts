@@ -12,3 +12,6 @@ export const ENVIRONMENT_COLORS = {
 
 /** Minimum WCAG contrast of a building, window or prop color on the floor. */
 export const MIN_COLOR_CONTRAST = 4.5;
+
+/** The edges of a damaged top floor (DESIGN.md `alarm-red`): a signal, not a palette color. */
+export const DAMAGED_EDGE_COLOR = '#ff6b6b';

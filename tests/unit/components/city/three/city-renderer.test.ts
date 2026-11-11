@@ -1,6 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { hashString } from '@/utils/hash';
+import { generateCityPlan } from '@/lib/city/plan/generate-city-plan';
+import { createSceneFrame, createScenePlan } from '@/lib/city/plan/scene-data';
+import { visibleFloors } from '@/lib/city/plan/visible-floors';
 
 const mocks = vi.hoisted(() => {
   const log = {
@@ -12,6 +16,8 @@ const mocks = vi.hoisted(() => {
     controlsListeners: new Map<string, () => void>(),
     failConstruct: false,
     lastControls: null as Record<string, unknown> | null,
+    fx: [] as Array<{ options: unknown; render: Mock<() => void>; resize: Mock<(w: number, h: number) => void>; setCrt: Mock<(on: boolean) => void>; dispose: Mock<() => void> }>,
+    meshes: [] as Array<{ group: unknown; applyFrame: Mock<(f: unknown) => void>; dispose: Mock<() => void> }>,
   };
   return log;
 });
@@ -32,6 +38,8 @@ vi.mock('three', () => {
   }
   class Scene {
     children: unknown[] = [];
+    add(child: unknown): void { this.children.push(child); }
+    remove(child: unknown): void { this.children = this.children.filter((c) => c !== child); }
     traverse(fn: (o: unknown) => void): void { for (const c of this.children) fn(c); }
   }
   class OrthographicCamera {
@@ -58,6 +66,27 @@ vi.mock('three/addons/controls/OrbitControls.js', () => {
   }
   return { OrbitControls };
 });
+
+vi.mock('@/components/city/three/post-processing', () => ({
+  createPostProcessing: (_gl: unknown, options: unknown) => {
+    const fx = {
+      options,
+      render: vi.fn(() => { mocks.renders += 1; }),
+      resize: vi.fn<(w: number, h: number) => void>(),
+      setCrt: vi.fn<(on: boolean) => void>(),
+      dispose: vi.fn<() => void>(),
+    };
+    mocks.fx.push(fx);
+    return fx;
+  },
+}));
+vi.mock('@/components/city/three/city-meshes', () => ({
+  createCityMeshes: () => {
+    const m = { group: { id: `group-${String(mocks.meshes.length)}` }, applyFrame: vi.fn<(f: unknown) => void>(), dispose: vi.fn<() => void>() };
+    mocks.meshes.push(m);
+    return m;
+  },
+}));
 
 import { ORBIT_LIMITS } from '@/lib/city/camera-framing';
 import { createCityRenderer } from '@/components/city/three/city-renderer';
@@ -123,6 +152,8 @@ describe('createCityRenderer (CR6.T6a)', () => {
     mocks.controlsListeners.clear();
     mocks.failConstruct = false;
     mocks.lastControls = null;
+    mocks.fx.length = 0;
+    mocks.meshes.length = 0;
     vi.stubGlobal('devicePixelRatio', 1);
   });
 
@@ -354,6 +385,93 @@ describe('createCityRenderer (CR6.T6a)', () => {
       r.registerDisposable(cleanup);
       r.dispose();
       expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+  });
+
+
+  describe('scene and effects (CR6.T6b)', () => {
+    const plan = generateCityPlan(hashString('session-renderer'));
+    const scene = createScenePlan(plan);
+    const frame = (built: number) => createSceneFrame(scene, plan, visibleFloors(plan, built, 600, 0));
+
+    it('has no post-processing unless asked: a plain render', () => {
+      create();
+      expect(mocks.fx).toHaveLength(0);
+    });
+
+    it('draws through the post-processing composer when asked', () => {
+      create({ effects: { bloom: true, crt: true } });
+      clock.flush(1_000);
+      expect(mocks.fx[0]?.options).toEqual({ bloom: true, crt: true });
+      expect(mocks.fx[0]?.render).toHaveBeenCalledTimes(1);
+      expect(mocks.renders).toBe(1);
+    });
+
+    it('resizes the composer with the canvas', () => {
+      const r = create({ effects: { bloom: true, crt: true } });
+      r.resize(400, 300);
+      expect(mocks.fx[0]?.resize).toHaveBeenCalledWith(400, 300);
+    });
+
+    it('switches the CRT pass on and off', () => {
+      const r = create({ effects: { bloom: true, crt: true } });
+      clock.flush(1_000);
+      r.setCrt(false);
+      expect(mocks.fx[0]?.setCrt).toHaveBeenCalledWith(false);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('adds the city meshes to the scene and draws them', () => {
+      const r = create();
+      clock.flush(1_000);
+      r.setScene(scene, plan);
+      expect(mocks.meshes).toHaveLength(1);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('gives the visible floors to the meshes and draws one frame for the change', () => {
+      const r = create();
+      r.setScene(scene, plan);
+      clock.flush(1_000);
+      const f = frame(300);
+      r.setFrame(f);
+      expect(mocks.meshes[0]?.applyFrame).toHaveBeenCalledWith(f);
+      clock.flush(1_100);
+      expect(mocks.renders).toBe(2);
+      clock.flush(1_200);
+      expect(mocks.renders).toBe(2);
+    });
+
+    it('ignores a frame that arrives before any scene', () => {
+      const r = create();
+      clock.flush(1_000);
+      expect(() => { r.setFrame(frame(300)); }).not.toThrow();
+      expect(clock.flush(1_100)).toBe(0);
+    });
+
+    it('applies the last frame to a scene that is set afterwards', () => {
+      const r = create();
+      r.setFrame(frame(300));
+      r.setScene(scene, plan);
+      expect(mocks.meshes[0]?.applyFrame).toHaveBeenCalledWith(frame(300));
+    });
+
+    it('frees the previous meshes when the scene is replaced', () => {
+      const r = create();
+      r.setScene(scene, plan);
+      r.setScene(scene, plan);
+      expect(mocks.meshes[0]?.dispose).toHaveBeenCalledTimes(1);
+      expect(mocks.meshes).toHaveLength(2);
+    });
+
+    it('frees the meshes and the composer on dispose', () => {
+      const r = create({ effects: { bloom: true, crt: true } });
+      r.setScene(scene, plan);
+      r.dispose();
+      expect(mocks.meshes[0]?.dispose).toHaveBeenCalledTimes(1);
+      expect(mocks.fx[0]?.dispose).toHaveBeenCalledTimes(1);
     });
   });
 

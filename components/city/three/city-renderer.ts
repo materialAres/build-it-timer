@@ -8,6 +8,10 @@ import {
   type DirtyReason,
   type SchedulerInput,
 } from '@/lib/city/render-scheduler';
+import type { CityPlan } from '@/lib/city/plan/city-plan.types';
+import type { SceneFrame, ScenePlan } from '@/lib/city/plan/scene-data';
+import { createCityMeshes, type CityMeshes } from './city-meshes';
+import { createPostProcessing, type PostProcessing, type PostProcessingOptions } from './post-processing';
 import { applyFraming, createGlContext, disposeScene, type GlContext } from './renderer-context';
 
 /** A source of animation frames, injectable so tests drive time by hand. */
@@ -24,6 +28,8 @@ export interface CityRendererOptions {
   readonly reducedMotion: boolean;
   /** Whether an ambient layer exists (CR6.T7); false draws only real changes. */
   readonly ambient: boolean;
+  /** Bloom and the CRT look; omitted means a plain render (no post-processing). */
+  readonly effects?: PostProcessingOptions;
   readonly now?: () => number;
   readonly frames?: FrameSource;
 }
@@ -38,6 +44,12 @@ export interface CityRenderer {
   /** Whether the view is on screen (its tab is open); a hidden view draws nothing. */
   setVisible(visible: boolean): void;
   setReducedMotion(reducedMotion: boolean): void;
+  /** Replace the city: build its meshes from the plan's scene data and add them. */
+  setScene(scene: ScenePlan, plan: CityPlan): void;
+  /** Show the floors of a frame (a plan and the progress, already derived) and draw once. */
+  setFrame(frame: SceneFrame): void;
+  /** The CRT look on or off; nothing else changes. */
+  setCrt(enabled: boolean): void;
   /** Register a cleanup (render targets, composer passes) to run on `dispose()`. */
   registerDisposable(cleanup: () => void): void;
   /** Free every GPU resource and listener; safe to call twice. */
@@ -78,6 +90,9 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
   let reducedMotion = options.reducedMotion;
   let disposed = false;
   let lost = false;
+  const post: PostProcessing | null = options.effects ? createPostProcessing(gl, options.effects) : null;
+  let meshes: CityMeshes | null = null;
+  let lastFrame: SceneFrame | null = null;
 
   const input = (): SchedulerInput => ({
     now: now(),
@@ -95,7 +110,8 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
     const current = input();
     const decision = decideFrame(state, current);
     if (decision.draw) {
-      gl.renderer.render(gl.scene, gl.camera);
+      if (post) post.render();
+      else gl.renderer.render(gl.scene, gl.camera);
       renderCount += 1;
       state = frameDrawn(state, decision, current.now);
     }
@@ -124,7 +140,29 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
       if (!(Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0)) return;
       gl.renderer.setSize(width, height);
       applyFraming(gl.camera, width, height);
+      post?.resize(width, height);
       change('resize');
+    },
+    setScene(scene, plan): void {
+      if (disposed) return;
+      if (meshes) {
+        gl.scene.remove(meshes.group);
+        meshes.dispose();
+      }
+      meshes = createCityMeshes({ scene, plan });
+      gl.scene.add(meshes.group);
+      if (lastFrame) meshes.applyFrame(lastFrame);
+      change('floors');
+    },
+    setFrame(frame): void {
+      lastFrame = frame;
+      if (disposed || meshes === null) return;
+      meshes.applyFrame(frame);
+      change('floors');
+    },
+    setCrt(enabled): void {
+      post?.setCrt(enabled);
+      change('look');
     },
     invalidate: change,
     setVisible(visible): void {
@@ -144,6 +182,8 @@ function wireRenderer(gl: GlContext, options: CityRendererOptions): CityRenderer
       document.removeEventListener('visibilitychange', onVisibilityChange);
       canvas.removeEventListener('webglcontextlost', onContextLost);
       for (const cleanup of cleanups.reverse()) cleanup();
+      meshes?.dispose();
+      post?.dispose();
       gl.controls.dispose();
       disposeScene(gl.scene);
       gl.renderer.dispose();

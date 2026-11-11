@@ -1545,6 +1545,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `CLAUDE.md` overview stack line and §1.4 minimal-dependencies list (three.js added, with the reason and the lazy-loading rule); `.serena/memories/tech_stack.md`; `docs/project-structure.md` (`components/city/three/`, `lib/city/plan/`); `city-3d.md` renderer section.
 
 ##### CR6.T6b — City meshes from scene data, bloom and CRT pass
+* **Status**: done (2026-11-11). Three helpers were added beyond the card (`lib/city/plan/scene-geometry.ts`, pure window bands and road geometry; the `look` scheduler reason; the 40-line rule split the meshes file into helpers). The look (bloom values, colors) is untuned: nothing renders on screen until CR6.T8a.
 * **Objective**: draw the city with the sketch D look.
 * **Files to create/modify**: `components/city/three/city-meshes.ts` (instanced bodies and window bands, edge lines, ground, grid, roads), `components/city/three/post-processing.ts` (bloom at half resolution), `components/city/three/crt-pass.ts` (scanlines, vignette, phosphor floor), `components/city/three/city-renderer.ts` (wiring), a test that the meshes follow the scene data (three.js mocked).
 * **Dependencies**: CR6.T6a

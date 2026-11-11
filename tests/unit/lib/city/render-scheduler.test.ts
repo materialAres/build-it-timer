@@ -22,7 +22,7 @@ describe('render scheduler (CR6.T6a)', () => {
     expect(decideFrame(createSchedulerState(), input())).toEqual({ draw: false, reasons: [] });
   });
 
-  it.each(['floors', 'camera', 'resize'] as const)('draws one frame when %s changed', (reason) => {
+  it.each(['floors', 'camera', 'resize', 'look'] as const)('draws one frame when %s changed', (reason) => {
     const state = invalidate(createSchedulerState(), reason);
     expect(decideFrame(state, input())).toEqual({ draw: true, reasons: [reason] });
   });
