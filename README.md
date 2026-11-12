@@ -21,6 +21,7 @@ Start a focus session and every stretch of undistracted work (one 600th of the s
 | Language | TypeScript 5 (strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`) |
 | UI | React 19 |
 | Extension framework | [WXT](https://wxt.dev) 0.21 (`@wxt-dev/module-react`), Manifest V3 |
+| 3D city | [three.js](https://threejs.org) 0.187 (exact), loaded lazily by the City tab only |
 | State | Zustand 5 with the `persist` middleware over `browser.storage.local` |
 | Domain parsing | `tldts` |
 | Unit / component tests | Vitest 5, Testing Library, `happy-dom`, `wxt/testing` (`fakeBrowser`) |
@@ -31,17 +32,20 @@ Start a focus session and every stretch of undistracted work (one 600th of the s
 ## Project structure
 
 ```
-entrypoints/        Extension entrypoints (background, content, popup)
+entrypoints/        Extension entrypoints (background, content, popup, city)
   background.ts     Service-worker orchestrator (store, alarms, messages, DNR)
-  content.ts        Content script
+  blocked-overlay.content.tsx  Content script (blocked-site overlay, Shadow DOM)
   popup/            React popup UI
+  city/             Full-city page (`city.html`), read-only, free camera
 components/         React components (city, timer, blocklist, score, common)
+  city/three/       The three.js renderer shell (meshes, ambient layer, animations, capture)
 store/              Zustand store, slices, storage adapter, cross-context sync
 lib/                Browser-free domain logic
   url/              Domain normalization (tldts)
   blocking/         Presets, DNR rule generation and application
-  city/             Growth/composition engines (planned)
-  score/            Score and malus logic (planned)
+  city/             Seeded city plan (`plan/`), visible floors, ambient plan, render scheduler, export
+  score/            Score, population and the escalating malus
+  browser/          Opening the extension's own pages
   timer/            Alarm adapter, timer restore, session ids
   messaging/        Typed message bus and message types
 utils/              Pure helpers (duration formatting, Result type)

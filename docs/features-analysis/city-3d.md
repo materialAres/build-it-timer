@@ -1,10 +1,10 @@
 # Three.js city with a new shape every session — analysis (CR6.T1)
 
-> Change request **CR6** (`docs/roadmap-en.md` §2.9). Status: **analysis** — no
-> production code yet. File and line references describe the tree at `385b6f9`
-> (branch `feat/ui-review`) and are kept as history once CR6 is implemented.
-> Every later CR6 task reads this document instead of re-deriving the decisions.
-> Dated 2026-11-11.
+> Change request **CR6** (`docs/roadmap-en.md` §2.9). Status: **implemented by
+> CR6.T1–T13**; the "As built" paragraphs in §7 record what was built, §8 the
+> measured budgets. File and line references in §2 describe the tree at `385b6f9`
+> (branch `feat/ui-review`) before the change and are kept as history. §1 is the
+> reference description every document reuses. Dated 2026-11-11.
 
 ## 1. Reference description of the new model
 
@@ -479,8 +479,11 @@ seconds"; the real cadence is `duration / 600` since CR3.
 
 ## 11. Open points for the developer
 
-1. **Cumulative `distractedMs` vs a "proceed" baseline** (§5): the plan drops
-   the baseline and the immediate character. Confirm, or approve one extra
-   persisted `timer` field.
-2. **Under construction vs damaged** (§4): amends the CR6.T4 card so floors
-   flash red only after a loss.
+1. **Cumulative `distractedMs` vs a "proceed" baseline** (§5): *resolved* — the
+   plan dropped the baseline and the immediate character, as proposed (CR6.T5b);
+   no extra persisted `timer` field.
+2. **Under construction vs damaged** (§4): *resolved* — floors flash red only
+   after a loss (CR6.T4).
+
+Still open after CR6: the first City frame misses its 200 ms budget (§8,
+changelog Open issues #22).

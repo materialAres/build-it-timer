@@ -1,6 +1,6 @@
 ---
 name: Build-it! Timer Focus
-description: A phosphor-green CRT terminal where focus time grows an ASCII skyline.
+description: A phosphor-green CRT terminal where focus time grows a 3D neon skyline.
 colors:
   phosphor-green: "#7dfba0"
   phosphor-rule: "rgba(125, 251, 160, 0.35)"
@@ -69,7 +69,7 @@ typography:
     letterSpacing: "0.1em"
   city:
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "0.85rem"
+    fontSize: "0.8rem"
     fontWeight: 400
     lineHeight: 1
 rounded:
@@ -176,9 +176,9 @@ The palette is a phosphor monitor at night: a near-black ground, one green beam,
 
 ### Neutral
 - **CRT Black** (`crt-black`): the popup ground, with a slight green tint.
-- **Night Sky** (`night-sky`): the city canvas backdrop.
+- **Night Sky** (`night-sky`): a black backdrop, equal to `city-floor`; the city stage uses it.
 - **Ink Field** (`ink-field`): the background of text inputs.
-- **Moss Frame** (`moss-frame`): the 1px frame around the city canvas.
+- **Moss Frame** (`moss-frame`): the 1px frame around the city stage.
 - **Screen White** (`screen-white`): the default text color. `#e9ecef` in the blocklist components is a near-duplicate and should merge into this.
 - **Overlay Panel / Overlay Frame / Overlay Scrim** (`overlay-panel`, `overlay-frame`, `overlay-scrim`): the blocked-site overlay. The panel is a dark green box on a 92% near-black scrim, framed in a muted green.
 - **Pale Phosphor** (`pale-phosphor`): the overlay's body copy, a softened green-white.
@@ -215,7 +215,7 @@ Only the buildings change. Each session draws one palette from `lib/city/plan/ci
 - **Body** (400, 0.8rem, 1.5): list rows, session history and helper text. The overlay message runs larger at 0.95rem because it sits on a full page.
 - **Tab** (400, 0.75rem, 0.1em, uppercase): popup tabs.
 - **Label** (400, 0.7–0.75rem, 0.14em, uppercase, 80–85% opacity): section titles ("Last sessions", "Blocklist") and the population unit.
-- **City** (400, 0.85rem, line-height 1): the ASCII grid. One `ch` per column, and the line height must stay at 1 so the rows tile.
+- **City** (400, 0.8rem, line-height 1): the text fallback city. One `ch` per column, and the line height must stay at 1 so the rows tile.
 
 ### Named Rules
 **The Explicit Mono Rule.** Every component declares the monospace stack itself. Chrome injects its own stylesheet into extension pages and resets `body` to the system sans (Cantarell on Linux) at 12px, so the `:root` declaration in `style.css` doesn't reach text that relies on inheritance.
@@ -226,7 +226,7 @@ The popup never scrolls. Its width is fixed at 32rem, and the City tab's view fi
 
 ## Elevation & Depth
 
-The system is flat. Surfaces don't lift. Depth comes from light: the glow on text, and the city's three layers at different opacities (background 0.4, middleground 0.75, foreground 1), which make a parallax skyline without any shadow. The only box shadows are ambient halos on surfaces that sit over something else.
+The system is flat. Surfaces don't lift. Depth comes from light: the glow on text, and the 3D city's own light (bloom on the neon edges, the CRT scanlines), which gives the skyline its depth without any shadow. The only box shadows are ambient halos on surfaces that sit over something else.
 
 ### Shadow Vocabulary
 - **Phosphor halo** (`box-shadow: 0 0 2rem rgba(125, 251, 160, 0.25)`): the blocked-site overlay panel.
@@ -286,7 +286,7 @@ The city is the product. Since CR6 it is a 3D view, not an ASCII grid. The **sta
 The old three-layer ASCII canvas (`CityCanvas`) is gone (CR6.T9a); the text city above is the only ASCII view.
 
 #### City 3D motion (CR6.T7)
-The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader and colors are tuned by eye in CR6.T8a.
+The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader, bloom and colors are first guesses that were measured but not yet judged by eye in a real browser (see `docs/features-analysis/city-3d.md` §8).
 
 - **Ambient layer:** rain streaks in `city-rain` falling over the whole ground, cars (small boxes in the palette's lamp color) driving along the roads, about one window in ten flickering (mostly lit with short dips), and beacons on landmarks and spires pulsing slowly, each out of step. Lamps and signs are scenery, not motion.
 - **Floor drop:** a floor that is added falls 2.4 world units into place in 360ms with an ease-out cubic and lands exactly.

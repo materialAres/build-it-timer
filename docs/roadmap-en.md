@@ -1655,6 +1655,7 @@ The following main-task criteria are intentionally amended by CR3. They remain i
   - **Docs**: `city-3d.md` (measured numbers next to the budgets), `docs/testing-matrix.md` (e2e row).
 
 ##### CR6.T13 — Documentation consistency pass and final verification
+* **Status**: done (2026-11-12). Gaps fixed in `DESIGN.md`, `CLAUDE.md`, `README.md`, the structure and matrix docs and the memories; `docs/features-analysis/city-3d.md` marked implemented. The six gate commands are green; fixing the former Open issue #21 (ESLint ignores for `.claude/**`) was needed for `bun run lint`. The first-frame budget stays open (Open issues #22).
 * **Objective**: prove that the whole documentation describes one model — the new one — and that the gate is green. The per-task **Docs** criteria did the writing; this task checks and closes the gaps.
 * **Files to create/modify**: any document from the CR6.T1 inventory still out of date; `docs/features-analysis/city-3d.md` (marked implemented); `.serena/memories/core.md` (final check); `docs/changelog.md` (verification only).
 * **Dependencies**: CR6.T1–CR6.T12

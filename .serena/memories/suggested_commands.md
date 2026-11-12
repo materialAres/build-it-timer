@@ -8,7 +8,7 @@ All from the repo root, via Bun:
 - `bun run test` — Vitest run (unit + integration + component).
 - `bun run test:watch` — watch mode.
 - `bun run test:coverage` — coverage (v8).
-- `bun run e2e` — Playwright Chromium suite (needs `bunx playwright install chromium` once).
+- `bun run build && bun run e2e` — Playwright Chromium suite on the built extension (needs `bunx playwright install chromium` once and a display; `E2E_GPU=1` uses the real GPU instead of SwiftShader).
 - `bun run compile` — `tsc --noEmit`.
 - `bun run lint` / `bun run lint:fix`.
 - `bun run format` / `bun run format:check`.

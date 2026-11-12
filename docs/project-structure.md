@@ -94,8 +94,7 @@ timer-focus/
 │   └── timer/
 │       ├── alarm-adapter.ts     # interface + implementation for browser.alarms
 │       └── duration-drum.ts     # pure index/motion math of the Duration Drum (UI.T9)
-├── assets/
-│   └── ascii/                   # static ASCII frames/modules (bases, floors, tops, decorations)
+├── assets/                      # static images (the city is drawn from code, no sprites or ASCII modules)
 ├── locales/                     # @wxt-dev/i18n translation files (en.yml default, it.yml), see M3.T9
 │   ├── en.yml
 │   └── it.yml

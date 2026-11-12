@@ -184,7 +184,7 @@ Notes:
 
 - Overlay buttons: `Open anyway` / `Back to work` instead of `Yes` / `No`.
 - Score: avoid a red `BAD` badge seconds into a session (neutral voice); consider showing tier only after a minimum of elapsed time or a softer early state.
-- City tab: empty-state hint that the city grows every 2s of focus.
+- City tab: empty-state hint that the city grows with focus (written as "every 2s" at the time; the pace follows the session length since CR3, and the hint no longer gives a number).
 
 ---
 
