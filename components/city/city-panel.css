@@ -80,7 +80,7 @@
 
 /* The full-city page (CR6.T11): the stage fills the window below its header. */
 .city-stage--full {
-  height: calc(100vh - 2.6rem);
+  height: calc(100vh - 3.8rem);
   min-height: 16rem;
 }
 

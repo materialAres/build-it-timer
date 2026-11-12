@@ -6,6 +6,10 @@ interface PassLike {
   enabled?: boolean;
   shader?: unknown;
   sizes?: Array<[number, number]>;
+  /** Only a bloom pass has these. */
+  strength?: number;
+  radius?: number;
+  threshold?: number;
 }
 interface ComposerLike {
   passes: PassLike[];
@@ -82,6 +86,15 @@ describe('createPostProcessing (CR6.T6b)', () => {
   it('renders the scene, blooms it, applies the CRT look, then converts to the screen', () => {
     createPostProcessing(gl, { bloom: true, crt: true });
     expect(fx.order).toEqual(['render', 'bloom', 'crt', 'output']);
+  });
+
+  it('keeps the bloom subtle so the buildings stay recognizable (I011)', () => {
+    createPostProcessing(gl, { bloom: true, crt: true });
+    const bloom = at(fx.blooms);
+    // 0.9 / 0.5 / 0.15 added up over thousands of bright edges and blew the whole city out to white.
+    expect(bloom.strength ?? Infinity).toBeLessThanOrEqual(0.4);
+    expect(bloom.radius ?? Infinity).toBeLessThanOrEqual(0.3);
+    expect(bloom.threshold ?? 0).toBeGreaterThanOrEqual(0.45);
   });
 
   it('draws through the composer', () => {

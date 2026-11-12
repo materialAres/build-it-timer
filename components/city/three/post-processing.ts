@@ -21,7 +21,7 @@ export interface PostProcessing {
   dispose(): void;
 }
 
-const BLOOM = { strength: 0.9, radius: 0.5, threshold: 0.15 } as const;
+const BLOOM = { strength: 0.3, radius: 0.2, threshold: 0.55 } as const;
 
 interface Disposable {
   dispose(): void;

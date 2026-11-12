@@ -1035,6 +1035,18 @@ description: Rules for updating the changelog
 - Acceptance criteria: verified — the checkpoint starts at the session start and at each resume, and the timer-slice and background integration suites are green in this run.
 - Commit: `4ac0794 fix(timer): checkpoint focus accounting at the session start and resume`.
 
+### I011 — The city is blown out to white by the bloom (buildings almost unrecognizable)
+
+- **Problem**: reported with a screenshot of the full-city page: the whole city is a white glow, the buildings are barely readable and the black ground turns grey-brown. The bloom values of CR6.T6b (strength 0.9, radius 0.5, threshold 0.15) were first guesses, never judged on screen.
+- **Root cause**: a city has thousands of thin bright edges and window bands; a bloom with a low threshold and a wide radius adds all their glow together, and the output conversion to sRGB lifts the faint far glow into a grey veil over the ground.
+- **Fix**: `components/city/three/post-processing.ts` — strength 0.3, radius 0.2, threshold 0.55. Checked by eye in the real extension (Chromium, the RTX GPU) on a complete city in the popup stage and on the full-city page at the reported size: edges and window bands read as neon outlines with a soft halo, the ground stays dark. Also `components/city/city-panel.css`: the full-city stage is `calc(100vh - 3.8rem)` tall (it was `2.6rem`, which made the page scroll by about 1.2rem).
+- Files created/modified: `components/city/three/post-processing.ts`, `components/city/city-panel.css`, `tests/unit/components/city/three/post-processing.test.ts` (+1 test), `DESIGN.md`, `docs/features-analysis/city-3d.md`, `docs/changelog.md`.
+- Dependencies added: none.
+- Tests: `post-processing.test.ts` (+1, unit) — the bloom stays under strength 0.4 and radius 0.3 and over threshold 0.45, so a return to the blown-out values fails. Full suite and e2e green.
+- Relevant notes/decisions: the look values were first guesses (see CR6.T6b and CR6.T12); this is the first time they were judged on screen, so they may still want taste adjustments (colors, label size, scanline strength). The numeric guard is deliberately loose.
+- Acceptance criteria: verified by eye in the built extension on both the popup stage and the full-city page, and by the unit guard.
+- Commit: —
+
 ---
 
 ## Change requests
