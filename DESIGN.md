@@ -288,7 +288,7 @@ The old three-layer ASCII canvas (`CityCanvas`) is gone (CR6.T9a); the text city
 #### City 3D motion (CR6.T7)
 The 3D city has an ambient layer and three floor effects. Reference for the behavior; the shader, bloom and colors are first guesses that were measured but not yet judged by eye in a real browser (see `docs/features-analysis/city-3d.md` §8).
 
-- **Ambient layer:** rain streaks in `city-rain` falling over the whole ground, cars (small boxes in the palette's lamp color) driving along the roads, about one window in ten flickering (mostly lit with short dips), and beacons on landmarks and spires pulsing slowly, each out of step. Lamps and signs are scenery, not motion.
+- **Ambient layer:** rain streaks in `city-rain` falling over the whole ground, cars (small boxes in the palette's lamp color) driving along the roads, about one window in ten flickering (lit, with one 180ms dip every 10 to 30 seconds, each out of step), and beacons on landmarks and spires pulsing slowly, each out of step. Lamps and signs are scenery, not motion.
 - **Floor drop:** a floor that is added falls 2.4 world units into place in 360ms with an ease-out cubic and lands exactly.
 - **Glitch-out:** a floor that is removed stays for 320ms, flickering in `alarm-red` with blink-outs and a tiny sideways shake, and then it is gone. A burst of removals ends with the exact final count.
 - **Damaged floor:** the partly paid top floor after a loss has `alarm-red` edges that flicker with sharp dropouts on a 1.7s cycle.

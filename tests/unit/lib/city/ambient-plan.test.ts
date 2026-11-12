@@ -95,12 +95,26 @@ describe('ambient time functions (CR6.T7)', () => {
     expect(rainHeight(drop, 100)).toBeLessThan(rainHeight(drop, 0) + 1e-9);
   });
 
-  it('flickers a window: mostly lit, with dips', () => {
-    const flicker = { floor: 1, periodMs: 2000, phaseMs: 0 };
-    const levels = Array.from({ length: 200 }, (_, i) => flickerLevel(flicker, i * 10));
+  it('flickers a window: mostly lit, with short dips', () => {
+    const flicker = { floor: 1, periodMs: 10_000, phaseMs: 0 };
+    const levels = Array.from({ length: 1000 }, (_, i) => flickerLevel(flicker, i * 10));
     expect(Math.max(...levels)).toBe(1);
     expect(Math.min(...levels)).toBeLessThan(0.5);
-    expect(levels.filter((l) => l === 1).length).toBeGreaterThan(150);
+    expect(levels.filter((l) => l === 1).length).toBeGreaterThan(950);
+  });
+
+  it('keeps a dip a fraction of a second whatever the period (I012)', () => {
+    const slow = { floor: 1, periodMs: 30_000, phaseMs: 0 };
+    const dimMs = Array.from({ length: 3000 }, (_, i) => flickerLevel(slow, i * 10)).filter((l) => l < 1).length * 10;
+    expect(dimMs).toBeLessThanOrEqual(250);
+    expect(flickerLevel(slow, 5000)).toBe(1);
+  });
+
+  it('spaces the flickers of one window at least 10 s apart (I012)', () => {
+    const offenders = seeds.filter((seed) =>
+      createAmbientPlan(generateCityPlan(seed)).flickers.some((f) => f.periodMs < 10_000 || f.phaseMs >= f.periodMs),
+    );
+    expect(offenders).toEqual([]);
   });
 
   it('pulses a beacon between dim and bright, each out of step', () => {

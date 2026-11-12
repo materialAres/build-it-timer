@@ -20,6 +20,11 @@ export const BEACON_PERIOD_MS = 1600;
 const MIN_CAR_ROAD = 3;
 const LANE_OFFSET = 0.2;
 const FLICKER_SHARE = 0.1;
+/** A window flickers once per period; long, so only a few are ever dim together (I012). */
+export const FLICKER_PERIOD_MIN_MS = 10_000;
+export const FLICKER_PERIOD_MAX_MS = 30_000;
+/** Each of the two steps of a dip lasts this long, whatever the period. */
+const FLICKER_DIP_MS = 90;
 /** Keeps the ambient stream apart from the plan's own use of the seed. */
 const SEED_SALT = 0x5bd1e995;
 
@@ -86,11 +91,10 @@ function flickersOf(plan: CityPlan, rng: ReturnType<typeof createRng>): FlickerW
   const total = plan.totalFloors;
   const count = Math.min(MAX_FLICKERING_FLOORS, Math.ceil(total * FLICKER_SHARE));
   const floors = shuffled(rng, Array.from({ length: total }, (_, i) => i)).slice(0, count);
-  return floors.map((floor) => ({
-    floor,
-    periodMs: nextInt(rng, 1200, 4000),
-    phaseMs: nextInt(rng, 0, 4000),
-  }));
+  return floors.map((floor) => {
+    const periodMs = nextInt(rng, FLICKER_PERIOD_MIN_MS, FLICKER_PERIOD_MAX_MS);
+    return { floor, periodMs, phaseMs: nextInt(rng, 0, periodMs - 1) };
+  });
 }
 
 function rainOf(plan: CityPlan, rng: ReturnType<typeof createRng>): RainDrop[] {
@@ -125,11 +129,11 @@ export function rainHeight(drop: RainDrop, ms: number): number {
   return Math.max(RAIN_STREAK, RAIN_HEIGHT * (1 - travelled));
 }
 
-/** Brightness of a flickering window band: mostly lit, with short dips. */
+/** Brightness of a flickering window band: lit, with one short dip per period. */
 export function flickerLevel(flicker: FlickerWindow, ms: number): number {
-  const cycle = fraction((ms + flicker.phaseMs) / flicker.periodMs);
-  if (cycle < 0.05) return 0.1;
-  if (cycle < 0.1) return 0.6;
+  const into = (((ms + flicker.phaseMs) % flicker.periodMs) + flicker.periodMs) % flicker.periodMs;
+  if (into < FLICKER_DIP_MS) return 0.1;
+  if (into < 2 * FLICKER_DIP_MS) return 0.6;
   return 1;
 }
 

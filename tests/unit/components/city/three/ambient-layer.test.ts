@@ -79,7 +79,7 @@ describe('createAmbientLayer (CR6.T7)', () => {
 
   it('flickers only the windows of its plan, never going dark for good', () => {
     const { layer, windows } = setup();
-    for (let t = 1000; t < 9000; t += 40) layer.update(t);
+    for (let t = 1000; t < 32_000; t += 40) layer.update(t);
     const floors = new Set(ambientPlan.flickers.map((f) => f.floor));
     expect(windows.every(([slot]) => floors.has(slot))).toBe(true);
     const levels = windows.map(([, level]) => level);
