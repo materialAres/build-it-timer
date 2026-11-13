@@ -78,14 +78,38 @@ describe('city selectors (CR6.T5a)', () => {
       expect(view.damaged).toBe(false);
     });
 
-    it('marks the top floor damaged once characters are lost', () => {
+    it('marks the top floor damaged while the city is losing characters', () => {
       const s = store();
       setSession(s, 'session-f');
-      // 15 min of focus is worth 300 characters; only 251 are left.
+      setProgress(s, 300, 15 * 60_000);
+      selectVisibleFloors(s.getState());
+      // A blocked site takes 49 characters back.
       setProgress(s, 251, 15 * 60_000);
       const view = selectVisibleFloors(s.getState());
       expect(view.partialFraction).toBeGreaterThan(0);
       expect(view.damaged).toBe(true);
+    });
+
+    it('builds the top floor again, not damaged, once the city grows after a loss (I015)', () => {
+      const s = store();
+      setSession(s, 'session-f2');
+      setProgress(s, 300, 15 * 60_000);
+      selectVisibleFloors(s.getState());
+      setProgress(s, 251, 15 * 60_000);
+      selectVisibleFloors(s.getState());
+      // Back to focus: every new character is construction, never damage.
+      for (let built = 252; built <= 260; built += 1) {
+        setProgress(s, built, 15 * 60_000 + (built - 251) * 3_000);
+        expect(selectVisibleFloors(s.getState()).damaged).toBe(false);
+      }
+    });
+
+    it('does not show damage on a view opened while the city regrows (I015)', () => {
+      const s = store();
+      setSession(s, 'session-f3');
+      // 15 min of focus is worth 300 characters; 251 are left from an earlier loss.
+      setProgress(s, 251, 15 * 60_000);
+      expect(selectVisibleFloors(s.getState()).damaged).toBe(false);
     });
 
     it('returns the same object while its inputs are unchanged (no re-render churn)', () => {

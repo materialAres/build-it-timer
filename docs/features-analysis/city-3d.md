@@ -202,8 +202,13 @@ partial  = exact − complete                        // 0 ≤ partial < 1
 - **The partial floor.** It is the floor at index `complete` in build order.
   - While the city grows (no characters lost) it is **under construction**:
     drawn as a dim wireframe with its edges only, scaled in height by `partial`.
-  - Once the session has lost characters it is **damaged**: cracked, flickering
-    red edges. "Lost" is `lostCharacters > 0`, with
+  - While the city is **losing** characters it is **damaged**: cracked, flickering
+    red edges. *Amended by I015:* the definition below made every partial floor
+    red for the rest of a session that had lost anything, so the regrowing city
+    flickered red on most new characters. Damage now follows the current fall:
+    `advanceFall` (`visible-floors.ts`) adds each drop of `builtCharacters` and
+    resets on any growth, and the selector keeps that state per plan (volatile,
+    a view opened mid-session starts undamaged). The original definition was: "Lost" is `lostCharacters > 0`, with
     `lostCharacters = max(0, focusCharacters − built)` and
     `focusCharacters = min(total, floor(focusedMs × total / durationMs))`.
     Both come from the persisted `timer` accumulators, so the popup needs no new

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hashString } from '@/utils/hash';
 import { generateCityPlan } from '@/lib/city/plan/generate-city-plan';
-import {
-  calculateLostCharacters,
-  visibleFloors,
-} from '@/lib/city/plan/visible-floors';
+import { advanceFall, visibleFloors } from '@/lib/city/plan/visible-floors';
 
 const TOTAL = 600;
 const plan = generateCityPlan(hashString('session-visible'));
@@ -90,24 +87,28 @@ describe('visibleFloors (CR6.T4)', () => {
   });
 });
 
-describe('calculateLostCharacters (CR6.T4)', () => {
-  const duration = 30 * 60_000;
-
-  it('is the focus characters not kept: focus minus built', () => {
-    expect(calculateLostCharacters(duration / 2, duration, 250, TOTAL)).toBe(50);
+describe('advanceFall: characters lost since the city last grew (I015)', () => {
+  it('starts with nothing lost, whatever the first count', () => {
+    expect(advanceFall(null, 251)).toEqual({ built: 251, lost: 0 });
   });
 
-  it('is 0 when nothing was lost or built exceeds focus', () => {
-    expect(calculateLostCharacters(duration / 2, duration, 300, TOTAL)).toBe(0);
-    expect(calculateLostCharacters(duration / 2, duration, 400, TOTAL)).toBe(0);
-    expect(calculateLostCharacters(0, duration, 0, TOTAL)).toBe(0);
+  it('adds every drop to the current fall', () => {
+    const first = advanceFall(advanceFall(null, 300), 290);
+    expect(first).toEqual({ built: 290, lost: 10 });
+    expect(advanceFall(first, 281)).toEqual({ built: 281, lost: 19 });
   });
 
-  it('caps focus at the total and ignores invalid time', () => {
-    expect(calculateLostCharacters(duration * 2, duration, 500, TOTAL)).toBe(100);
-    expect(calculateLostCharacters(Number.NaN, duration, 0, TOTAL)).toBe(0);
-    expect(calculateLostCharacters(-1, duration, 0, TOTAL)).toBe(0);
-    expect(calculateLostCharacters(duration, 0, 0, TOTAL)).toBe(0);
-    expect(calculateLostCharacters(duration, duration, 0, 0)).toBe(0);
+  it('ends the fall as soon as the city grows again', () => {
+    const fallen = advanceFall(advanceFall(null, 300), 251);
+    expect(advanceFall(fallen, 252)).toEqual({ built: 252, lost: 0 });
+  });
+
+  it('keeps the state while the count is unchanged', () => {
+    const fallen = advanceFall(advanceFall(null, 300), 251);
+    expect(advanceFall(fallen, 251)).toBe(fallen);
+  });
+
+  it('treats an invalid count as 0', () => {
+    expect(advanceFall(advanceFall(null, 10), Number.NaN)).toEqual({ built: 0, lost: 10 });
   });
 });
