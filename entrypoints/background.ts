@@ -423,10 +423,16 @@ export function startBackground(
   // accumulates how long blocked tabs stay open while a session is running, and
   // the wiring routes the overlay's "proceed" choice plus those ticks to the
   // city store.
+  // Bound once the growth tracker exists: a tab opening or closing a blocked
+  // site accounts the stretch before the state flips (I014).
+  let accountBeforeFlip = (): void => undefined;
   const distractionTracker = createTabDistractionTracker({
     eventSource: dependencies.tabEventSource ?? createBrowserTabEventSource(),
     isDistractedUrl: createDistractionPredicate(store),
     now,
+    onBeforeDistractedChange: () => {
+      accountBeforeFlip();
+    },
   });
   // The tracker's initial tab read is best-effort: a failure must not become an
   // unhandled rejection that kills the service worker (§1.4). It is awaited by
@@ -463,6 +469,7 @@ export function startBackground(
     now,
     isDistracted: () => distractionTracker.isDistracted(),
   });
+  accountBeforeFlip = growthTick.account;
   disposers.push(() => {
     growthTick.dispose();
   });

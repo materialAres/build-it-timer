@@ -25,6 +25,12 @@ export interface DistractionTrackerDependencies {
   readonly isDistractedUrl: (url: string | undefined) => boolean;
   /** Clock (injectable for deterministic tests). */
   readonly now: () => number;
+  /**
+   * Called just before `isDistracted()` flips, while it still reports the old
+   * state (I014). The background accounts the stretch here, so time is booked to
+   * the state it was spent in, not to the state when the next heartbeat fires.
+   */
+  readonly onBeforeDistractedChange?: () => void;
 }
 
 export interface TabDistractionTracker {
@@ -72,7 +78,7 @@ export interface TabDistractionTracker {
 export function createTabDistractionTracker(
   dependencies: DistractionTrackerDependencies,
 ): TabDistractionTracker {
-  const openBlockedTabs = new Set<number>();
+  let openBlockedTabs = new Set<number>();
   let accumulatedMs = 0;
   let lastSampleMs = dependencies.now();
 
@@ -85,24 +91,39 @@ export function createTabDistractionTracker(
     lastSampleMs = nowMs;
   };
 
+  // Apply a membership change, telling the caller first when it flips the
+  // distracted state.
+  const change = (mutate: (tabs: Set<number>) => void): void => {
+    const next = new Set(openBlockedTabs);
+    mutate(next);
+    if (next.size > 0 !== openBlockedTabs.size > 0) {
+      dependencies.onBeforeDistractedChange?.();
+    }
+    openBlockedTabs = next;
+  };
+
   const track = (tab: TrackedTab): void => {
     sample();
-    if (dependencies.isDistractedUrl(tab.url)) openBlockedTabs.add(tab.id);
-    else openBlockedTabs.delete(tab.id);
+    change((tabs) => {
+      if (dependencies.isDistractedUrl(tab.url)) tabs.add(tab.id);
+      else tabs.delete(tab.id);
+    });
   };
 
   const untrack = (tabId: number): void => {
     sample();
-    openBlockedTabs.delete(tabId);
+    change((tabs) => tabs.delete(tabId));
   };
 
   // Replace the membership with the freshly read tabs: a tab that navigated
   // away while the read was in flight must stop counting, not linger.
   const syncTabs = (tabs: ReadonlyArray<TrackedTab>): void => {
-    openBlockedTabs.clear();
-    for (const tab of tabs) {
-      if (dependencies.isDistractedUrl(tab.url)) openBlockedTabs.add(tab.id);
-    }
+    change((open) => {
+      open.clear();
+      for (const tab of tabs) {
+        if (dependencies.isDistractedUrl(tab.url)) open.add(tab.id);
+      }
+    });
     lastSampleMs = dependencies.now();
   };
 
