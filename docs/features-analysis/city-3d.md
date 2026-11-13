@@ -246,6 +246,21 @@ distractionCharacters(distractedMs, durationMs, total) =
 built = max(0, floor(focusCharacters − distractionCharacters))
 ```
 
+- **A malus larger than the city is a debt (by design, I013).** The count is a
+  function of the session totals, and the clamp at 0 applies only to what is
+  shown. So when the malus exceeds what has been built, the city and the
+  population show 0 while the difference is still owed, and focus must earn it
+  back before anything grows again. Example (30-minute session, one character
+  per 3 s): 3 characters built, then 24 s on a blocked site (8 ticks, cost 11)
+  leaves a debt of 8, so after closing the site the city stays empty for about
+  24 s of focus. This is the price of a fair rule: **the final count depends
+  only on the session's totals, never on when the distraction happened**, so a
+  distraction at the start costs exactly as much as the same distraction at the
+  end (measured in the built extension: 2 and 3 characters for the same totals,
+  the difference being 22 ms at a character boundary). Forgiving the excess was
+  tried and rejected: it made early distraction cheaper than late distraction.
+  The guard is `growth-tick.test.ts` ("pays back the accumulated distraction
+  before growing again").
 - **Same clock.** `tickMs = duration / total`, so
   `floor(distractedMs / tickMs) = floor(distractedMs × total / durationMs)`:
   the number of distraction ticks is the same quantity the score already uses.

@@ -58,6 +58,12 @@ growth rate:
   recent character at its band's rate (in the `great` band it costs 20). The
   population never goes below 0. Reaching 100% therefore requires a full session
   with zero whole distraction ticks.
+- **The count is a balance of the session totals, so it can owe** *(documented
+  by I013)*: the clamp at 0 applies only to what is shown. A distraction that
+  costs more than has been built leaves a debt that later focus pays back
+  before the city and the population grow again, so they look frozen at 0 for
+  a while. In exchange, the final score depends only on how much focus and
+  distraction the session had, not on their order. See `city-3d.md` §5.
 - **Completion bonus is proportional**: 7% of the population reached
   (the maximum before the bonus, 6900 today → 483). No fixed number: it scales
   with the total and the rates. Decided in §10, point 2.
