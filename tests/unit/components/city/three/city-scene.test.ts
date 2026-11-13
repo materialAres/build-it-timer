@@ -72,7 +72,8 @@ describe('createCityScene (CR6.T7)', () => {
 
   it('has no ambient motion under reduced motion, and the preference can change while running', () => {
     const city = make({ reducedMotion: true });
-    const [rain, cars] = [ofKind('lines')[1] as Obj, ofKind('instanced')[3] as Obj];
+    // Lines: edges, then rain. Instanced: the city's meshes, then the cars.
+    const [rain, cars] = [ofKind('lines')[1] as Obj, ofKind('instanced')[2] as Obj];
     expect(rain.visible).toBe(false);
     expect(cars.visible).toBe(false);
     city.setReducedMotion(false);
@@ -110,7 +111,8 @@ describe('createCityScene (CR6.T7)', () => {
     still.setFrame(frameFor(180), now);
     animated.update(now + 10_000);
     const a = ofKind('instanced')[0];
-    const b = ofKind('instanced')[4];
+    // Three instanced meshes per scene: the second scene's bodies are the fourth.
+    const b = ofKind('instanced')[3];
     expect(a?.count).toBe(b?.count);
     expect(Array.from(a?.instanceMatrix?.array ?? [])).toEqual(Array.from(b?.instanceMatrix?.array ?? []));
   });

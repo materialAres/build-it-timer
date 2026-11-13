@@ -156,10 +156,10 @@ describe('generateCityPlan — colors (CR6.T3)', () => {
       }
     });
 
-    it('colors a sign like its building', () => {
+    it('colors a sign with another palette color than its building, so it stands out', () => {
       for (const plan of all.slice(0, 200)) {
         for (const p of plan.props.filter((x) => x.kind === 'sign')) {
-          expect(p.color).toBe(plan.buildings[p.building ?? -1]?.color);
+          expect(p.color).not.toBe(plan.buildings[p.building ?? -1]?.color);
         }
       }
     });

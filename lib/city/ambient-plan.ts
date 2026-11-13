@@ -25,6 +25,12 @@ export const FLICKER_PERIOD_MIN_MS = 10_000;
 export const FLICKER_PERIOD_MAX_MS = 30_000;
 /** Each of the two steps of a dip lasts this long, whatever the period. */
 const FLICKER_DIP_MS = 90;
+/** A neon sign buzzes once per period, seconds apart. */
+export const SIGN_BUZZ_MIN_MS = 6_000;
+export const SIGN_BUZZ_MAX_MS = 18_000;
+/** Brightness of a buzzing sign per 40 ms step: a stutter, then back to lit. */
+const SIGN_BUZZ_PATTERN: ReadonlyArray<number> = [0.15, 1, 0.3, 0.85, 0.1, 0.6];
+const SIGN_BUZZ_STEP_MS = 40;
 /** Keeps the ambient stream apart from the plan's own use of the seed. */
 const SEED_SALT = 0x5bd1e995;
 
@@ -47,6 +53,12 @@ export interface FlickerWindow {
   readonly phaseMs: number;
 }
 
+/** When a whole neon sign buzzes; one per sign, in the order of the plan's props. */
+export interface SignBuzz {
+  readonly periodMs: number;
+  readonly phaseMs: number;
+}
+
 export interface RainDrop {
   readonly x: number;
   readonly z: number;
@@ -58,6 +70,7 @@ export interface AmbientPlan {
   readonly cars: ReadonlyArray<CarRoute>;
   readonly flickers: ReadonlyArray<FlickerWindow>;
   readonly rain: ReadonlyArray<RainDrop>;
+  readonly signs: ReadonlyArray<SignBuzz>;
 }
 
 function carsOf(plan: CityPlan, rng: ReturnType<typeof createRng>): CarRoute[] {
@@ -106,9 +119,22 @@ function rainOf(plan: CityPlan, rng: ReturnType<typeof createRng>): RainDrop[] {
   }));
 }
 
+function signBuzzesOf(plan: CityPlan, rng: ReturnType<typeof createRng>): SignBuzz[] {
+  return plan.props
+    .filter((p) => p.kind === 'sign')
+    .map(() => {
+      const periodMs = nextInt(rng, SIGN_BUZZ_MIN_MS, SIGN_BUZZ_MAX_MS);
+      return { periodMs, phaseMs: nextInt(rng, 0, periodMs - 1) };
+    });
+}
+
 export function createAmbientPlan(plan: CityPlan): AmbientPlan {
   const rng = createRng((plan.seed ^ SEED_SALT) >>> 0);
-  return { cars: carsOf(plan, rng), flickers: flickersOf(plan, rng), rain: rainOf(plan, rng) };
+  // The signs draw last, so the cars, flicker and rain of a plan stay as they were.
+  const cars = carsOf(plan, rng);
+  const flickers = flickersOf(plan, rng);
+  const rain = rainOf(plan, rng);
+  return { cars, flickers, rain, signs: signBuzzesOf(plan, rng) };
 }
 
 const fraction = (value: number): number => value - Math.floor(value);
@@ -135,6 +161,12 @@ export function flickerLevel(flicker: FlickerWindow, ms: number): number {
   if (into < FLICKER_DIP_MS) return 0.1;
   if (into < 2 * FLICKER_DIP_MS) return 0.6;
   return 1;
+}
+
+/** Brightness of a whole neon sign: lit, with one short stuttering buzz per period. */
+export function signLevel(buzz: SignBuzz, ms: number): number {
+  const into = (((ms + buzz.phaseMs) % buzz.periodMs) + buzz.periodMs) % buzz.periodMs;
+  return SIGN_BUZZ_PATTERN[Math.floor(into / SIGN_BUZZ_STEP_MS)] ?? 1;
 }
 
 /** Brightness of beacon `index` at `ms`: a slow pulse, each one out of step. */

@@ -33,7 +33,13 @@ export const MAX_LANDMARKS = 3;
 export const MAX_PARK_SHARE = 0.1;
 
 export const MAX_LAMPS = 40;
-export const MAX_SIGNS = 12;
+export const MAX_SIGNS = 10;
+/** A vertical neon sign needs a ground section at least this tall, in levels. */
+export const MIN_SIGN_BUILDING_LEVELS = 4;
+/** The shortest sign, in floors. */
+export const MIN_SIGN_SPAN = 3;
+/** A sign covers this share of its section's height. */
+export const SIGN_SPAN_SHARE = { min: 0.4, max: 0.7 } as const;
 export const MAX_BEACONS = 4;
 
 /** Height adjustments before the floor fit gives up (custom data only). */

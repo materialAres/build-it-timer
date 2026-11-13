@@ -128,5 +128,6 @@ export function threeMock(): Record<string, unknown> {
     BufferAttribute, InstancedBufferAttribute, BufferGeometry, BoxGeometry, PlaneGeometry,
     MeshBasicMaterial: Material, LineBasicMaterial: Material, PointsMaterial: Material,
     Group, Mesh, InstancedMesh, LineSegments, Points, GridHelper, CanvasTexture,
+    DoubleSide: 2,
   };
 }

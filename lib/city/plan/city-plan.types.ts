@@ -127,7 +127,13 @@ export interface PlanFloor {
 
 export type PropKind = 'lamp' | 'sign' | 'beacon';
 
-/** `x`/`z` in cells, `level` in floors above the ground. */
+/**
+ * `x`/`z` in cells, `level` in floors above the ground. A sign is a vertical
+ * neon strip standing on one face of its building: `side` is the face (`x` the
+ * face at the highest x, `z` the one at the highest z, both turned to the
+ * camera), `x`/`z` the middle of the strip on that face, `level` its lowest
+ * floor and `span` its height in floors. Lamps and beacons have neither.
+ */
 export interface PlanProp {
   readonly kind: PropKind;
   readonly x: number;
@@ -135,6 +141,8 @@ export interface PlanProp {
   readonly level: number;
   readonly building: number | null;
   readonly color: string;
+  readonly span?: number;
+  readonly side?: 'x' | 'z';
 }
 
 /** A prop before its color is assigned. */

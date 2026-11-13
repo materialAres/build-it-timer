@@ -17,9 +17,12 @@ function setup(): { layer: ReturnType<typeof createAmbientLayer>; windows: Array
   const layer = createAmbientLayer({ plan, setWindows: (slot, level) => { windows.push([slot, level]); } });
   return { layer, windows };
 }
-const [rainLines] = [() => ofKind('lines')[0] as Obj];
-const cars = (): Obj => ofKind('instanced')[1] as Obj;
-const signs = (): Obj => ofKind('instanced')[0] as Obj;
+const signs = (): Obj => ofKind('mesh')[0] as Obj;
+const rainLines = (): Obj => ofKind('lines')[0] as Obj;
+const cars = (): Obj => ofKind('instanced')[0] as Obj;
+const signCount = plan.props.filter((p) => p.kind === 'sign').length;
+/** Vertices of the signs drawn (each sign is a fixed number of line vertices). */
+const signVertices = (): number => signs().geometry?.drawRange.count ?? -1;
 const lights = (): Obj => ofKind('points')[0] as Obj;
 const sum = (a: ArrayLike<number>): number => Array.from(a).reduce((s, v) => s + v, 0);
 const lastFloorOf = (building: number): number =>
@@ -31,7 +34,7 @@ describe('createAmbientLayer (CR6.T7)', () => {
   it('is four draw calls: lights, signs, rain and cars', () => {
     const { layer } = setup();
     let drawables = 0;
-    layer.group.traverse((o) => { if (['points', 'instanced', 'lines'].includes((o as unknown as Obj).kind)) drawables += 1; });
+    layer.group.traverse((o) => { if (['points', 'instanced', 'lines', 'mesh'].includes((o as unknown as Obj).kind)) drawables += 1; });
     expect(drawables).toBe(4);
   });
 
@@ -41,9 +44,9 @@ describe('createAmbientLayer (CR6.T7)', () => {
     const lampCount = plan.props.filter((p) => p.kind === 'lamp').length;
     const lit = (): number => Array.from({ length: colors.length / 3 }, (_, i) => sum(Array.from(colors).slice(i * 3, i * 3 + 3))).filter((v) => v > 0).length;
     expect(lit()).toBe(lampCount);
-    expect(signs().count).toBe(0);
+    expect(signVertices()).toBe(0);
     layer.setComplete(plan.totalFloors);
-    expect(signs().count).toBe(plan.props.filter((p) => p.kind === 'sign').length);
+    expect(signVertices()).toBe(attr(signs().geometry, 'position').array.length / 3);
     layer.update(1000);
     expect(lit()).toBe(plan.props.filter((p) => p.kind !== 'sign').length);
   });
@@ -54,9 +57,33 @@ describe('createAmbientLayer (CR6.T7)', () => {
     if (sign?.building == null) return;
     const end = lastFloorOf(sign.building);
     layer.setComplete(end - 1);
-    const before = signs().count ?? 0;
+    const before = signVertices();
     layer.setComplete(end);
-    expect(signs().count).toBeGreaterThan(before);
+    expect(signVertices()).toBeGreaterThan(before);
+  });
+
+  it('draws each sign as a vertical neon ladder of flat strips: two rails and a rung per floor', () => {
+    setup();
+    expect(signCount).toBeGreaterThan(0);
+    const spans = plan.props.filter((p) => p.kind === 'sign').reduce((total, p) => total + (p.span ?? 0), 0);
+    // Per sign: 2 rails + (span + 1) rungs, each a flat strip of 2 triangles (6 vertices).
+    expect(attr(signs().geometry, 'position').array.length / 3).toBe(6 * (2 * signCount + spans + signCount));
+  });
+
+  it('buzzes the whole sign while the motion is on, and holds it steady when it is off', () => {
+    const { layer } = setup();
+    layer.setComplete(plan.totalFloors);
+    const colors = (): number[] => Array.from(attr(signs().geometry, 'color').array);
+    const seen = new Set<string>();
+    for (let t = 0; t < 40_000; t += 40) {
+      layer.update(t);
+      seen.add(colors().join(','));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    layer.setMotion(false);
+    const steady = colors();
+    layer.update(60_000);
+    expect(colors()).toEqual(steady);
   });
 
   it('updates at most 30 times a second', () => {

@@ -2,12 +2,12 @@
 
 exports[`createScenePlan (CR6.T4) > matches the snapshot for a fixed seed 1`] = `
 {
-  "colorsSum": 676.647,
+  "colorsSum": 578.235,
   "edgesSum": 15083.652,
   "firstColor": [
-    0.4353,
-    0.7686,
+    0.2275,
     1,
+    0.9294,
   ],
   "firstMatrix": [
     0.7,
@@ -40,6 +40,6 @@ exports[`createScenePlan (CR6.T4) > matches the snapshot for a fixed seed 1`] = 
     },
   ],
   "matricesSum": 1673.977,
-  "windowColorsSum": 838.373,
+  "windowColorsSum": 812.576,
 }
 `;

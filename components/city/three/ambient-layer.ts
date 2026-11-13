@@ -1,21 +1,17 @@
 import {
-  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Group,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  MeshBasicMaterial,
   Points,
   PointsMaterial,
 } from 'three';
-import { beaconLevel, createAmbientPlan, flickerLevel } from '@/lib/city/ambient-plan';
+import { beaconLevel, createAmbientPlan, flickerLevel, signLevel } from '@/lib/city/ambient-plan';
 import type { CityPlan, PlanProp } from '@/lib/city/plan/city-plan.types';
-import { boxMatrix } from '@/lib/city/plan/box-geometry';
 import { hexToUnitRgb } from '@/lib/city/plan/color-math';
 import { FLOOR_HEIGHT } from '@/lib/city/plan/limits';
 import { AMBIENT_INTERVAL_MS } from '@/lib/city/render-scheduler';
 import { createCars, createRain } from './ambient-motion';
+import { createNeonSigns } from './neon-signs';
 
 export interface AmbientLayerInput {
   readonly plan: CityPlan;
@@ -35,7 +31,6 @@ export interface AmbientLayer {
 }
 
 const LAMP_HEIGHT = 0.5;
-const SIGN_SIZE = [0.5, 0.18, 0.04] as const;
 
 const worldOf = (plan: CityPlan, prop: PlanProp): [number, number, number] => [
   prop.x - plan.bounds.width / 2,
@@ -73,39 +68,17 @@ function createLights(plan: CityPlan, ends: Map<number, number>) {
   return { points, paint };
 }
 
-/** Signs as instanced boxes sorted by when their building completes, so a count shows the right ones. */
-function createSigns(plan: CityPlan, ends: Map<number, number>) {
-  const signs = plan.props
-    .filter((p) => p.kind === 'sign')
-    .sort((a, b) => (ends.get(a.building ?? -1) ?? 0) - (ends.get(b.building ?? -1) ?? 0));
-  const mesh = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial({ color: 0xffffff }), Math.max(signs.length, 1));
-  const colors = new Float32Array(Math.max(signs.length, 1) * 3);
-  signs.forEach((sign, index) => {
-    const [x, y, z] = worldOf(plan, sign);
-    mesh.instanceMatrix.array.set(boxMatrix({ cx: x, cy: y, cz: z, sx: SIGN_SIZE[0], sy: SIGN_SIZE[1], sz: SIGN_SIZE[2] }), index * 16);
-    colors.set(hexToUnitRgb(sign.color), index * 3);
-  });
-  mesh.instanceColor = new InstancedBufferAttribute(colors, 3);
-  mesh.frustumCulled = false;
-  mesh.count = 0;
-  const show = (complete: number): void => {
-    mesh.count = signs.filter((s) => complete >= (ends.get(s.building ?? -1) ?? 0)).length;
-    mesh.instanceMatrix.needsUpdate = true;
-  };
-  return { mesh, show };
-}
-
 /**
  * Sketch D's life (CR6.T7): rain, cars, window flicker, pulsing beacons, lamps
- * and signs, in four draw calls (lights, signs, rain, cars). Lamps and signs
- * are scenery and always drawn; the rest is motion and stops under reduced
- * motion. What moves comes from `lib/city/ambient-plan.ts`.
+ * and vertical neon signs, in four draw calls (lights, signs, rain, cars).
+ * Lamps and signs are scenery and always drawn; the rest, the signs' buzz
+ * included, is motion and stops under reduced motion. What moves comes from `lib/city/ambient-plan.ts`.
  */
 export function createAmbientLayer({ plan, setWindows }: AmbientLayerInput): AmbientLayer {
   const ambient = createAmbientPlan(plan);
   const ends = completionOf(plan);
   const lights = createLights(plan, ends);
-  const signs = createSigns(plan, ends);
+  const signs = createNeonSigns(plan, ends);
   const rainLayer = createRain(ambient);
   const cars = createCars(ambient);
   const group = new Group();
@@ -119,10 +92,15 @@ export function createAmbientLayer({ plan, setWindows }: AmbientLayerInput): Amb
     rainLayer.step(now);
     cars.step(now);
     lights.paint(complete, (i) => beaconLevel(now, i));
+    signs.paint((i) => {
+      const buzz = ambient.signs[i];
+      return buzz === undefined ? 1 : signLevel(buzz, now);
+    });
     for (const f of ambient.flickers) setWindows(f.floor, flickerLevel(f, now));
   };
   const settle = (): void => {
     lights.paint(complete, steady);
+    signs.paint(steady);
     for (const f of ambient.flickers) setWindows(f.floor, 1);
   };
   render(0);

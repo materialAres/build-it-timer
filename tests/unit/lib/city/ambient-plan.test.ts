@@ -12,6 +12,7 @@ import {
   createAmbientPlan,
   flickerLevel,
   rainHeight,
+  signLevel,
 } from '@/lib/city/ambient-plan';
 
 const seeds = Array.from({ length: 40 }, (_, i) => hashString(`ambient-${String(i)}`));
@@ -122,5 +123,28 @@ describe('ambient time functions (CR6.T7)', () => {
     expect(Math.min(...levels)).toBeGreaterThanOrEqual(0.1 - 1e-9);
     expect(Math.max(...levels)).toBeLessThanOrEqual(1 + 1e-9);
     expect(beaconLevel(0, 0)).not.toBeCloseTo(beaconLevel(0, 1), 3);
+  });
+});
+
+describe('neon sign buzz', () => {
+  it('gives every sign of the plan its own buzz, seconds apart', () => {
+    for (const seed of seeds) {
+      const plan = generateCityPlan(seed);
+      const ambient = createAmbientPlan(plan);
+      const signs = plan.props.filter((p) => p.kind === 'sign').length;
+      expect(ambient.signs.length).toBe(signs);
+      for (const s of ambient.signs) {
+        expect(s.periodMs).toBeGreaterThanOrEqual(6_000);
+        expect(s.phaseMs).toBeLessThan(s.periodMs);
+      }
+    }
+  });
+
+  it('keeps a sign lit, with one short buzz per period', () => {
+    const buzz = { periodMs: 10_000, phaseMs: 0 };
+    const levels = Array.from({ length: 1000 }, (_, i) => signLevel(buzz, i * 10));
+    expect(Math.max(...levels)).toBe(1);
+    expect(Math.min(...levels)).toBeLessThan(0.5);
+    expect(levels.filter((l) => l < 1).length * 10).toBeLessThanOrEqual(400);
   });
 });

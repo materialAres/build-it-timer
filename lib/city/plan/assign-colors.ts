@@ -69,7 +69,11 @@ export function colorBuildings(
   return colored;
 }
 
-/** Lamps, signs and beacons take the palette's accents; a sign wears its building's color. */
+/**
+ * Lamps and beacons take the palette's accents. A sign takes another color of
+ * the palette than its building, so the neon strip stands out from the edges
+ * behind it (picked by the building id: no randomness needed).
+ */
 export function colorProps(
   props: ReadonlyArray<PropShape>,
   buildings: ReadonlyArray<PlanBuilding>,
@@ -79,6 +83,8 @@ export function colorProps(
     if (prop.kind === 'lamp') return { ...prop, color: style.palette.lamp };
     if (prop.kind === 'beacon') return { ...prop, color: style.palette.beacon };
     const owner = prop.building === null ? undefined : buildings[prop.building];
-    return { ...prop, color: owner?.color ?? style.palette.lamp };
+    const others = style.colors.filter((color) => color !== owner?.color);
+    const color = others[(owner?.id ?? 0) % Math.max(others.length, 1)] ?? style.palette.lamp;
+    return { ...prop, color };
   });
 }
