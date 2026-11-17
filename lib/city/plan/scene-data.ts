@@ -5,6 +5,14 @@ import { FLOOR_BODY_RATIO, FLOOR_HEIGHT, MIN_PARTIAL_HEIGHT } from './limits';
 import type { VisibleFloors } from './visible-floors';
 
 export const EDGES_PER_FLOOR = EDGES_PER_BOX;
+/**
+ * Brightness of the lit window bands and of the neon edges, as a share of the
+ * palette color. On a complete city every floor has a band and full edges, and
+ * at full strength the bloom washed the zoomed-in city out to near white. The
+ * bodies are dimmed by the renderer (`BODY_DIM`); the neon signs keep their own.
+ */
+export const WINDOW_BRIGHTNESS = 0.75;
+export const EDGE_BRIGHTNESS = 0.85;
 
 /** A landmark's name, anchored above it; shown once the building is complete. */
 export interface SceneLabel {
@@ -95,10 +103,11 @@ export function createScenePlan(plan: CityPlan): ScenePlan {
     matrices.set(boxMatrix(box), index * 16);
     const body = hexToUnitRgb(building.color);
     colors.set(body, index * 3);
-    windowColors.set(hexToUnitRgb(building.windowColor), index * 3);
+    windowColors.set(hexToUnitRgb(building.windowColor).map((c) => c * WINDOW_BRIGHTNESS), index * 3);
+    const edge = body.map((c) => c * EDGE_BRIGHTNESS);
     edges.set(boxEdges(box), index * EDGES_PER_FLOOR * 6);
     for (let v = 0; v < EDGES_PER_FLOOR * 2; v += 1) {
-      edgeColors.set(body, (index * EDGES_PER_FLOOR * 2 + v) * 3);
+      edgeColors.set(edge, (index * EDGES_PER_FLOOR * 2 + v) * 3);
     }
   });
   return { floorCount: count, matrices, colors, windowColors, edges, edgeColors, labels: labelsOf(plan) };

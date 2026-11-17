@@ -5,9 +5,12 @@ import { hashString } from '@/utils/hash';
 import { generateCityPlan } from '@/lib/city/plan/generate-city-plan';
 import {
   EDGES_PER_FLOOR,
+  EDGE_BRIGHTNESS,
+  WINDOW_BRIGHTNESS,
   createSceneFrame,
   createScenePlan,
 } from '@/lib/city/plan/scene-data';
+import { hexToUnitRgb } from '@/lib/city/plan/color-math';
 import { visibleFloors } from '@/lib/city/plan/visible-floors';
 import { FLOOR_HEIGHT, MAX_BUILDING_FLOORS } from '@/lib/city/plan/limits';
 
@@ -160,5 +163,25 @@ describe('purity (CR6.T4)', () => {
         .replace(/^\s*\/\/.*$/gm, '');
       expect(source).not.toMatch(/Date\.now|Math\.random|from 'three|document\.|window\./);
     }
+  });
+});
+
+describe('building brightness', () => {
+  it('dims the window bands and the edges, so a complete city does not wash out to white', () => {
+    expect(WINDOW_BRIGHTNESS).toBeLessThan(1);
+    expect(EDGE_BRIGHTNESS).toBeLessThan(1);
+    const floor = plan.floors[0];
+    const building = plan.buildings[floor?.building ?? -1];
+    if (building === undefined) throw new Error('no building');
+    const window = hexToUnitRgb(building.windowColor).map((c) => Math.fround(c * WINDOW_BRIGHTNESS));
+    const edge = hexToUnitRgb(building.color).map((c) => Math.fround(c * EDGE_BRIGHTNESS));
+    expect(Array.from(scene.windowColors.subarray(0, 3))).toEqual(window);
+    expect(Array.from(scene.edgeColors.subarray(0, 3))).toEqual(edge);
+  });
+
+  it('keeps the bodies at the full palette color (the renderer dims them itself)', () => {
+    const building = plan.buildings[plan.floors[0]?.building ?? -1];
+    if (building === undefined) throw new Error('no building');
+    expect(Array.from(scene.colors.subarray(0, 3))).toEqual(hexToUnitRgb(building.color).map((c) => Math.fround(c)));
   });
 });

@@ -269,6 +269,8 @@ Quiet, labeled like a terminal.
 ### City Canvas (signature)
 The city is the product. Since CR6 it is a 3D view, not an ASCII grid. The **stage** (`.city-stage`) is a black box (`city-floor`, `#000000`) with a 1px `moss-frame` border and 4px corners, the full width of the tab and 17rem (272px) tall, so the popup stays under the 600px height cap. The three.js canvas fills it, loaded only when the City tab opens; while it loads (and if it cannot start) the stage keeps its size and says so in a quiet 0.75rem line, so the tab never jumps. The camera is a fixed isometric view from above that can be orbited a quarter turn with the pointer (no pan, limited zoom); orbiting is optional, nothing in the stage takes keyboard focus, and the stage itself is a labelled image.
 
+**Building brightness:** bodies at 12% of the building color, edges at 85% and lit window bands at 75% of the palette's window color (`BODY_DIM` in `floor-slots.ts`, `EDGE_BRIGHTNESS` and `WINDOW_BRIGHTNESS` in `lib/city/plan/scene-data.ts`). At full strength a zoomed-in complete city washed out to near white under the bloom. The neon signs keep their own, brighter colors, so they stand out.
+
 **HUD line:** at the stage's bottom left, `> 120/240 FLOORS` in `city-hud` (`#7dfba0`), 0.7rem, 0.08em tracking, with the standard 4px glow, not interactive (`aria-hidden`). It follows every floor.
 
 **Tower labels:** `> NAME` on landmark towers, drawn inside the 3D view (see City 3D motion).

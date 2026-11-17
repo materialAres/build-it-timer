@@ -40,6 +40,6 @@ exports[`createScenePlan (CR6.T4) > matches the snapshot for a fixed seed 1`] = 
     },
   ],
   "matricesSum": 1673.977,
-  "windowColorsSum": 812.576,
+  "windowColorsSum": 609.432,
 }
 `;
