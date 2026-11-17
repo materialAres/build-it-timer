@@ -250,7 +250,7 @@ Quiet, labeled like a terminal.
 
 ### Buttons
 - **Outline pill (canonical):** a 1px `currentColor` border, 999px radius, transparent background, phosphor green, 0.06em spacing, a 4px glow, and a phosphor-wash fill on hover. Used for export, and it's the intended style for every popup action.
-- **Overlay button:** 4px corners, 0.5rem 1.25rem padding, an `overlay-frame` border. The danger variant uses `alarm-red-frame` with `alarm-red-soft` text. Focus is a 2px phosphor outline offset by 2px.
+- **Overlay button:** pill corners (999px, consistent with the rest of the design), 8px 20px padding, an `overlay-frame` border, text size unchanged (the overlay's 16px base). The danger variant uses `alarm-red-frame` with `alarm-red-soft` text. Focus is a 2px phosphor outline offset by 2px.
 - **Toggle:** the pressed state turns the border and text phosphor green and adds a glow. The blocklist preset row uses it (`aria-pressed`, a count inside, 0.4 opacity and no glow when the list is locked). It's not used for the duration presets; they use the Duration Drum below.
 
 ### Chips
@@ -320,7 +320,7 @@ A vertical scroll-wheel for picking the session length, drawn like a terminal re
 - **In a session** (`running`/`paused`/`completed`): the drum doesn't scroll. The neighbors, ruler and `MIN` label fade out in 200ms, and the selected row becomes the countdown in the same slot and Numeral type. **The drum becomes the clock.** On Reset it reverses: the countdown becomes the selected preset again and the neighbors fade back in. Under reduced motion this is an instant swap.
 
 ### Blocked-Site Overlay (signature)
-A full-viewport `overlay-scrim` over the page in Shadow DOM. It holds a centered `overlay-panel` with a phosphor halo, an uppercase glowing title ("Stay focused"), a `pale-phosphor` message with the domain in `lamp-amber`, and two overlay buttons. The danger button is the one that opens the site anyway.
+A full-viewport `overlay-scrim` over the page in Shadow DOM. It holds a centered `overlay-panel` with a phosphor halo, an uppercase glowing title ("Stay focused"), a `pale-phosphor` message with the domain in `lamp-amber`, and two overlay buttons. The danger button is the one that opens the site anyway. **Sizes are in px, never rem** (I016): inside a page a rem is the page's root font size (YouTube sets 10px), which shrank the overlay there. The title is 24px, the message and the encouragement 16px, the panel at most 480px wide with 24px padding.
 
 ### Lock Notice
 A 1px 60% amber frame, amber text, 0.75rem, 0.35rem 0.5rem padding. Shown in the blocklist while a session is running.
@@ -330,7 +330,7 @@ A 1px 60% amber frame, amber text, 0.75rem, 0.35rem 0.5rem padding. Shown in the
 ### Do:
 - **Do** declare the monospace stack on every component root (see The Explicit Mono Rule).
 - **Do** use phosphor green (`#7dfba0`) for every interactive accent, and the phosphor wash (12–15%) as the only interactive fill.
-- **Do** make a new action an outline pill (1px `currentColor`, 999px radius, transparent) unless it lives in the overlay.
+- **Do** make a new action an outline pill (1px `currentColor`, 999px radius, transparent); overlay buttons keep their own frame colors but are pills too.
 - **Do** keep the city the brightest, most saturated thing on screen. The interface around it stays dim.
 - **Do** keep the city font's line height at 1 and the canvas content box at exactly 60ch × 20 rows.
 

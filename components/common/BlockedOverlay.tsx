@@ -3,6 +3,9 @@ import { i18n } from '#i18n';
 /**
  * The overlay's own stylesheet, rendered *inside* the shadow root (M2.T8).
  *
+ * Sizes are in `px`, never `rem`: a rem is the *page's* root font size (YouTube
+ * sets it to 10px), which shrank the text on such sites.
+ *
  * A shadow root stops the host page's rules from matching the overlay's
  * elements, but inheritable properties (`color`, `font`, `line-height`,
  * `visibility`, …) still cross the shadow boundary. `all: initial` on the root
@@ -25,26 +28,26 @@ const OVERLAY_STYLES = `
   }
   .blocked-overlay__panel {
     box-sizing: border-box;
-    max-width: 30rem;
-    margin: 1rem;
-    padding: 1.5rem;
+    max-width: 480px;
+    margin: 16px;
+    padding: 24px;
     border: 1px solid #2f6b45;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     background: #0b1410;
-    box-shadow: 0 0 2rem rgba(125, 251, 160, 0.25);
+    box-shadow: 0 0 32px rgba(125, 251, 160, 0.25);
     text-align: center;
   }
   .blocked-overlay__title {
-    margin: 0 0 0.75rem;
-    font-size: 1.25rem;
+    margin: 0 0 12px;
+    font-size: 24px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: #7dfba0;
     text-shadow: 0 0 6px currentColor;
   }
   .blocked-overlay__message {
-    margin: 0 0 1.25rem;
-    font-size: 0.95rem;
+    margin: 0 0 20px;
+    font-size: 16px;
     line-height: 1.5;
     color: #cfe9d8;
   }
@@ -54,22 +57,22 @@ const OVERLAY_STYLES = `
   }
   .blocked-overlay__feedback {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 16px;
     line-height: 1.5;
     color: #7dfba0;
   }
   .blocked-overlay__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    gap: 12px;
     justify-content: center;
   }
   .blocked-overlay__button {
     all: unset;
     cursor: pointer;
-    padding: 0.5rem 1.25rem;
+    padding: 8px 20px;
     border: 1px solid #2f6b45;
-    border-radius: 0.25rem;
+    border-radius: 999px;
     font: inherit;
     color: #7dfba0;
   }

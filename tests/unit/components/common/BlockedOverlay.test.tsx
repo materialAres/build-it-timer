@@ -103,4 +103,33 @@ describe('BlockedOverlay (M2.T8)', () => {
     expect(style?.textContent).toContain('.blocked-overlay');
     expect(style?.textContent).toContain('all: initial');
   });
+
+  describe('readable on any page', () => {
+    const sheet = (): string => {
+      const { container } = render(
+        <BlockedOverlay domain="youtube.com" dismissed={false} onProceed={vi.fn()} onGoBack={vi.fn()} />,
+      );
+      return container.querySelector('style')?.textContent ?? '';
+    };
+    const rule = (css: string, selector: string): string => {
+      const start = css.indexOf(`${selector} {`);
+      return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
+    };
+
+    it('sizes the title at 24px and the description and feedback at 16px', () => {
+      const css = sheet();
+      expect(rule(css, '.blocked-overlay__title')).toContain('font-size: 24px');
+      expect(rule(css, '.blocked-overlay__message')).toContain('font-size: 16px');
+      expect(rule(css, '.blocked-overlay__feedback')).toContain('font-size: 16px');
+    });
+
+    it('uses no rem: the page decides what a rem is (YouTube sets it to 10px)', () => {
+      expect(sheet()).not.toMatch(/\d(\.\d+)?rem/);
+    });
+
+    it('rounds the buttons like the rest of the design (pill)', () => {
+      expect(rule(sheet(), '.blocked-overlay__button')).toContain('border-radius: 999px');
+    });
+  });
 });
+
