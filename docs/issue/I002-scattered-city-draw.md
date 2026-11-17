@@ -2,7 +2,7 @@
 
 > Superseded by CR6 (§2.9): describes the ASCII city.
 
-- **Status**: open
+- **Status**: obsolete (closed by CR6.T9a, 2026-11-11): the ASCII growth engine this issue describes was removed; the city is now a seeded 3D plan whose buildings are whole by construction.
 - **Severity**: high (the city is the product's main visual output; it reads as noise)
 - **Type**: real bug — a design defect in the growth engine's placement strategy
 - **Found**: manual run of the built extension (M3.T4 popup, City tab)
