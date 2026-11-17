@@ -186,6 +186,19 @@ describe('createCityRenderer (CR6.T6a)', () => {
   });
 
   describe('creation', () => {
+    it('draws on the probed canvas and its context, so the page makes one WebGL context (#22)', () => {
+      const context = { probed: true };
+      const canvas = { getContext: (kind: string) => (kind === 'webgl2' ? context : null) } as unknown as HTMLCanvasElement;
+      create({ canvas });
+      expect(mocks.rendererOptions[0]).toMatchObject({ canvas, context });
+    });
+
+    it('makes its own canvas when none was probed', () => {
+      create();
+      expect(mocks.rendererOptions[0]?.canvas).toBeUndefined();
+      expect(mocks.rendererOptions[0]?.context).toBeUndefined();
+    });
+
     it('is light: no MSAA, low-power GPU, no preserved drawing buffer', () => {
       create();
       expect(mocks.rendererOptions[0]).toMatchObject({

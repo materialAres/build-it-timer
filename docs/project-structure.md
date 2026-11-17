@@ -41,7 +41,8 @@ timer-focus/
 │   │   ├── CityView3D.tsx       # CR6.T8a: mounts the renderer and wires the selectors (the lazy three.js chunk)
 │   │   ├── city-capture.ts      # CR6.T10: bridge from the lazy 3D view to the export button
 │   │   ├── CityFallback.tsx     # CR6.T8b: the plan as text where WebGL2 is missing or lost
-│   │   ├── webgl-support.ts     # CR6.T8b: `hasWebGl2()` capability check
+│   │   ├── webgl-support.ts     # CR6.T8b, #22: `probeWebGl2()` (the context the renderer reuses) and `afterFirstPaint()`
+│   │   ├── use-city-view.ts     # #22: loading line, WebGL2 check after the first paint, plain dynamic import of CityView3D
 │   │   ├── use-city-renderer.ts # CR6.T8a: renderer lifecycle (size, visibility, reduced motion, dispose)
 │   │   ├── use-city-summary.ts  # CR6.T8a: live summary for the HUD, milestone summary for screen readers
 │   │   └── ExportCityButton.tsx # export the city as JPEG/PNG (the text city until CR6.T10 adds the 3D capture)

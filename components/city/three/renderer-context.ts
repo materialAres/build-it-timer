@@ -8,6 +8,7 @@ import {
   frustumFor,
 } from '@/lib/city/camera-framing';
 import { ENVIRONMENT_COLORS } from '@/lib/city/plan/environment-colors';
+import { GL_ATTRIBUTES } from '../webgl-support';
 
 /** The pixel ratio never exceeds this: sharp enough, and 4× fewer pixels than a 3× screen. */
 export const MAX_PIXEL_RATIO = 1.5;
@@ -38,15 +39,13 @@ function isDisposable(value: unknown): value is Disposable {
  * (a capture renders and reads in one task), a capped pixel ratio, and orbit
  * controls without pan or damping so a still view needs no frame loop.
  * `free` swaps the limited orbit for the full-city page's free one (CR6.T11).
+ * `canvas` is the probed one (#22): its WebGL2 context already exists, made with
+ * the same attributes, so the page does not make a second one.
  * Throws when WebGL is unavailable; the caller turns that into a `Result`.
  */
-export function createGlContext(host: HTMLElement, free = false): GlContext {
-  const renderer = new WebGLRenderer({
-    antialias: false,
-    powerPreference: 'low-power',
-    preserveDrawingBuffer: false,
-    alpha: false,
-  });
+export function createGlContext(host: HTMLElement, free = false, canvas?: HTMLCanvasElement): GlContext {
+  const context = canvas?.getContext('webgl2', GL_ATTRIBUTES) ?? undefined;
+  const renderer = new WebGLRenderer({ ...GL_ATTRIBUTES, canvas, context });
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO));
   renderer.setClearColor(ENVIRONMENT_COLORS.floor);
   host.appendChild(renderer.domElement);

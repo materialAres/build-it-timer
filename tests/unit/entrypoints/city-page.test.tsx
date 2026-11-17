@@ -6,7 +6,10 @@ import { useAppStore } from '@/store';
 
 const mocks = vi.hoisted(() => ({ freeCamera: false }));
 
-vi.mock('@/components/city/webgl-support', () => ({ hasWebGl2: () => true }));
+vi.mock('@/components/city/webgl-support', () => ({
+  probeWebGl2: () => ({ take: () => null, release: () => undefined }),
+  afterFirstPaint: (work: () => void) => { work(); return () => undefined; },
+}));
 vi.mock('@/components/city/CityView3D', () => ({
   default: ({ freeCamera }: { freeCamera?: boolean }) => {
     mocks.freeCamera = freeCamera === true;

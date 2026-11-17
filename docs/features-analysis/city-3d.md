@@ -403,7 +403,7 @@ built = max(0, floor(focusCharacters − distractionCharacters))
 | Budget | Target |
 |---|---|
 | three.js chunk | ≤ 180 KB gzipped (`wxt build` output) |
-| First City frame after opening the tab | ≤ 200 ms on the reference machine |
+| First City frame after opening the tab | ≤ 250 ms on the reference machine (was 200 ms, raised after #22) |
 | Renders per second, nothing changing, reduced motion | 0 |
 | Ambient layer | ≤ 30 fps; stopped when the view is hidden |
 | Draw calls for the city (scene render, composer passes excluded) | ≤ 12 |
@@ -444,6 +444,47 @@ and probe once instead of twice, build the scene before the first frame, or
 warm the chunk once the City tab is nearer (which conflicts with "the Timer tab
 never requests it"). The budget is a target for a reference machine; this one
 misses it by about 2.5×, so it is reported, not hidden.
+
+**Follow-up on open issue #22 (2026-11-17).** An unminified build profiled
+three times identified the unknown 110 ms function: it was `hasWebGl2()`, about
+160 ms, because the first WebGL2 context of a page starts the GPU side. It ran
+synchronously in the City panel's first render, so the click froze before
+anything painted. Three changes:
+
+1. **One context.** `probeWebGl2()` (`components/city/webgl-support.ts`) makes
+   the context with the renderer's attributes (`GL_ATTRIBUTES`) and hands its
+   canvas to the renderer (`CityRendererOptions.canvas`), so the page makes one
+   context instead of a throwaway plus a real one; an unused probe is released
+   when the panel unmounts.
+2. **Check after the first paint.** `useCityView` (`components/city/use-city-view.ts`)
+   runs the probe after the first paint (`afterFirstPaint`: the next animation
+   frame, then a task), so the `LOADING CITY…` line shows at once instead of the
+   click freezing.
+3. **No `Suspense` for the 3D view.** The biggest cost was not the probe: React
+   19 holds back revealing a `Suspense` boundary for about 300 ms after its
+   fallback appeared, and the old `lazy` + `Suspense` with the loading line hit
+   that every time. The chunk is now loaded with a plain dynamic `import()` once
+   the probe passes, and the panel shows the loading line from its own state
+   until the module is there; a chunk that fails to load counts as unavailable
+   (text city with its note). Code splitting is unchanged: the Timer tab never
+   requests the chunk.
+
+Showing the text city while loading was tried and dropped at the developer's
+request: the loading line is the preferred look.
+
+| e2e budget test, `E2E_GPU=1` (RTX 3060) | First 3D frame |
+|---|---|
+| Before (HEAD `cde6475`, 4 runs) | 446–543 ms |
+| After (5 isolated runs) | 170–223 ms (about 172 or about 220, one frame apart) |
+| After, software GL (full suite) | 196–219 ms |
+
+The original 200 ms budget was met about half the time on the GPU and missed
+by about 20 ms otherwise, so the e2e budget test failed at random with
+`E2E_GPU=1`. The developer accepted this performance and the budget was raised
+to **250 ms**: it is met in every run and still catches a real regression.
+Open issue #22 is resolved. What remains is the chunk load, the GPU start-up (about
+57 ms, now inside three.js's first `getExtension`) and the first draw with its
+shader compilation (about 55 ms).
 
 **A real bug found by the e2e, fixed here.** Leaving the City tab crashed the
 popup (`TypeError: t?.dispose is not a function`, caught by the error boundary,
@@ -509,5 +550,5 @@ seconds"; the real cadence is `duration / 600` since CR3.
 2. **Under construction vs damaged** (§4): *resolved* — floors flash red only
    after a loss (CR6.T4).
 
-Still open after CR6: the first City frame misses its 200 ms budget (§8,
-changelog Open issues #22).
+Resolved after CR6: the first City frame (open issue #22) now takes 170–223 ms
+on the reference GPU, within the raised 250 ms budget (§8).

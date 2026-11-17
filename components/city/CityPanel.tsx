@@ -1,12 +1,8 @@
-import { lazy, Suspense, useCallback, useState } from 'react';
 import { i18n } from '#i18n';
 import { CityFallback } from './CityFallback';
 import { describeSummary, useCitySummary } from './use-city-summary';
-import { hasWebGl2 } from './webgl-support';
+import { useCityView } from './use-city-view';
 import './city-panel.css';
-
-// The dynamic import is what makes the three.js chunk: only the City tab mounts this.
-const CityView3D = lazy(() => import('./CityView3D'));
 
 function CityHud() {
   const { live } = useCitySummary();
@@ -29,8 +25,9 @@ function CitySummary() {
 }
 
 /**
- * The City tab's picture: a stage that keeps its size while the 3D view loads
- * (or shows the text fallback where WebGL2 is missing or lost), the HUD line
+ * The City tab's picture: a stage that shows a loading line at once and while
+ * the 3D view loads, then the 3D view (or the text city with a note where
+ * WebGL2 is missing or lost), the HUD line
  * over it, and a screen-reader summary beside it. The canvas is not
  * focusable and orbiting with the pointer is optional, so there is no keyboard
  * trap and nothing to operate without a mouse.
@@ -42,21 +39,20 @@ export interface CityPanelProps {
 
 export function CityPanel({ full = false }: CityPanelProps) {
   // Without WebGL2 the 3D chunk is never requested; if it fails later, the view reports it.
-  const [unavailable, setUnavailable] = useState(() => !hasWebGl2());
-  const onUnavailable = useCallback(() => { setUnavailable(true); }, []);
+  const [view, onUnavailable] = useCityView();
   return (
     <>
       <div className={full ? 'city-stage city-stage--full' : 'city-stage'} role="img" aria-label={i18n.t('city.canvasAriaLabel')}>
-        {unavailable ? (
-          <CityFallback />
+        {view.kind === 'ready' ? (
+          <view.View onUnavailable={onUnavailable} freeCamera={full} probe={view.probe} />
+        ) : view.kind === 'checking' ? (
+          <p className="city-view__message" aria-hidden="true">{i18n.t('city.loading')}</p>
         ) : (
-          <Suspense fallback={<p className="city-view__message" aria-hidden="true">{i18n.t('city.loading')}</p>}>
-            <CityView3D onUnavailable={onUnavailable} freeCamera={full} />
-          </Suspense>
+          <CityFallback />
         )}
         <CityHud />
       </div>
-      {unavailable ? <p className="city-note">{i18n.t('city.fallbackNote')}</p> : null}
+      {view.kind === 'unavailable' ? <p className="city-note">{i18n.t('city.fallbackNote')}</p> : null}
       <CitySummary />
     </>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { isDebugRender } from './use-city-debug';
 import { createCityRenderer, type CityRenderer } from './three/city-renderer';
+import type { ProbedCanvas } from './webgl-support';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -20,6 +21,7 @@ export function useCityRenderer(
   host: RefObject<HTMLElement | null>,
   enabled: boolean,
   freeCamera = false,
+  probe?: ProbedCanvas,
 ): CityRendererState {
   const [state, setState] = useState<CityRendererState>({ renderer: null, failed: false });
 
@@ -33,6 +35,7 @@ export function useCityRenderer(
       reducedMotion: motion?.matches ?? false,
       ambient: true,
       freeCamera,
+      canvas: probe?.take() ?? undefined,
       debug: isDebugRender(),
       effects: { bloom: true, crt: true },
     });
@@ -62,7 +65,7 @@ export function useCityRenderer(
       viewWatch?.disconnect();
       renderer.dispose();
     };
-  }, [host, enabled, freeCamera]);
+  }, [host, enabled, freeCamera, probe]);
 
   return state;
 }

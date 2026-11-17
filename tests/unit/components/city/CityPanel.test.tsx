@@ -3,9 +3,24 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { CityPanel } from '@/components/city/CityPanel';
 import { selectCityPlan, useAppStore } from '@/store';
 
-const mocks = vi.hoisted(() => ({ webgl: true, freeCamera: false, onUnavailable: null as (() => void) | null }));
+const mocks = vi.hoisted(() => ({
+  webgl: true,
+  freeCamera: false,
+  onUnavailable: null as (() => void) | null,
+  holdProbe: false,
+  pending: null as (() => void) | null,
+  released: 0,
+}));
 
-vi.mock('@/components/city/webgl-support', () => ({ hasWebGl2: () => mocks.webgl }));
+vi.mock('@/components/city/webgl-support', () => ({
+  probeWebGl2: () => (mocks.webgl ? { take: () => null, release: () => { mocks.released += 1; } } : null),
+  // The probe waits for the first paint; the tests run it at once unless they hold it.
+  afterFirstPaint: (work: () => void) => {
+    if (mocks.holdProbe) { mocks.pending = work; return () => { mocks.pending = null; }; }
+    work();
+    return () => undefined;
+  },
+}));
 vi.mock('@/components/city/CityView3D', () => ({
   default: ({ onUnavailable, freeCamera }: { onUnavailable?: () => void; freeCamera?: boolean }) => {
     mocks.onUnavailable = onUnavailable ?? null;
@@ -29,6 +44,9 @@ describe('CityPanel (CR6.T8a)', () => {
     mocks.webgl = true;
     mocks.onUnavailable = null;
     mocks.freeCamera = false;
+    mocks.holdProbe = false;
+    mocks.pending = null;
+    mocks.released = 0;
     setCity(null, 0);
   });
   afterEach(cleanup);
@@ -36,9 +54,26 @@ describe('CityPanel (CR6.T8a)', () => {
   it('is a stage with a label that holds the 3D view, loaded lazily', async () => {
     render(<CityPanel />);
     expect(screen.getByRole('img', { name: /city/i })).toBeInTheDocument();
+    expect(await screen.findByTestId('view-3d')).toBeInTheDocument();
+  });
+
+  it('shows the loading line at once, before the WebGL check and while the 3D view loads (#22)', async () => {
+    mocks.holdProbe = true;
+    setCity('session-a', 300);
+    const { container } = render(<CityPanel />);
     expect(screen.getByText('LOADING CITY…')).toBeInTheDocument();
+    expect(container.querySelector('.city-fallback')).toBeNull();
+    expect(screen.queryByTestId('view-3d')).not.toBeInTheDocument();
+    act(() => { mocks.pending?.(); });
     expect(await screen.findByTestId('view-3d')).toBeInTheDocument();
     expect(screen.queryByText('LOADING CITY…')).not.toBeInTheDocument();
+  });
+
+  it('releases an unused probe when the panel goes away (#22)', async () => {
+    const { unmount } = render(<CityPanel />);
+    await screen.findByTestId('view-3d');
+    unmount();
+    expect(mocks.released).toBe(1);
   });
 
   it('is not a keyboard trap: nothing in the stage takes focus', async () => {

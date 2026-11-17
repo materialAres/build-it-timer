@@ -5,6 +5,7 @@ import { createSceneFrame, createScenePlan } from '@/lib/city/plan/scene-data';
 import { clearCityCapture, setCityCapture } from './city-capture';
 import { useCityDebug } from './use-city-debug';
 import { useCityRenderer } from './use-city-renderer';
+import type { ProbedCanvas } from './webgl-support';
 
 /**
  * The 3D city (CR6.T8a). This module and everything it imports, `three`
@@ -17,13 +18,15 @@ export interface CityView3DProps {
   readonly onUnavailable?: () => void;
   /** The full-city page's free camera (CR6.T11). */
   readonly freeCamera?: boolean;
+  /** The panel's WebGL2 probe; the renderer draws on its canvas (#22). */
+  readonly probe?: ProbedCanvas;
 }
 
-export default function CityView3D({ onUnavailable, freeCamera = false }: CityView3DProps) {
+export default function CityView3D({ onUnavailable, freeCamera = false, probe }: CityView3DProps) {
   const plan = useAppStore(selectCityPlan);
   const visible = useAppStore(selectVisibleFloors);
   const host = useRef<HTMLDivElement>(null);
-  const { renderer, failed } = useCityRenderer(host, plan !== null, freeCamera);
+  const { renderer, failed } = useCityRenderer(host, plan !== null, freeCamera, probe);
   useCityDebug(host, plan, renderer);
   const scene = useMemo(() => (plan === null ? null : createScenePlan(plan)), [plan]);
 

@@ -102,6 +102,14 @@ describe('CityView3D (CR6.T8a)', () => {
     expect(options?.reducedMotion).toBe(false);
   });
 
+  it('gives the renderer the probed canvas, taken once (#22)', () => {
+    const canvas = document.createElement('canvas');
+    let taken = false;
+    const probe = { take: () => { if (taken) return null; taken = true; return canvas; }, release: () => undefined };
+    render(<CityView3D probe={probe} />);
+    expect(created.options[0]?.canvas).toBe(canvas);
+  });
+
   it('asks for the free camera only when told to (the full-city page)', () => {
     const { unmount } = render(<CityView3D />);
     expect(created.options[0]?.freeCamera).toBeFalsy();
