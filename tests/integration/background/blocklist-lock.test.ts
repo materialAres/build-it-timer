@@ -135,3 +135,133 @@ describe('blocklist lock in the background (CR2.T2)', () => {
     handle.dispose();
   });
 });
+
+/** The persisted timer status in each `storage.local.set` call, in order. */
+const persistedStatuses = (
+  setSpy: { mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> } },
+): string[] =>
+  setSpy.mock.calls.flatMap(([items]) => {
+    const raw = (items as Record<string, unknown>)[STORE_NAME];
+    if (typeof raw !== 'string') return [];
+    const parsed = JSON.parse(raw) as { state: { timer: { status: string } } };
+    return [parsed.state.timer.status];
+  });
+
+/**
+ * I010.T1 (red until fixed) — the startup window: the mutation listeners are
+ * registered synchronously, while the persisted state is read asynchronously.
+ * The storage read is held open here so a message provably arrives before the
+ * background knows the session is running (see
+ * `docs/issue/I010-cr2-review-findings.md`, F1).
+ */
+describe('blocklist lock before the startup hydration (I010.T1)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it('rejects a blocklist mutation that arrives before the persisted running session is loaded', async () => {
+    // Persist a running session, as a previous worker would have left it.
+    const previous = createAppStore();
+    await previous.persist.rehydrate();
+    previous.setState({ timer: runningTimer() });
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+        state: { timer: { status: string } };
+      };
+      expect(parsed.state.timer.status).toBe('running');
+    });
+
+    const alarmProvider = new FakeAlarmProvider(T0);
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1_500_000);
+
+    // Hold every storage read until released: the worker has started, but the
+    // persisted state is still "in flight". The read is taken when it is
+    // issued (FIFO, like the real storage backend) and only its delivery is
+    // delayed, so a later write cannot leak into an earlier read.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const local = fakeBrowser.storage.local;
+    const realGet = local.get.bind(local) as (
+      keys: string,
+    ) => Promise<Record<string, unknown>>;
+    const delayedGet = async (keys: string): Promise<Record<string, unknown>> => {
+      const snapshot = realGet(keys);
+      await gate;
+      return snapshot;
+    };
+    const getSpy = vi
+      .spyOn(local, 'get')
+      // `storage.local.get` also has a callback overload typed as returning
+      // void; the promise form is the one the storage adapter uses.
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      .mockImplementation(delayedGet as unknown as typeof local.get);
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+
+    const records: LogRecord[] = [];
+    const logger = createLogger('lock-test', {
+      sink: (record) => records.push(record),
+      minLevel: 'debug',
+    });
+    // A fresh store, as after a worker restart (no injected `store`).
+    const handle = startBackground({ alarmProvider, now: () => T0, logger });
+
+    await sendMessage({
+      type: 'BLOCKLIST_ADD_SITE',
+      payload: { site: 'facebook.com' },
+    });
+    await flushAsync();
+
+    release();
+    await handle.ready;
+    await flushAsync();
+
+    // Soft assertions so one run reports every symptom of the window.
+    expect
+      .soft(
+        records.some(
+          (record) =>
+            record.message ===
+            'blocklist mutation ignored while the timer is not idle',
+        ),
+        'the early mutation is rejected by the CR2 lock',
+      )
+      .toBe(true);
+    expect
+      .soft(
+        persistedStatuses(setSpy),
+        'storage never receives a default idle timer',
+      )
+      .not.toContain('idle');
+    expect
+      .soft(handle.store.getState().timer.status, 'the session is still running')
+      .toBe('running');
+    expect
+      .soft(
+        handle.store.getState().blocklist.blocklist,
+        'the blocklist is unchanged',
+      )
+      .toEqual([]);
+
+    getSpy.mockRestore();
+    // What the next worker restart (or a popup) would read.
+    const stored = await fakeBrowser.storage.local.get(STORE_NAME);
+    const persisted = JSON.parse(stored[STORE_NAME] as string) as {
+      state: {
+        timer: { status: string };
+        blocklist: { blocklist: ReadonlyArray<unknown> };
+      };
+    };
+    expect
+      .soft(persisted.state.timer.status, 'storage still holds the running session')
+      .toBe('running');
+    expect
+      .soft(persisted.state.blocklist.blocklist, 'storage holds the unchanged blocklist')
+      .toEqual([]);
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+});

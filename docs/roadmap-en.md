@@ -1215,6 +1215,100 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 | M3.T3c | completion recomputes the population from ticks | completion recomputes `builtCharacters` from the duration (CR3.T6) |
 | §4 open point (ratio formula) | exact `distractionRatio` formula to be defined | resolved: the ratio path is removed, score derives from `builtCharacters` (CR3.T5) |
 
+### 2.7 Follow-up I010 — CR2 review findings (blocklist lock, PR #5)
+
+**Analysis.** The findings, root cause and evidence are in `docs/issue/I010-cr2-review-findings.md` (post-merge review of PR #5, merged as `8bdbb57`). This section turns findings F1–F5 into tasks. F6 (commit hygiene) is a process note only: history is not rewritten (§4.2).
+
+**Goal.** Close the one correctness gap in CR2: the background must enforce the lock against the **persisted** timer status, including in the startup window before hydration. Then tidy the mutation handler, tighten the component tests to match the CR2 criteria, and fix the Italian copy. The CR2 rule (blocklist editable only while `idle`) does not change.
+
+**Behavioral rule after the change.**
+- No mutation message (blocklist, tag or timer command) is applied by the background before its startup hydration has resolved. Messages that arrive earlier wait and are then applied in arrival order, against the hydrated state.
+- An early blocklist mutation with a persisted `running`, `paused` or `completed` session is rejected exactly like a late one: no `setState`, no `storage.local.set`, and the CR2.T2 `debug` record with `{ type }` only.
+- Storage never receives a snapshot built from the slice defaults because of an early mutation.
+- Ordinary sync rehydrations (M1.T8) do **not** block or drop mutations: the gate is the startup hydration only, not `store.persist.hasHydrated()`.
+- If the startup hydration fails, the store keeps its defaults (M4.T3c, already logged) and waiting mutations are released, never left pending forever.
+
+**Sequencing note.** I010.T1 is the security-relevant task and goes first, red test first (§3.1). I010.T2 refactors the handler and can follow in any order, but must not change behavior. I010.T3 and I010.T4 are independent and test/copy only. I010.T5 closes the follow-up. Re-run the CR2 suites and the timer persistence regression suites (M2.T2, M1.T8, M1.T10) after I010.T1 and I010.T2 (§3.4).
+
+#### 2.7.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| I010.T1 | Gate background mutations on the startup hydration | — |
+| I010.T2 | Explicit blocklist branch and exhaustive switch in `createMutationHandler` | I010.T1 |
+| I010.T3 | Component lock tests assert that no mutation is sent | — |
+| I010.T4 | Italian lock notice wording | — |
+| I010.T5 | Changelog, issue status, and final verification | I010.T1, I010.T2, I010.T3, I010.T4 |
+
+#### 2.7.2 Task cards
+
+##### I010.T1 — Gate background mutations on the startup hydration
+* **Objective**: make the background apply mutation messages only after its startup hydration has resolved, so the CR2 lock is checked against the persisted timer status and an early message can no longer persist default state.
+* **Files to create/modify**: `entrypoints/background.ts`, `tests/integration/background/blocklist-lock.test.ts`.
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - **Red test already in place**: `tests/integration/background/blocklist-lock.test.ts`, describe *"blocklist lock before the startup hydration (I010.T1)"*. It persists a `running` session, starts a fresh background, holds the storage read open (FIFO), and sends `BLOCKLIST_ADD_SITE` **before** `handle.ready` resolves. It currently fails on four soft assertions (see the issue doc, F1). Do not weaken it: it must turn green as written.
+  - After the fix, that test passes: the message is rejected with the CR2.T2 `debug` record (`{ type }` only, no domain); no `storage.local.set` call contains an `idle` timer; after `handle.ready` both the in-memory and the **persisted** state hold the `running` session and the unchanged blocklist.
+  - The test that was named "while a restored running session is reconciled" is renamed to what it actually checks (after the restart has completed), or merged into the new test. Decision F is now covered by a message sent during the window.
+  - A second early-message test with a persisted `idle` state: the `BLOCKLIST_ADD_SITE` is applied exactly once after hydration and persisted once. Early messages keep their arrival order (e.g. `ADD a.com` then `REMOVE a.com` leaves the list empty).
+  - Timer commands go through the same gate. An early `TIMER_PAUSED`/`TIMER_RESET` still credits the stretch (`growthTick.account()`) on the hydrated state, not on the defaults. The existing M2.T2, M3.T3b and mutation-bus suites stay green unchanged.
+  - The gate is the startup hydration promise (the same one `ready` awaits), **not** `store.persist.hasHydrated()`. A test (or an assertion in the existing sync tests) shows that an `idle` edit arriving while the background's own sync rehydration is in flight is still applied.
+  - A failed startup hydration releases the waiting messages (they run on the defaults kept by M4.T3c). No promise is left pending and there is no unhandled rejection.
+  - The new logic stays out of the existing functions where it would push them over 40 lines (extract a small helper in the same file if needed).
+* **Notes/decisions**: the window exists because the listeners are registered synchronously (≈ lines 621–642) while `ready` hydrates asynchronously (≈ lines 666–667), and zustand v5's persisted `setState` writes even before hydration. `hasHydrated()` is rejected as the gate because the background's `attachStoreSync` (≈ line 495) sets it back to `false` on every sync rehydration. Sender provenance remains M5.T1's concern.
+
+##### I010.T2 — Explicit blocklist branch and exhaustive switch in `createMutationHandler`
+* **Objective**: declare the blocklist/tag mutation set as data, make the handler's switch exhaustive, and bring `createMutationHandler` within the §1.2 limits. No behavior change.
+* **Files to create/modify**: `lib/messaging/messages.types.ts`, `lib/messaging/apply-mutation.ts`, `tests/integration/messaging/mutation-bus.test.ts`.
+* **Dependencies**: I010.T1
+* **Acceptance criteria**:
+  - `messages.types.ts` exports `BLOCKLIST_MUTATION_TYPES` (`as const`, the seven blocklist/tag types) and a type guard `isBlocklistMutation(message): message is BlocklistMutationMessage`. `MUTATION_TYPES` is composed from it plus the timer commands, so the two lists cannot drift.
+  - `createMutationHandler` declares its return type explicitly (`(message: MutationMessage) => void`) and is ≤ 40 lines. The blocklist branch (CR2 lock check, debug log, `applyBlocklistMutation`, identity check, `setState`) is extracted into a private helper.
+  - The switch has no catch-all `default:` that applies the lock. Every timer command and the blocklist branch are handled explicitly, and the switch ends with a `never` exhaustiveness check, so adding a mutation type without handling it fails `bun run compile`.
+  - `mutation-bus.test.ts` asserts that `MUTATION_TYPES` equals the union of `BLOCKLIST_MUTATION_TYPES` and the four timer commands (no type is missing or duplicated). All existing mutation-bus and CR2 lock tests pass unchanged.
+  - `apply-mutation.ts` stays ≤ 200 lines.
+* **Notes/decisions**: this is a refactor. If a test needs a behavioral change to pass, stop and report it instead of changing the test.
+
+##### I010.T3 — Component lock tests assert that no mutation is sent
+* **Objective**: cover the CR2.T3a/T3b criterion "no store change, **no mutation sent**" in the component tests, not only the store.
+* **Files to create/modify**: `tests/unit/components/blocklist/SiteList.test.tsx`, `tests/unit/components/blocklist/PresetPicker.test.tsx`, `tests/unit/components/blocklist/TagEditor.test.tsx`.
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - In each locked-status block (`running`, `paused`, `completed`), the test that interacts with disabled controls also asserts that no mutation message left the popup. For example, spy on `fakeBrowser.runtime.sendMessage` (the module-level store's default `sendMutation` goes through the message bus), or use another spy at the bus boundary that does not change production code.
+  - Where `fireEvent` is used on a disabled control, the test also checks that the control is `disabled`, so it is clear what is being proven.
+  - The idle-path tests stay unchanged and green.
+  - No production file is touched.
+* **Notes/decisions**: the store-level guarantees are already proven in `tests/unit/store/blocklist-lock.test.ts`. This task only aligns the component tests with their card.
+
+##### I010.T4 — Italian lock notice wording
+* **Objective**: remove the "bloccati… bloccata" repetition from the Italian lock notice.
+* **Files to create/modify**: `locales/it.yml`, `tests/unit/i18n/i18n.test.tsx`.
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - `blocklist.locked` in `it.yml` reads: "La lista dei siti bloccati non è modificabile durante una sessione. Reimposta il timer per modificarla." It still names Reset (CR2 decision A). The EN string is unchanged.
+  - The IT assertion in `i18n.test.tsx` is updated. The EN/IT key-parity test stays green.
+  - The `#i18n` types are regenerated (`wxt prepare` or a build) before `bun run compile`.
+* **Notes/decisions**: copy-only change, no new key.
+
+##### I010.T5 — Changelog, issue status, and final verification
+* **Objective**: record the follow-up and prove the full gate is green.
+* **Files to create/modify**: `docs/changelog.md`, `docs/issue/I010-cr2-review-findings.md`, `docs/features-analysis/blocklist-lock.md`, `.serena/memories/core.md`.
+* **Dependencies**: I010.T1, I010.T2, I010.T3, I010.T4
+* **Acceptance criteria**:
+  - `docs/changelog.md` gets one detail entry per I010 task in the standard format, the summary rows, the "Current status" line for I010, and the **real** test counts. `Commit: —` until the developer commits.
+  - `docs/issue/I010-cr2-review-findings.md` is marked **fixed**, with "Fixed in" filled in and each acceptance criterion ticked.
+  - `docs/features-analysis/blocklist-lock.md`: decision F points to the new during-the-window test of I010.T1.
+  - `.serena/memories/core.md`: the CR2 invariant adds that background mutations wait for the startup hydration (never gated on `hasHydrated()`).
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build` and `bun run build:firefox` are green; run `bun run e2e` if the Playwright suite is available.
+* **Notes/decisions**: no persistence change, so there is no migration entry.
+
+#### 2.7.3 Amended acceptance criteria in Section 1 and §2.5
+
+| Task | Amended part | New rule |
+|---|---|---|
+| M1.T10 | the mutation handler applies a message as soon as it is received | mutations wait for the background's startup hydration, then apply in arrival order (I010.T1) |
+| CR2.T2 | startup window covered by a test that sends after `handle.ready` | covered by a test that sends **before** `handle.ready` resolves (I010.T1) |
+
 ---
 
 ## 3. PR Reviews
