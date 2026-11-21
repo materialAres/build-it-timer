@@ -32,10 +32,11 @@ export function calculateFocusCharacters(
  * Focus is capped at `total`. Distraction is charged on the escalation schedule
  * (`malusForDistractionTicks`, M4.T1; option A of CR6): the whole distraction
  * ticks (`distractedMs × total / durationMs`, the same clock as focus) cost 1
- * character each for the first five, then 2, then 3, so a long stay costs more
- * than its length. The net count never goes below 0, but only the result is
- * clamped: a malus larger than the focus is a debt that later focus pays back
- * before the count rises again. That is deliberate (I013): being a function of
+ * character each for the first five, then 2, then 3. The ticks are counted
+ * over the whole session, so several short visits escalate like one long
+ * stay. The net count never goes below 0, but only the result is clamped:
+ * a malus larger than the focus is a debt that later focus pays back before
+ * the count rises again. That is deliberate (I013): being a function of
  * the totals, the count charges a distraction the same whatever its moment.
  *
  * Pure and total: no `Date.now()`/`Math.random()`, no hard-coded total, and any
