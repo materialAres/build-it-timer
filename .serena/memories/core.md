@@ -9,8 +9,8 @@ WXT MV3 browser extension ("Build-it! Timer Focus"): a focus-session timer that 
 - `components/` — presentational React (`timer/`, `city/`, `blocklist/`, `score/`, `common/`).
 - `utils/` — logger, duration formatting, hash, `Result`.
 - `tests/` — unit · integration · e2e · helpers; unit tests mirror the source tree.
-- `docs/` — `roadmap-en.md` (authoritative task cards), `changelog.md` (mandatory per-task record), `store-analysis.md`, `issue/`, `ui/ui-review-tasks.md` (UI.T* cards from the Impeccable critique; logic parts delegate to roadmap CRs).
-- `PRODUCT.md` (product truth, neutral/minimal voice) + `DESIGN.md` / `.impeccable/design.json` (visual system "The Phosphor Skyline": phosphor green `#7dfba0` sole UI accent, mono everywhere, glow only on active/earned/alarming text) — design authority for any UI work; critique snapshots in `.impeccable/critique/`.
+- `docs/` — `roadmap-en.md` (authoritative task cards), `changelog.md` (mandatory per-task record), `store-analysis.md`, `issue/`, `ui/ui-review-tasks.md` (UI.T* cards from the 2026-11 UI critique, a past review; logic parts delegate to roadmap CRs).
+- `PRODUCT.md` (product truth, neutral/minimal voice) + `DESIGN.md` / `docs/ui/design.json` (visual system "The Phosphor Skyline": phosphor green `#7dfba0` sole UI accent, mono everywhere, glow only on active/earned/alarming text) — design authority for any UI work. The `impeccable` tool is no longer installed; the `/impeccable` commands in `docs/ui/ui-review-tasks.md` are history.
 - `locales/en.yml` (default) + `locales/it.yml`.
 - `CLAUDE.md` — binding design/testing rules (loaded every session). On demand: `docs/project-structure.md`, `docs/testing-matrix.md`; changelog procedure lives in the `changelog` skill (`.claude/skills/changelog/`).
 

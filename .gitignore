@@ -41,7 +41,3 @@ Thumbs.db
 # Miscellaneous
 .mcp.json
 opencode.jsonc
-
-# Impeccable local working state (machine-specific)
-.impeccable/critique/
-.impeccable/live/

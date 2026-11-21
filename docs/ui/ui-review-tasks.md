@@ -1,7 +1,9 @@
 # UI review — task list
 
-Source: `/impeccable critique entrypoints/popup` (Blocklist focus), run 2026-11-09, score **17/40 (Poor)**.
-Full report: `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md` (local only: `.impeccable/critique/` is gitignored because snapshots hold machine-specific absolute paths; this file is the committed backlog).
+Source: an `impeccable critique` of `entrypoints/popup` (Blocklist focus), run 2026-11-09, score **17/40 (Poor)**. The report was a local snapshot and is not kept; this file is the committed backlog.
+
+> The `impeccable` tool is no longer installed in this project (PR #7 review, T6). The `/impeccable …` commands named in the cards below are history of how the work was planned and can't be re-run. The design spec lives in `DESIGN.md` and `docs/ui/design.json`.
+
 Design authority: `PRODUCT.md`, `DESIGN.md` ("The Phosphor Skyline").
 
 Tasks are meant to be tackled one at a time, following **Execution order** below, not the numeric order of the IDs. Each card follows the roadmap card shape (`#### <ID> — <Title>`, one-line **Dependencies**).
@@ -193,7 +195,7 @@ Notes:
 
 **Status**: done (2026-11-09). Implemented directly, without running the impeccable commands. Pure math in `lib/timer/duration-drum.ts` (index, step, clamp, snap, rubber-band, row opacity/scale/colour/glow, wheel accumulation, key targets; 30 tests written first); `components/timer/DurationDrum.tsx` composes `DrumRow`, `DrumRuler` and the existing `TimerDisplay`; input in `use-drum-gesture.ts` (pointer, keys) and `use-drum-wheel.ts`; the single settle-time request in `use-drum-commit.ts`; `framer-motion` only. `DurationPicker.tsx` is removed. Idle it is a `spinbutton` (5–120 min, `aria-valuetext` `30 min`); in a session the wheel fades out over 200ms and the countdown shows in the same 8.5rem frame, and Reset reverses it. Reduced motion: no animation or rubber-band, 80ms opacity crossfade. Layout: the drum comes first on the Timer tab, then Start/Pause/Reset and the blocklist summary. Checked in the built extension at 420px (idle, a step, the end row, mid-drag, after a drag, running, Reset, reduced motion); the Timer tab is 256px tall.
 
-**Spec (normative):** `DESIGN.md` → Components → **Duration Drum (signature)**, plus the `duration-drum*` and `numeral*` tokens in its frontmatter and the `Duration Drum` snippet and `drum-*` motion tokens in `.impeccable/design.json`.
+**Spec (normative):** `DESIGN.md` → Components → **Duration Drum (signature)**, plus the `duration-drum*` and `numeral*` tokens in its frontmatter and the `Duration Drum` snippet and `drum-*` motion tokens in `docs/ui/design.json`.
 **References:**
 - `docs/ui/references/duration-drum-reference.png`: what the user asked for. Copy its **motion and composition only** (centered selected value, faded neighbors, ruler ticks on both edges, snapping vertical wheel). Don't copy its look (white card, grey shading, 3D, hours:minutes).
 - `docs/ui/references/duration-drum-target.png`: the static target in the Phosphor Skyline style.
@@ -219,7 +221,7 @@ Notes:
 #### UI.T8 — Re-run the critique
 **Command**: `/impeccable critique entrypoints/popup` · **Dependencies**: UI.T1–UI.T7, UI.T9
 
-**Status**: critique re-run (2026-11-10): **26/40 (Acceptable)**, up from 17/40; snapshot `.impeccable/critique/2026-11-10T12-05-34Z__entrypoints-popup.md` (local only). The first snapshot (17/40) is not closed yet: `/impeccable polish` closes it. Open findings: P1 the City canvas is about 492px wide and overflows a 420px popup, P1 time, city and score live on three tabs, P2 paused and Resume copy plus a stale blocklist summary after Reset (the summary target is 13px tall), P2 nothing explains the score tiers, P3 Reset has no undo. Detector: 8 advisory findings, none structural; `#8a948e` is missing from DESIGN.md's front-matter tokens.
+**Status**: critique re-run (2026-11-10): **26/40 (Acceptable)**, up from 17/40; snapshot kept locally only, not committed. The first snapshot (17/40) is not closed yet: `/impeccable polish` closes it. Open findings: P1 the City canvas is about 492px wide and overflows a 420px popup, P1 time, city and score live on three tabs, P2 paused and Resume copy plus a stale blocklist summary after Reset (the summary target is 13px tall), P2 nothing explains the score tiers, P3 Reset has no undo. Detector: 8 advisory findings, none structural; `#8a948e` is missing from DESIGN.md's front-matter tokens.
 
 Compare against 17/40 and close the snapshot.
 
