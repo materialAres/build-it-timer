@@ -1,11 +1,5 @@
-import type {
-  CityGrid,
-  CityLayers,
-  CityLayerName,
-  Theme,
-} from '@/components/city/city.types';
-import type { Result } from '@/utils/result';
-import { getBuildingColor } from './palette';
+import { err, type Result } from '@/utils/result';
+import { ENVIRONMENT_COLORS } from './plan/environment-colors';
 import {
   rasterizeCityImage,
   DEFAULT_IMAGE_FORMAT,
@@ -20,17 +14,6 @@ export const CITY_CHAR_WIDTH = 8;
 export const CITY_CHAR_HEIGHT = 14;
 export const CITY_IMAGE_PADDING = 8;
 
-/** Painter's order and parallax fade, mirroring `CityCanvas` (M2.T14). */
-const LAYER_ORDER: ReadonlyArray<CityLayerName> = [
-  'background',
-  'middleground',
-  'foreground',
-];
-const LAYER_OPACITY: Readonly<Record<CityLayerName, number>> = {
-  background: 0.4,
-  middleground: 0.75,
-  foreground: 1,
-};
 const SVG_FONT_FAMILY =
   'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
@@ -69,107 +52,99 @@ function resolvePositive(value: number | undefined, fallback: number): number {
   return value;
 }
 
-interface CityGeometry {
-  readonly charWidth: number;
-  readonly charHeight: number;
-  readonly padding: number;
-  readonly fontSize: number;
-}
-
-function resolveGeometry(options: CityImageOptions): CityGeometry {
-  const charWidth = resolvePositive(options.charWidth, CITY_CHAR_WIDTH);
-  const charHeight = resolvePositive(options.charHeight, CITY_CHAR_HEIGHT);
-  return {
-    charWidth,
-    charHeight,
-    padding: resolvePositive(options.padding, CITY_IMAGE_PADDING),
-    fontSize: resolvePositive(options.fontSize, charHeight),
-  };
+/** One non-blank character as an SVG `<text>` at its grid position. */
+function renderChar(
+  char: string,
+  row: number,
+  column: number,
+  charWidth: number,
+  charHeight: number,
+  padding: number,
+): string {
+  const x = padding + column * charWidth;
+  const y = padding + (row + 1) * charHeight;
+  return `<text x="${x.toString()}" y="${y.toString()}">${escapeXml(char)}</text>`;
 }
 
 /**
- * One occupied cell as an SVG `<text>`. Empty (`null`/`''`) cells emit nothing
- * but still occupy their column/row, so the image matches `CityCanvas`; a
- * per-cell color wins over the layer fallback.
+ * Serialize the text city (`renderSkyline`, CR6.T8b) to a deterministic SVG:
+ * the black floor, one phosphor-green `<text>` per non-blank character on a
+ * fixed grid, so the image does not depend on the font that renders it. This
+ * is the export path where WebGL is missing or the capture fails. Pure (no DOM
+ * access), so it is unit-tested in isolation.
  */
-function renderCell(
-  grid: CityGrid,
-  rowIndex: number,
-  colIndex: number,
-  layerColor: string,
-  geometry: CityGeometry,
-): string | null {
-  const cell = grid.cells[rowIndex]?.[colIndex];
-  if (cell === undefined || cell.char === null || cell.char === '') return null;
-
-  const color = cell.color ?? layerColor;
-  const x = geometry.padding + colIndex * geometry.charWidth;
-  const y = geometry.padding + (rowIndex + 1) * geometry.charHeight;
-  return `<text x="${x.toString()}" y="${y.toString()}" fill="${color}">${escapeXml(cell.char)}</text>`;
-}
-
-/** Render a whole layer, keeping `CityCanvas`'s palette color and depth fade. */
-function renderLayer(
-  layerName: CityLayerName,
-  grid: CityGrid,
-  theme: Theme,
-  geometry: CityGeometry,
-): string {
-  const layerColor = getBuildingColor(layerName, theme.palette);
-  const text = grid.cells
+export function buildCityImage(
+  rows: ReadonlyArray<string>,
+  options: CityImageOptions = {},
+): SerializedCityImage {
+  const charWidth = resolvePositive(options.charWidth, CITY_CHAR_WIDTH);
+  const charHeight = resolvePositive(options.charHeight, CITY_CHAR_HEIGHT);
+  const padding = resolvePositive(options.padding, CITY_IMAGE_PADDING);
+  const fontSize = resolvePositive(options.fontSize, charHeight);
+  const columns = Math.max(0, ...rows.map((row) => row.length));
+  const width = padding * 2 + columns * charWidth;
+  const height = padding * 2 + rows.length * charHeight;
+  const text = rows
     .map((row, rowIndex) =>
-      row
-        .map((_cell, colIndex) =>
-          renderCell(grid, rowIndex, colIndex, layerColor, geometry),
+      Array.from(row)
+        .map((char, column) =>
+          char === ' ' ? '' : renderChar(char, rowIndex, column, charWidth, charHeight, padding),
         )
-        .filter((cell): cell is string => cell !== null)
         .join(''),
     )
     .join('');
 
-  return `<g data-layer="${layerName}" opacity="${LAYER_OPACITY[layerName].toString()}">${text}</g>`;
-}
-
-/**
- * Serialize the current three layers to a deterministic SVG (roadmap M3.T8).
- * It mirrors what `CityCanvas` displays: the active theme's `backgroundColor`
- * and palette, the per-cell color override, the parallax opacity and the CRT
- * monospace font. Pure (no DOM access), so it is unit-tested in isolation.
- */
-export function buildCityImage(
-  layers: CityLayers,
-  theme: Theme,
-  options: CityImageOptions = {},
-): SerializedCityImage {
-  const geometry = resolveGeometry(options);
-  const width =
-    geometry.padding * 2 + layers.background.width * geometry.charWidth;
-  const height =
-    geometry.padding * 2 + layers.background.height * geometry.charHeight;
-  const body = LAYER_ORDER.map((name) =>
-    renderLayer(name, layers[name], theme, geometry),
-  ).join('');
-
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width.toString()}" height="${height.toString()}" ` +
     `viewBox="0 0 ${width.toString()} ${height.toString()}">` +
-    `<rect width="${width.toString()}" height="${height.toString()}" fill="${theme.backgroundColor}"/>` +
-    `<g font-family="${SVG_FONT_FAMILY}" font-size="${geometry.fontSize.toString()}">${body}</g>` +
+    `<rect width="${width.toString()}" height="${height.toString()}" fill="${ENVIRONMENT_COLORS.floor}"/>` +
+    `<g font-family="${SVG_FONT_FAMILY}" font-size="${fontSize.toString()}" fill="${ENVIRONMENT_COLORS.hud}">${text}</g>` +
     '</svg>';
 
   return { svg, width, height };
 }
 
+/** Size of the exported picture of the 3D city, in pixels (16:9, large enough to share). */
+export const EXPORT_WIDTH = 1600;
+export const EXPORT_HEIGHT = 900;
+
 /**
- * High-level export used by `ExportCityButton`: serialize the layers and
- * rasterize them in the requested format. The component only calls this and
- * handles the download/error UI (Separation of Concerns, §1.1).
+ * Renders one frame of the 3D city at a size and reads it (`captureFrame` of the
+ * renderer, CR6.T10). Present only while the 3D view is running.
+ */
+export type FrameCapture = (
+  width: number,
+  height: number,
+  format: ImageFormat,
+) => Result<RasterizedCityImage>;
+
+function tryCapture(
+  capture: FrameCapture,
+  format: ImageFormat,
+): Result<RasterizedCityImage> {
+  try {
+    return capture(EXPORT_WIDTH, EXPORT_HEIGHT, format);
+  } catch (cause) {
+    return err(cause instanceof Error ? cause : new Error(String(cause)));
+  }
+}
+
+/**
+ * High-level export used by `ExportCityButton` (§1.4 boundary: every failure is
+ * a `Result`). With the 3D view running it is the 3D frame at `EXPORT_WIDTH` ×
+ * `EXPORT_HEIGHT`; without it (no WebGL, a lost context) or when the capture
+ * fails, it is the text city serialized as SVG. The component only calls this
+ * and handles the download/error UI (Separation of Concerns, §1.1).
  */
 export async function exportCityImage(
-  layers: CityLayers,
-  theme: Theme,
+  rows: ReadonlyArray<string>,
   format: ImageFormat = DEFAULT_IMAGE_FORMAT,
+  capture: FrameCapture | null = null,
 ): Promise<Result<RasterizedCityImage>> {
-  const { svg, width, height } = buildCityImage(layers, theme);
+  if (capture !== null) {
+    const framed = tryCapture(capture, format);
+    if (framed.ok) return framed;
+  }
+  const { svg, width, height } = buildCityImage(rows);
   return rasterizeCityImage(svg, width, height, format);
 }

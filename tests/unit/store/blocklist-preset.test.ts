@@ -1,146 +1,188 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { createAppStore, addPresetToBlocklist, type BlocklistState } from '@/store';
-import { PRESETS, getPresetById } from '@/lib/blocking/presets';
+import {
+  createAppStore,
+  selectAppliedPresetIds,
+  selectIsPresetApplied,
+  selectPresetCoveredCount,
+  selectUserPresets,
+  type AppStore,
+} from '@/store';
+import { PRESETS } from '@/lib/blocking/presets';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
-import type { Preset } from '@/store/store.types';
 
-const empty: BlocklistState = { blocklist: [], customTags: [] };
-
-function requirePreset(id: string): Preset {
-  const preset = getPresetById(id);
-  if (preset === undefined) throw new Error(`missing preset ${id}`);
-  return preset;
+function createStore() {
+  const sendMutation = vi.fn<(message: MutationMessage) => void>();
+  const store = createAppStore({
+    dependencies: { sendMutation, now: () => 1_000, random: () => 0.5 },
+  });
+  return { store, sendMutation };
 }
 
-describe('preset expansion (M3.T1)', () => {
-  it('adds every domain of a preset to the blocklist', () => {
-    const next = addPresetToBlocklist(empty, requirePreset('social'));
+const domainsOf = (store: AppStore): string[] =>
+  store.getState().blocklist.blocklist.map((entry) => entry.domain.value);
 
-    expect(next.blocklist.map((entry) => entry.domain.value)).toEqual([
-      'instagram.com',
-      'facebook.com',
-      'x.com',
-      'tiktok.com',
-    ]);
-  });
-
-  it('attaches the preset tag to every contributed domain', () => {
-    const next = addPresetToBlocklist(empty, requirePreset('social'));
-
-    for (const entry of next.blocklist) {
-      expect(entry.tagIds).toEqual(['social']);
-    }
-  });
-
-  it('applies two presets with an overlapping domain without duplicating it', () => {
-    const first: Preset = {
-      id: 'one',
-      name: 'One',
-      tag: { id: 'one', label: 'One' },
-      domains: [{ value: 'shared.com' }, { value: 'a.com' }],
-    };
-    const second: Preset = {
-      id: 'two',
-      name: 'Two',
-      tag: { id: 'two', label: 'Two' },
-      domains: [{ value: 'shared.com' }, { value: 'b.com' }],
-    };
-
-    const next = addPresetToBlocklist(addPresetToBlocklist(empty, first), second);
-
-    expect(next.blocklist.map((entry) => entry.domain.value)).toEqual([
-      'shared.com',
-      'a.com',
-      'b.com',
-    ]);
-    // The shared domain keeps one entry and gathers both tags.
-    expect(next.blocklist[0]?.tagIds).toEqual(['one', 'two']);
-  });
-
-  it('keeps an existing tagged entry and adds the preset tag', () => {
-    const existing: BlocklistState = {
-      blocklist: [{ domain: { value: 'facebook.com' }, tagIds: ['focus'] }],
-      customTags: [],
-    };
-
-    const next = addPresetToBlocklist(existing, requirePreset('social'));
-
-    expect(next.blocklist.find((entry) => entry.domain.value === 'facebook.com')?.tagIds).toEqual([
-      'focus',
-      'social',
-    ]);
-  });
-
-  it('is a no-op returning the same reference for an empty preset', () => {
-    const bare: Preset = {
-      id: 'bare',
-      name: 'Bare',
-      tag: { id: 'bare', label: 'Bare' },
-      domains: [],
-    };
-
-    expect(addPresetToBlocklist(empty, bare)).toBe(empty);
-  });
-
-  it('applying the same preset twice returns the same reference and never duplicates', () => {
-    const once = addPresetToBlocklist(empty, requirePreset('social'));
-
-    expect(addPresetToBlocklist(once, requirePreset('social'))).toBe(once);
-  });
-
-  it('does not mutate the input state (pure)', () => {
-    const before = structuredClone(empty);
-
-    addPresetToBlocklist(empty, requirePreset('social'));
-
-    expect(empty).toEqual(before);
-  });
-
-  it('every declared preset is canonical and adds without leftovers', () => {
+describe('built-in presets (M2.T5)', () => {
+  it('every declared preset is canonical and has a unique id', () => {
+    expect(new Set(PRESETS.map((preset) => preset.id)).size).toBe(
+      PRESETS.length,
+    );
     for (const preset of PRESETS) {
-      const next = addPresetToBlocklist(empty, preset);
-      expect(next.blocklist).toHaveLength(preset.domains.length);
+      const { store } = createStore();
+      store.getState().togglePreset(preset.id, true);
+      expect(domainsOf(store)).toHaveLength(preset.domains.length);
     }
   });
 });
 
-describe('applyPreset store action (M3.T1)', () => {
+describe('togglePreset store action (CR4.T3)', () => {
   beforeEach(() => {
     fakeBrowser.reset();
   });
 
   it('applies the whole preset in a single update and sends a single mutation', () => {
-    const sendMutation = vi.fn<(message: MutationMessage) => void>();
-    const store = createAppStore({ dependencies: { sendMutation } });
+    const { store, sendMutation } = createStore();
     const notify = vi.fn();
     store.subscribe(notify);
 
-    store.getState().applyPreset('social');
+    store.getState().togglePreset('social', true);
 
-    expect(store.getState().blocklist.blocklist.map((entry) => entry.domain.value)).toEqual([
+    expect(domainsOf(store)).toEqual([
       'instagram.com',
       'facebook.com',
       'x.com',
       'tiktok.com',
     ]);
-    // One store update (one re-render) for the whole preset.
+    // One store update (one re-render) and one mutation for the whole preset.
     expect(notify).toHaveBeenCalledTimes(1);
-    // One mutation, not one per domain.
     expect(sendMutation).toHaveBeenCalledTimes(1);
     expect(sendMutation).toHaveBeenCalledWith({
-      type: 'BLOCKLIST_APPLY_PRESET',
-      payload: { presetId: 'social' },
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'social', applied: true },
     });
   });
 
+  it('switches the preset off again and removes only what it contributed', () => {
+    const { store, sendMutation } = createStore();
+    store.getState().addSite('x.com');
+    store.getState().togglePreset('social', true);
+
+    store.getState().togglePreset('social', false);
+
+    expect(domainsOf(store)).toEqual(['x.com']);
+    expect(selectAppliedPresetIds(store.getState())).toEqual([]);
+    expect(sendMutation).toHaveBeenLastCalledWith({
+      type: 'PRESET_TOGGLE',
+      payload: { presetId: 'social', applied: false },
+    });
+  });
+
+  it('switching on a preset that is already on sends nothing', () => {
+    const { store, sendMutation } = createStore();
+    store.getState().togglePreset('social', true);
+    sendMutation.mockClear();
+
+    store.getState().togglePreset('social', true);
+
+    expect(sendMutation).not.toHaveBeenCalled();
+  });
+
   it('ignores an unknown preset id without mutating or sending', () => {
-    const sendMutation = vi.fn<(message: MutationMessage) => void>();
-    const store = createAppStore({ dependencies: { sendMutation } });
+    const { store, sendMutation } = createStore();
 
-    store.getState().applyPreset('does-not-exist');
+    store.getState().togglePreset('does-not-exist', true);
 
-    expect(store.getState().blocklist.blocklist).toEqual([]);
+    expect(domainsOf(store)).toEqual([]);
+    expect(sendMutation).not.toHaveBeenCalled();
+  });
+
+  it('exposes the applied state and the covered count through selectors', () => {
+    const { store } = createStore();
+    const social = PRESETS[0];
+    if (social === undefined) throw new Error('missing preset');
+
+    expect(selectIsPresetApplied('social')(store.getState())).toBe(false);
+    expect(selectPresetCoveredCount(social)(store.getState())).toBe(0);
+
+    store.getState().togglePreset('social', true);
+    expect(selectIsPresetApplied('social')(store.getState())).toBe(true);
+    expect(selectPresetCoveredCount(social)(store.getState())).toBe(4);
+
+    store.getState().removeSite('x.com');
+    expect(selectIsPresetApplied('social')(store.getState())).toBe(true);
+    expect(selectPresetCoveredCount(social)(store.getState())).toBe(3);
+  });
+});
+
+describe('saved presets store actions (CR4.T3)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it('savePreset mints the id from the injected clock and entropy', () => {
+    const { store, sendMutation } = createStore();
+    store.getState().addSite('x.com');
+    sendMutation.mockClear();
+
+    store.getState().savePreset('  Focus ');
+
+    const [preset] = selectUserPresets(store.getState());
+    expect(preset?.name).toBe('Focus');
+    expect(preset?.id.startsWith('user:')).toBe(true);
+    expect(sendMutation).toHaveBeenCalledWith({
+      type: 'PRESET_SAVE',
+      // The raw name is sent; the background trims and validates it again.
+      payload: { id: preset?.id, name: '  Focus ' },
+    });
+    // The domains are not sent: the background snapshots its own list.
+    expect(JSON.stringify(sendMutation.mock.calls)).not.toContain('x.com');
+  });
+
+  it('savePreset rejects an empty list and duplicate names without sending', () => {
+    const { store, sendMutation } = createStore();
+
+    store.getState().savePreset('Focus');
+    expect(sendMutation).not.toHaveBeenCalled();
+
+    store.getState().addSite('x.com');
+    store.getState().savePreset('social');
+    expect(selectUserPresets(store.getState())).toEqual([]);
+  });
+
+  it('renames and deletes a saved preset, keeping its sites blocked', () => {
+    const { store } = createStore();
+    store.getState().addSite('x.com');
+    store.getState().savePreset('Focus');
+    const id = selectUserPresets(store.getState())[0]?.id ?? '';
+
+    store.getState().renamePreset(id, 'Deep work');
+    expect(selectUserPresets(store.getState())[0]?.name).toBe('Deep work');
+
+    store.getState().deletePreset(id);
+    expect(selectUserPresets(store.getState())).toEqual([]);
+    expect(domainsOf(store)).toEqual(['x.com']);
+    expect(store.getState().blocklist.blocklist[0]?.manual).toBe(true);
+  });
+
+  it('a saved preset toggles like a built-in one', () => {
+    const { store } = createStore();
+    store.getState().addSite('x.com');
+    store.getState().savePreset('Focus');
+    const id = selectUserPresets(store.getState())[0]?.id ?? '';
+
+    store.getState().togglePreset(id, false);
+    expect(domainsOf(store)).toEqual([]);
+
+    store.getState().togglePreset(id, true);
+    expect(domainsOf(store)).toEqual(['x.com']);
+  });
+
+  it('never renames or deletes a built-in preset', () => {
+    const { store, sendMutation } = createStore();
+
+    store.getState().renamePreset('social', 'Mine');
+    store.getState().deletePreset('social');
+
     expect(sendMutation).not.toHaveBeenCalled();
   });
 });

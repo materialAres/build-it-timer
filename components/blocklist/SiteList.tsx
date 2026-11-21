@@ -1,99 +1,85 @@
 import { i18n } from '#i18n';
-import { useState, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from 'react';
+import { classifyEntryError } from '@/lib/blocking/entry-error';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
-import { selectBlocklist, selectBlocklistEditable, useAppStore } from '@/store';
+import { computeEntrySourceLabels } from '@/lib/blocking/entry-sources';
+import { PRESETS } from '@/lib/blocking/presets';
+import {
+  selectBlocklist,
+  selectBlocklistAddAllowed,
+  selectBlocklistEditable,
+  selectUserPresets,
+  useAppStore,
+} from '@/store';
+import { describeEntryError } from './entry-error-message';
+import { SiteEntry } from './SiteEntry';
+import { SITE_LIST_STYLES } from './site-list.styles';
+import { useListChanges } from './use-list-changes';
 
-/**
- * The list's own stylesheet, consistent with the CRT/monospace look used by the
- * rest of the popup (M2.T14/M2.T17/M2.T18/M3.T1/M3.T2).
- */
-const SITE_LIST_STYLES = `
-  .site-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #e9ecef;
-  }
-  .site-list__title {
-    margin: 0;
-    font-size: 0.75rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.85;
-  }
-  .site-list__form {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .site-list__input {
-    flex: 1;
-    background: #0b0f14;
-    border: 1px solid #4dabf7;
-    color: inherit;
-    padding: 0.3rem 0.5rem;
-  }
-  .site-list__preview {
-    margin: 0;
-    font-size: 0.7rem;
-    color: #4dabf7;
-    opacity: 0.9;
-  }
-  .site-list__feedback {
-    margin: 0;
-    font-size: 0.75rem;
-  }
-  .site-list__feedback--error {
-    color: #ff6b6b;
-  }
-  .site-list__feedback--info {
-    color: #51cf66;
-  }
-  .site-list__entries {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .site-list__entry {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .site-list__domain {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`;
+/** How long a confirmation stays; an error stays until the field is edited. */
+const INFO_FEEDBACK_MS = 3_000;
 
 interface Feedback {
   readonly kind: 'error' | 'info';
   readonly text: string;
 }
 
+interface SiteListProps {
+  /** Rendered between the add form and the list (the preset quick-add row). */
+  readonly quickAdd?: ReactNode;
+}
+
 /**
- * Site CRUD UI for the blocklist (M3.T3, revised by CR1.T1).
+ * The Blocklist tab's single list (M3.T3, revised by CR1.T1 and UI.T1).
  *
- * Presentational: it reads the entries through the granular selector and never
- * computes list state itself. The input is canonicalized live with
- * `normalizeEntry` (M1.T2/M2.T21) both to preview the registrable domain and to
- * validate: an unparseable input or a "bare" public suffix is rejected with the
- * localized `blocklist.invalidUrl` message ("Enter a valid URL" in the EN
- * default) and is never dispatched. Duplicates are detected here only to produce
- * the visible feedback; the authoritative dedup stays in the store's pure
- * helpers (M2.T4).
+ * Presentational: entries come from the granular selector, the input is
+ * canonicalized live with `normalizeEntry` (M1.T2/M2.T21) to preview and
+ * validate, and duplicates are detected only for the visible feedback — the
+ * authoritative dedup stays in the store's pure helpers (M2.T4). Each domain is
+ * rendered exactly once (UI.T1), labelled with the presets/tags it came from.
+ * UI.T6 hardening: a rejected entry says why and is linked to the field, a
+ * confirmation fades, new rows are highlighted and scrolled into view, and a
+ * preset's additions/removals are announced in a live region.
+ *
+ * Two windows (CR5.T3): adding is allowed from `idle` through `paused`, while
+ * removing stays `idle`-only, so the form and the × buttons follow different
+ * predicates.
  */
-export function SiteList() {
+export function SiteList({ quickAdd }: SiteListProps) {
   const entries = useAppStore(selectBlocklist);
+  const userPresets = useAppStore(selectUserPresets);
+  const presets = useMemo(() => [...PRESETS, ...userPresets], [userPresets]);
   const editable = useAppStore(selectBlocklistEditable);
+  const addAllowed = useAppStore(selectBlocklistAddAllowed);
   const [value, setValue] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const feedbackId = useId();
+  const formAdd = useRef<string | null>(null);
+  const domains = useMemo(
+    () => entries.map((entry) => entry.domain.value),
+    [entries],
+  );
+  const { added, announcement } = useListChanges(domains, formAdd);
 
-  const title = i18n.t('blocklist.blockedSites');
+  useEffect(() => {
+    if (feedback?.kind !== 'info') return;
+    const timer = globalThis.setTimeout(() => {
+      setFeedback(null);
+    }, INFO_FEEDBACK_MS);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [feedback]);
+
+  const title = i18n.t('tabs.blocklist');
   const listName = i18n.t('blocklist.blocklistName');
   const preview = normalizeEntry(value.trim());
   const previewDomain = preview.ok ? preview.value : null;
@@ -102,17 +88,25 @@ export function SiteList() {
     event.preventDefault();
     const result = normalizeEntry(value);
     if (!result.ok) {
-      setFeedback({ kind: 'error', text: i18n.t('blocklist.invalidUrl') });
+      setFeedback({
+        kind: 'error',
+        text: describeEntryError(classifyEntryError(value)),
+      });
       return;
     }
     const domain = result.value;
-    if (entries.some((entry) => entry.domain.value === domain)) {
+    // A site only a preset listed is not a duplicate: adding it by hand makes it
+    // a manual entry, so switching that preset off keeps it.
+    if (
+      entries.some((entry) => entry.domain.value === domain && entry.manual)
+    ) {
       setFeedback({
         kind: 'info',
         text: i18n.t('blocklist.alreadyInList', [domain, listName]),
       });
       return;
     }
+    formAdd.current = domain;
     useAppStore.getState().addSite(domain);
     setFeedback({ kind: 'info', text: i18n.t('blocklist.added', [domain]) });
     setValue('');
@@ -121,61 +115,83 @@ export function SiteList() {
   return (
     <section className="site-list" aria-label={title}>
       <style>{SITE_LIST_STYLES}</style>
-      <h3 className="site-list__title">{title}</h3>
+      <div className="site-list__compose">
+        <h3 className="site-list__title">
+          <span className="site-list__title-text">{title}</span>
+          <span className="site-list__count">{entries.length}</span>
+        </h3>
 
-      <form className="site-list__form" onSubmit={handleSubmit}>
-        <input
-          className="site-list__input"
-          type="text"
-          value={value}
-          disabled={!editable}
-          aria-label={i18n.t('blocklist.addTo', [title])}
-          placeholder={i18n.t('blocklist.exampleDomain')}
-          onChange={(event) => {
-            setValue(event.target.value);
-            setFeedback(null);
-          }}
-        />
-        <button type="submit" disabled={!editable}>
-          {i18n.t('common.add')}
-        </button>
-      </form>
+        <form className="site-list__form" onSubmit={handleSubmit}>
+          <input
+            className="site-list__input"
+            type="text"
+            value={value}
+            disabled={!addAllowed}
+            aria-invalid={feedback?.kind === 'error' ? true : undefined}
+            aria-describedby={
+              addAllowed && feedback !== null ? feedbackId : undefined
+            }
+            aria-label={i18n.t('blocklist.addTo', [title])}
+            placeholder={i18n.t('blocklist.exampleDomain')}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setFeedback(null);
+            }}
+          />
+          <button type="submit" disabled={!addAllowed}>
+            {i18n.t('common.add')}
+          </button>
+        </form>
 
-      {editable && previewDomain !== null && previewDomain !== value.trim() ? (
-        <p className="site-list__preview" aria-live="polite">
-          → {previewDomain}
-        </p>
-      ) : null}
+        {addAllowed &&
+        previewDomain !== null &&
+        previewDomain !== value.trim() ? (
+          <p className="site-list__preview" aria-live="polite">
+            → {previewDomain}
+          </p>
+        ) : null}
 
-      {editable && feedback !== null ? (
-        <p
-          className={`site-list__feedback site-list__feedback--${feedback.kind}`}
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
+        {addAllowed && feedback !== null ? (
+          <p
+            id={feedbackId}
+            className={`site-list__feedback site-list__feedback--${feedback.kind}`}
+            role={feedback.kind === 'error' ? 'alert' : 'status'}
+          >
+            {feedback.text}
+          </p>
+        ) : null}
+
+        <div
+          className="site-list__announce"
+          data-announcement
+          aria-live="polite"
+          aria-atomic="true"
         >
-          {feedback.text}
-        </p>
-      ) : null}
+          {announcement}
+        </div>
 
-      <ul
-        className="site-list__entries"
-        aria-label={i18n.t('blocklist.entriesAriaLabel', [title])}
-      >
-        {entries.map((entry) => (
-          <li key={entry.domain.value} className="site-list__entry">
-            <span className="site-list__domain">{entry.domain.value}</span>
-            <button
-              type="button"
-              disabled={!editable}
-              aria-label={i18n.t('common.remove', [entry.domain.value])}
-              onClick={() => {
-                useAppStore.getState().removeSite(entry.domain.value);
-              }}
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+        {quickAdd}
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="site-list__empty">{i18n.t('blocklist.empty')}</p>
+      ) : (
+        <ul
+          className="site-list__entries"
+          aria-label={i18n.t('blocklist.entriesAriaLabel', [title])}
+        >
+          {entries.map((entry) => (
+            <SiteEntry
+              key={entry.domain.value}
+              domain={entry.domain.value}
+              sources={computeEntrySourceLabels(entry.presetIds, presets)}
+              editable={editable}
+              isNew={added.includes(entry.domain.value)}
+              reveal={added[0] === entry.domain.value}
+            />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

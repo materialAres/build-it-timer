@@ -4,9 +4,10 @@ import { ScoreBadge, scoreLevelLabel } from '@/components/score/ScoreBadge';
 import { useAppStore } from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
-function setScore(level: ScoreLevel): void {
+function setScore(level: ScoreLevel, builtCharacters = 300): void {
   useAppStore.setState((state) => ({
-    score: { ...state.score, level },
+    score: { ...state.score, level, builtCharacters },
+    timer: { ...state.timer, status: 'running' },
   }));
 }
 
@@ -57,6 +58,37 @@ describe('ScoreBadge (M2.T17)', () => {
     expect(badge).toHaveTextContent('Bad');
     expect(badge).toHaveClass('score-badge--bad');
     expect(badge).toHaveAttribute('data-level', 'bad');
+  });
+
+  it('shows a neutral early state instead of Bad in the first moments', () => {
+    setScore('bad', 0);
+
+    render(<ScoreBadge />);
+
+    const badge = screen.getByRole('status');
+    expect(badge).toHaveTextContent('Starting');
+    expect(badge).toHaveClass('score-badge--early');
+    expect(badge).toHaveAttribute('data-level', 'early');
+    expect(badge).not.toHaveTextContent('Bad');
+  });
+
+  it('shows Bad once a tenth of the session is built', () => {
+    setScore('bad', 60);
+
+    render(<ScoreBadge />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Bad');
+  });
+
+  it('shows the real tier of a finished session even when little was built', () => {
+    setScore('bad', 12);
+    act(() => {
+      useAppStore.setState((state) => ({ timer: { ...state.timer, status: 'completed' } }));
+    });
+
+    render(<ScoreBadge />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Bad');
   });
 
   it('reflects a transition from excellent to bad between two consecutive renders', () => {

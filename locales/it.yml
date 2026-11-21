@@ -11,9 +11,12 @@ timer:
   timeRemaining: Tempo rimanente
   start: Avvia
   pause: Pausa
+  resume: Riprendi
+  paused: In pausa
   reset: Reimposta
   durationLabel: Durata della sessione
   durationOption: '$1 min'
+  minutesUnit: MIN
 
 tabs:
   ariaLabel: Sezioni del popup
@@ -27,12 +30,27 @@ city:
   exportAriaLabel: Esporta città
   exportPng: Esporta PNG
   exportJpeg: Esporta JPEG
+  emptyHint: La tua città cresce mentre ti concentri. Avvia una sessione per costruirla.
   exportError: Impossibile esportare l'immagine della città.
+  loading: CARICAMENTO CITTÀ…
+  openFull: Vedi la città intera
+  openError: Impossibile aprire la pagina della città intera.
+  fallbackNote: Vista 3D non disponibile qui, mostro una versione testuale.
+  hud: '> $1/$2 PIANI'
+  summaryEmpty: 'Città: ancora nulla di costruito.'
+  summary: 'Città: $1 piani costruiti su $2. Edifici in piedi: $3.'
+  summaryTallestNamed: 'Più alto: $1, piani: $2.'
+  summaryTallest: 'Edificio più alto, piani: $1.'
+
+cityPage:
+  title: Build-it! — Città intera
+  hint: Trascina per ruotare, scorri per zoomare, trascina col tasto destro per spostare.
 
 score:
   excellent: Eccellente
   great: Ottimo
   good: Buono
+  early: In partenza
   bad: Scarso
   badgeAriaLabel: 'Punteggio di concentrazione: $1'
   population: popolazione
@@ -44,25 +62,46 @@ score:
 
 blocklist:
   presets: Preset
-  applyPreset: 'Applica preset $1'
-  tags: Tag
-  newTagName: Nome del nuovo tag
-  newTag: Nuovo tag
-  createTag: Crea tag
-  customTags: Tag personalizzati
-  assignTag: 'Assegna $1 a $2'
-  filterByTag: 'Filtra per $1'
-  deleteTag: 'Elimina $1'
+  presetToggle: 'Preset $1, $2 di $3 siti bloccati'
+  presetDomains: 'Blocca $1'
+  presetNoSites: Nessun sito in questo preset
+  savePreset: Salva lista come preset
+  savePresetNote: Salva tutti i siti della lista. Disattivando il preset vengono rimossi.
+  presetName: Nome del preset
+  save: Salva
+  cancel: Annulla
+  presetNameEmpty: Inserisci un nome.
+  presetNameTooLong: 'Usa al massimo $1 caratteri.'
+  presetNameTaken: Esiste già un preset con questo nome.
+  editSavedPresets: Modifica preset salvati
+  savedPresets: Preset salvati
+  renamePreset: Rinomina
+  renamePresetLabel: 'Rinomina $1'
+  deletePreset: Elimina
+  deletePresetLabel: 'Elimina $1'
+  deletePresetConfirm: 'Eliminare $1? I suoi siti restano bloccati.'
+  keepPreset: Mantieni
   sites: Siti
-  blockedSites: Siti bloccati
   blocklistName: lista dei bloccati
   addTo: 'Aggiungi a $1'
   entriesAriaLabel: '$1 voci'
   exampleDomain: example.com
+  empty: Nessun sito bloccato.
   invalidUrl: Inserisci un URL valido
   alreadyInList: '$1 è già nella $2.'
   added: 'Aggiunto $1.'
-  locked: La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.
+  addedSites: 'Aggiunti $1 siti'
+  removed: 'Rimosso $1.'
+  removedSites: 'Rimossi $1 siti'
+  invalidEmpty: Inserisci un sito, ad esempio example.com.
+  invalidSuffix: '$1 è una terminazione di dominio, non un sito. Aggiungi il nome del sito, ad esempio example.com.'
+  invalidIp: Gli indirizzi IP non possono essere bloccati. Inserisci un nome di dominio.
+  locked: La lista è bloccata. Reimposta il timer per modificarla.
+  addOnly: Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.
+  summarySites: 'Blocca $1 siti'
+  summarySite: Blocca 1 sito
+  summaryAddOnly: '$1 · solo aggiunte durante una sessione'
+  summaryEmpty: Nessun sito bloccato
 
 overlay:
   title: Resta concentrato
@@ -71,8 +110,8 @@ overlay:
   # `<span>` while the sentence stays translatable as a whole.
   questionPrefix: 'Hai messo '
   questionSuffix: ' nella lista dei bloccati. Sei sicuro di voler accedere?'
-  yes: Sì
-  no: No
+  openAnyway: Apri comunque
+  backToWork: Torna al lavoro
 
 common:
   add: Aggiungi

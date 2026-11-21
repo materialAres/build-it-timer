@@ -47,7 +47,11 @@ describe('site CRUD actions (M3.T3)', () => {
 
     const state = store.getState().blocklist;
     expect(domainValues(state.blocklist)).toEqual(['x.com']);
-    expect(Object.keys(state).sort()).toEqual(['blocklist', 'customTags']);
+    expect(Object.keys(state).sort()).toEqual([
+      'appliedPresetIds',
+      'blocklist',
+      'userPresets',
+    ]);
     expect(sendMutation).toHaveBeenCalledTimes(1);
   });
 

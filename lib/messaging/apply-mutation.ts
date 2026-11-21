@@ -1,89 +1,74 @@
 import type { AppStore } from '@/store';
-import { getPresetById } from '@/lib/blocking/presets';
-import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
 import {
   addBlocklistSite,
-  addPresetToBlocklist,
-  assignTagToSite,
-  unassignTagFromSite,
   removeBlocklistSite,
-  upsertTag,
-  removeTag,
+} from '@/lib/blocking/blocklist-sites';
+import { togglePreset } from '@/lib/blocking/preset-toggle';
+import { PRESETS } from '@/lib/blocking/presets';
+import {
+  deleteUserPreset,
+  findPreset,
+  renameUserPreset,
+  saveUserPreset,
+} from '@/lib/blocking/saved-presets';
+import { isPresetDurationSeconds } from '@/lib/timer/focus-presets';
+import {
+  isBlocklistAddAllowed,
   isBlocklistEditable,
   type BlocklistState,
 } from '@/store';
+import {
+  isAddDirectionMutation,
+  isWellFormedBlocklistMutation,
+  type BlocklistMutation,
+} from './blocklist-payload';
 import type { MutationMessage } from './messages.types';
-import type { Tag } from '@/store/store.types';
 import { createLogger, type Logger } from '@/utils/logger';
 
-function isTag(value: unknown): value is Tag {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as { id?: unknown; label?: unknown };
-  return typeof candidate.id === 'string' && typeof candidate.label === 'string';
-}
-
 /**
- * Apply one blocklist/tag mutation to the blocklist state. Returns the *same*
- * reference when the payload is malformed or unknown, so an invalid message
- * neither mutates the store nor triggers a persist (forward-compatible with
- * M5.T1 hardening).
+ * Apply one blocklist/preset mutation to the blocklist state. The payload has
+ * already passed `isWellFormedBlocklistMutation`, so only the domain decisions
+ * are left: normalization (M2.T4/M2.T21), dedup, preset resolution and name
+ * rules live in the pure helpers, which return the *same* reference for a
+ * request they refuse, so nothing is persisted (M1.T10).
  *
  * The handler addresses the single blocklist (CR1.T2/CR1.T5a); an extra `list`
  * field in a received payload has no effect.
- *
- * The semantics stay deliberately minimal here: normalization (M2.T4/M2.T21),
- * dedup, preset expansion (M2.T5) and the DNR side-effect (M2.T7) are owned by
- * those tasks.
  */
 function applyBlocklistMutation(
   state: BlocklistState,
-  message: MutationMessage,
+  message: BlocklistMutation,
 ): BlocklistState {
   switch (message.type) {
-    case 'BLOCKLIST_ADD_SITE': {
-      const { site } = message.payload;
-      if (typeof site !== 'string' || site.length === 0) return state;
-      return addBlocklistSite(state, site);
-    }
-    case 'BLOCKLIST_REMOVE_SITE': {
-      const { site } = message.payload;
-      if (typeof site !== 'string' || site.length === 0) return state;
-      return removeBlocklistSite(state, site);
-    }
-    case 'BLOCKLIST_APPLY_PRESET': {
-      const { presetId } = message.payload;
-      if (typeof presetId !== 'string' || presetId.length === 0) return state;
-      const preset = getPresetById(presetId);
-      if (preset === undefined) return state;
-      // The whole preset is expanded in a single state update (M3.T1), so the
+    case 'BLOCKLIST_ADD_SITE':
+      return addBlocklistSite(state, message.payload.site);
+    case 'BLOCKLIST_REMOVE_SITE':
+      return removeBlocklistSite(state, message.payload.site);
+    case 'PRESET_TOGGLE': {
+      const { presetId, applied } = message.payload;
+      const preset = findPreset(state, presetId);
+      // The whole preset is applied in a single state update (M3.T1), so the
       // mutation persists once no matter how many domains it contains.
-      return addPresetToBlocklist(state, preset);
+      return preset === undefined
+        ? state
+        : togglePreset(state, preset, applied);
     }
-    case 'TAG_UPSERT': {
-      if (!isTag(message.payload)) return state;
-      return upsertTag(state, message.payload);
-    }
-    case 'TAG_REMOVE': {
-      const { tagId } = message.payload;
-      if (typeof tagId !== 'string' || tagId.length === 0) return state;
-      return removeTag(state, tagId);
-    }
-    case 'TAG_ASSIGN': {
-      const { site, tagId } = message.payload;
-      if (typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return assignTagToSite(state, site, tagId);
-    }
-    case 'TAG_UNASSIGN': {
-      const { site, tagId } = message.payload;
-      if (typeof site !== 'string' || typeof tagId !== 'string') {
-        return state;
-      }
-      return unassignTagFromSite(state, site, tagId);
-    }
-    default:
-      return state;
+    case 'PRESET_SAVE':
+      return saveUserPreset(
+        state,
+        message.payload.id,
+        message.payload.name,
+        PRESETS,
+      );
+    case 'PRESET_RENAME':
+      return renameUserPreset(
+        state,
+        message.payload.presetId,
+        message.payload.name,
+        PRESETS,
+      );
+    case 'PRESET_DELETE':
+      return deleteUserPreset(state, message.payload.presetId);
   }
 }
 
@@ -106,7 +91,7 @@ function hasEmptyPayload(payload: unknown): boolean {
  * store (M1.T9) and the change propagates back to the popup through the M1.T8
  * sync bridge.
  *
- * Two families share the path. Blocklist/tag mutations are pure state
+ * Two families share the path. Blocklist/preset mutations are pure state
  * transformations applied here. Timer mutations are *commands*: they invoke the
  * background's own timer slice (M2.T1), which is what schedules/clears the
  * session alarm on the background's provider — the popup's copy is read-only
@@ -146,12 +131,25 @@ export function createMutationHandler(
       default: {
         // CR2.T2: the background is the single writer, so the lock must hold
         // here too — a stale or forged message would otherwise bypass the
-        // store/UI guard. Only the message type is logged, never the payload.
-        if (!isBlocklistEditable(store.getState().timer.status)) {
+        // store/UI guard. CR5.T2: a message that only adds sites has the wider
+        // window. Only the message type is logged, never the payload.
+        const { status } = store.getState().timer;
+        const allowed = isAddDirectionMutation(message)
+          ? isBlocklistAddAllowed(status)
+          : isBlocklistEditable(status);
+        if (!allowed) {
           logger.debug(
             'blocklist mutation ignored while the timer is not idle',
             { type: message.type },
           );
+          return;
+        }
+        // CR4.T4: a payload that does not match its type is dropped at the
+        // boundary, again logging the type only.
+        if (!isWellFormedBlocklistMutation(message)) {
+          logger.debug('blocklist mutation dropped: malformed payload', {
+            type: message.type,
+          });
           return;
         }
         const current = store.getState().blocklist;

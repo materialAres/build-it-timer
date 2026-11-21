@@ -21,12 +21,16 @@ describe('presets data (M2.T5)', () => {
     expect(getPresetById('does-not-exist')).toBeUndefined();
   });
 
-  it('gives every preset a non-empty id, name and tag', () => {
+  it('gives every preset a non-empty id and name', () => {
     for (const preset of PRESETS) {
       expect(preset.id.length).toBeGreaterThan(0);
       expect(preset.name.length).toBeGreaterThan(0);
-      expect(preset.tag.id.length).toBeGreaterThan(0);
-      expect(preset.tag.label.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('never uses the user preset id prefix (CR4.T3)', () => {
+    for (const preset of PRESETS) {
+      expect(preset.id.startsWith('user:')).toBe(false);
     }
   });
 

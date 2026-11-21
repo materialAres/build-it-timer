@@ -21,7 +21,7 @@ describe('BlockedOverlay (M2.T8)', () => {
     expect(screen.getByText(/are you sure you want to access it\?/i)).toBeInTheDocument();
   });
 
-  it('offers exactly the two choices "Yes" and "No"', () => {
+  it('offers exactly the two choices "Open anyway" and "Back to work"', () => {
     render(
       <BlockedOverlay
         domain="facebook.com"
@@ -31,12 +31,12 @@ describe('BlockedOverlay (M2.T8)', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to work' })).toBeInTheDocument();
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
-  it('reports "Yes" through onProceed only', async () => {
+  it('reports "Open anyway" through onProceed only', async () => {
     const onProceed = vi.fn();
     const onGoBack = vi.fn();
 
@@ -48,13 +48,13 @@ describe('BlockedOverlay (M2.T8)', () => {
         onGoBack={onGoBack}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open anyway' }));
 
     expect(onProceed).toHaveBeenCalledTimes(1);
     expect(onGoBack).not.toHaveBeenCalled();
   });
 
-  it('reports "No" through onGoBack only', async () => {
+  it('reports "Back to work" through onGoBack only', async () => {
     const onProceed = vi.fn();
     const onGoBack = vi.fn();
 
@@ -66,7 +66,7 @@ describe('BlockedOverlay (M2.T8)', () => {
         onGoBack={onGoBack}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'No' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Back to work' }));
 
     expect(onGoBack).toHaveBeenCalledTimes(1);
     expect(onProceed).not.toHaveBeenCalled();
@@ -83,8 +83,8 @@ describe('BlockedOverlay (M2.T8)', () => {
     );
 
     expect(screen.getByText('Great! Keep focusing!')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'No' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open anyway' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to work' })).not.toBeInTheDocument();
   });
 
   it('carries its stylesheet inside its own markup', () => {
@@ -103,4 +103,33 @@ describe('BlockedOverlay (M2.T8)', () => {
     expect(style?.textContent).toContain('.blocked-overlay');
     expect(style?.textContent).toContain('all: initial');
   });
+
+  describe('readable on any page', () => {
+    const sheet = (): string => {
+      const { container } = render(
+        <BlockedOverlay domain="youtube.com" dismissed={false} onProceed={vi.fn()} onGoBack={vi.fn()} />,
+      );
+      return container.querySelector('style')?.textContent ?? '';
+    };
+    const rule = (css: string, selector: string): string => {
+      const start = css.indexOf(`${selector} {`);
+      return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
+    };
+
+    it('sizes the title at 24px and the description and feedback at 16px', () => {
+      const css = sheet();
+      expect(rule(css, '.blocked-overlay__title')).toContain('font-size: 24px');
+      expect(rule(css, '.blocked-overlay__message')).toContain('font-size: 16px');
+      expect(rule(css, '.blocked-overlay__feedback')).toContain('font-size: 16px');
+    });
+
+    it('uses no rem: the page decides what a rem is (YouTube sets it to 10px)', () => {
+      expect(sheet()).not.toMatch(/\d(\.\d+)?rem/);
+    });
+
+    it('rounds the buttons like the rest of the design (pill)', () => {
+      expect(rule(sheet(), '.blocked-overlay__button')).toContain('border-radius: 999px');
+    });
+  });
 });
+

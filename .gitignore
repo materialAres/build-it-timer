@@ -41,3 +41,6 @@ Thumbs.db
 # Miscellaneous
 .mcp.json
 opencode.jsonc
+
+# Local Claude Code settings (machine-specific)
+.claude/settings.local.json

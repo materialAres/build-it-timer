@@ -7,7 +7,6 @@ import { startBackground } from '@/entrypoints/background';
 import { useAppStore, attachStoreSync, DEFAULT_FOCUS_SECONDS } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
 import { tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
-import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
 /** Cadence of the default preset the sessions start on. */
@@ -18,14 +17,6 @@ const flushAsync = (): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
-
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
 
 /**
  * M3.T4 — popup composition. The real background runs in-process with
@@ -77,6 +68,15 @@ describe('popup App composition (M3.T4)', () => {
     handle.dispose();
   });
 
+  it('names the tab panel after its tab, not after its contents (UI.T6)', async () => {
+    render(<App />);
+
+    expect(screen.getByRole('tabpanel', { name: 'Timer' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.getByRole('tabpanel', { name: 'Blocklist' })).toBeInTheDocument();
+  });
+
   it('renders the tab bar and the timer section by default', () => {
     render(<App />);
 
@@ -86,14 +86,18 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
   });
 
-  it('locks the blocklist while a session is in progress and unlocks it on reset', async () => {
+  it('allows adding but not removing during a session and unlocks it on reset', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
-    expect(
-      screen.queryByText(/locked while a session is in progress/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocklist'),
+      'facebook.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -101,22 +105,68 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('status')).toHaveTextContent(
-      /locked while a session is in progress/i,
+      /added during a session.*timer reset/i,
     );
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Remove facebook.com' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeEnabled();
+
+    await userEvent.type(
+      screen.getByLabelText('Add to Blocklist'),
+      'instagram.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getByRole('button', { name: 'Remove instagram.com' }),
+    ).toBeDisabled();
+    expect(
+      useAppStore.getState().blocklist.blocklist.map((e) => e.domain.value),
+    ).toEqual(['facebook.com', 'instagram.com']);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
     await flushAsync();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/locked while a session is in progress/i),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+      screen.getByRole('button', { name: 'Remove facebook.com' }),
+    ).toBeEnabled();
   });
 
-  it('keeps the blocklist locked when the session completes', async () => {
+  it('summarises the blocklist under Start and opens the Blocklist tab (UI.T4)', async () => {
+    // The singleton store keeps the list a previous test built.
+    useAppStore.setState({
+      blocklist: { blocklist: [], appliedPresetIds: [], userPresets: [] },
+    });
+    useAppStore.getState().setActiveTab('timer');
+    render(<App />);
+
+    expect(
+      screen.getByRole('button', { name: 'No sites blocked' }),
+    ).toBeInTheDocument();
+
+    useAppStore.getState().addSite('facebook.com');
+    expect(
+      await screen.findByRole('button', {
+        name: 'Blocks 1 site',
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /^Blocks 1 site/ }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Blocklist' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('region', { name: 'Blocklist' })).toBeVisible();
+  });
+
+  it('keeps the blocklist fully locked when the session completes', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -126,9 +176,10 @@ describe('popup App composition (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('status')).toHaveTextContent(
-      /locked while a session is in progress/i,
+      /blocklist is locked.*reset the timer/i,
     );
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Video preset,/ })).toBeDisabled();
   });
 
   it('counts the displayed timer down while the session runs (I001)', async () => {
@@ -179,11 +230,36 @@ describe('popup App composition (M3.T4)', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
     expect(screen.getByRole('group', { name: 'Presets' })).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'Blocked sites' }),
+      screen.getByRole('region', { name: 'Blocklist' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('region', { name: 'Allowed sites' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows each blocked site once, after the add form and the presets (UI.T1)', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Blocklist' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: /^Social preset,/ }),
+    );
+    await flushAsync();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('instagram.com')).toHaveLength(1);
+    });
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+
+    const input = screen.getByLabelText('Add to Blocklist');
+    const presets = screen.getByRole('group', { name: 'Presets' });
+    const list = screen.getByRole('list', { name: 'Blocklist entries' });
+    expect(
+      input.compareDocumentPosition(presets) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      presets.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('starts the session from the UI and updates the display through the background', async () => {
@@ -198,34 +274,45 @@ describe('popup App composition (M3.T4)', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
 
-  it('changes the session length from the picker before starting', async () => {
+  it('changes the session length from the drum before starting (UI.T9)', async () => {
     render(<App />);
+    const drum = screen.getByRole('spinbutton', { name: 'Focus duration' });
+    expect(drum).toHaveAttribute('aria-valuenow', '30');
 
-    await userEvent.click(screen.getByRole('button', { name: '10 min' }));
+    drum.focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(drum).toHaveAttribute('aria-valuenow', '10');
     await flushAsync();
 
     // The command reached the background (read-only popup) and came back via sync.
     await waitFor(() => {
       expect(useAppStore.getState().timer.durationSeconds).toBe(10 * 60);
     });
-    expect(screen.getByText('00:10:00')).toBeInTheDocument();
+    expect(drum).toHaveAttribute('aria-valuenow', '10');
   });
 
-  it('disables the duration picker while a session is running', async () => {
+  it('turns the drum into the clock while a session runs and back on reset (UI.T9)', async () => {
     render(<App />);
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-valuenow', '30');
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
     await flushAsync();
 
-    expect(screen.getByRole('button', { name: '10 min' })).toBeDisabled();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Time remaining')).toHaveTextContent('00:30:00');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await flushAsync();
+
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-valuenow', '30');
   });
 
-  it('grows the city after a simulated tick while the session runs', async () => {
+  it('builds a character after a simulated tick while the session runs (the city is derived from the score)', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
     await flushAsync();
-    const empty = useAppStore.getState().city.layers;
+    expect(useAppStore.getState().score.builtCharacters).toBe(0);
 
     // The singleton store stamps the session start with its own clock (the
     // real one), so the tick is placed one session tick after that instant.
@@ -238,8 +325,7 @@ describe('popup App composition (M3.T4)', () => {
       });
     });
 
-    expect(countOccupied(useAppStore.getState().city.layers)).toBe(1);
-    expect(useAppStore.getState().city.layers).not.toBe(empty);
+    expect(useAppStore.getState().score.builtCharacters).toBe(1);
   });
 
   it('hides the export button during the session and shows it once completed', async () => {

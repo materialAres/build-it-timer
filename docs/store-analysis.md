@@ -8,6 +8,14 @@
 > `bun run test` → 29 passed / 6 files. Per `.continue/rules/changelog.md`, the
 > store is at task **M1.T4** (skeleton): slices are stubs and have **no actions yet**.
 
+> **CR6.T5a update (2026-11-11).** The `city` slice described below changed with CR6: the
+> persisted `city` is now only `{ sessionId }` (persist **version 4**; `lib/city/migrate-city.ts`
+> migrates v1–v3 by dropping `layers`, `buildings` and `themeId`). The plan is derived from the
+> session id (`selectCityPlan`) and the visible floors from the score (`selectVisibleFloors`),
+> both in `store/city.selectors.ts` and memoized. The ASCII `layers`, `buildings` and `themeId`
+> were removed in CR6.T9a: `CitySlice` is now `{ city: { sessionId }, resetCityForNewSession }` with
+> no injected dependencies. The text below is the M1.T4 baseline and is kept as history.
+
 ---
 
 ## Summary

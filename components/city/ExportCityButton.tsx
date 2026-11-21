@@ -1,31 +1,29 @@
 import { i18n } from '#i18n';
 import { useState } from 'react';
-import { selectCityLayers, selectCityThemeId, useAppStore } from '@/store';
-import {
-  DEFAULT_THEME_ID,
-  getThemeById,
-} from '@/lib/city/theme-registry';
+import { selectCityPlan, selectVisibleFloors, useAppStore } from '@/store';
 import {
   exportCityImage,
+  type FrameCapture,
   type ImageFormat,
 } from '@/lib/city/export-image';
+import { renderSkyline } from '@/lib/city/plan/plan-skyline';
 import type { RasterizedCityImage } from '@/lib/city/rasterize-image';
 import type { Result } from '@/utils/result';
 import { createLogger, type Logger } from '@/utils/logger';
-import type { CityLayers, Theme } from './city.types';
-import { FALLBACK_THEME } from './CityCanvas';
+import { getCityCapture } from './city-capture';
 
 const defaultLogger = createLogger('popup:export-city');
 
 /**
  * Injected boundary (principle D/L): the production default serializes and
- * rasterizes the real city, while a test substitutes a spy so it can assert the
- * component handed it the current grid and theme without touching a canvas.
+ * rasterizes the city, while a test substitutes a spy so it can assert the
+ * component handed it the current rows and the 3D capture (null when the 3D view
+ * is not running) without touching a canvas.
  */
 export type CityImageExporter = (
-  layers: CityLayers,
-  theme: Theme,
+  rows: ReadonlyArray<string>,
   format: ImageFormat,
+  capture: FrameCapture | null,
 ) => Promise<Result<RasterizedCityImage>>;
 
 export interface ExportCityButtonProps {
@@ -71,10 +69,11 @@ function triggerDownload(dataUrl: string, filename: string): void {
 }
 
 /**
- * Export the finished city as PNG/JPEG (roadmap M3.T8). The component is
- * presentational: it reads the current layers and active theme from the store,
- * then delegates serialization to `lib/city/export-image.ts` and only handles
- * the download and the error state (Separation of Concerns, §1.1). Because the
+ * Export the finished city as PNG/JPEG (roadmap M3.T8). With the 3D view
+ * running it exports a frame of it (CR6.T10); otherwise the text city
+ * (`renderSkyline`) of the current plan and visible floors. The component is presentational: it reads them from the
+ * store, then delegates serialization to `lib/city/export-image.ts` and only
+ * handles the download and the error state (Separation of Concerns, §1.1). Because the
  * exporter returns a `Result`, a failed export shows a localized message
  * instead of breaking the popup. Strings are resolved through `i18n.t(...)`
  * (M3.T9).
@@ -83,9 +82,8 @@ export function ExportCityButton({
   exporter = exportCityImage,
   logger = defaultLogger,
 }: ExportCityButtonProps) {
-  const layers = useAppStore(selectCityLayers);
-  const themeId = useAppStore(selectCityThemeId);
-  const theme = getThemeById(themeId ?? DEFAULT_THEME_ID) ?? FALLBACK_THEME;
+  const plan = useAppStore(selectCityPlan);
+  const visible = useAppStore(selectVisibleFloors);
   const [error, setError] = useState<string | null>(null);
 
   const handleExport = (format: ImageFormat): void => {
@@ -97,7 +95,8 @@ export function ExportCityButton({
     };
 
     try {
-      void exporter(layers, theme, format)
+      const rows = plan === null ? [] : renderSkyline(plan, visible);
+      void exporter(rows, format, getCityCapture())
         .then((result) => {
           if (!result.ok) {
             fail(result.error, 'city export failed');

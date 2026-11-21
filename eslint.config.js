@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
-    ignores: ['.wxt/**', 'node_modules/**', '.output/**', 'dist/**', 'eslint.config.js', 'vitest.config.ts', 'wxt.config.ts', 'playwright.config.ts'],
+    ignores: ['.wxt/**', 'node_modules/**', '.output/**', 'dist/**', '.claude/**', 'test-results/**', 'playwright-report/**', 'eslint.config.js', 'vitest.config.ts', 'wxt.config.ts', 'playwright.config.ts'],
   },
   js.configs.recommended,
     ...tseslint.configs.strictTypeChecked,

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import type { BlocklistEntry } from '@/store/store.types';
 
-const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
+const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, manual: true, presetIds: [] });
 
 describe('isDomainBlocked (M2.T8, CR1.T4)', () => {
   it('blocks a domain present in the blocklist', () => {

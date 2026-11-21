@@ -328,6 +328,7 @@ Each task is a standalone card, with this fixed format:
   - **Note**: the exact formula by which `distractionRatio` is derived from individual distraction events (duration, number of events, weight of each) remains an **open point**, to be defined in a later revision of the plan — see Section 4. This task implements only the threshold function (`ratio → level`), which is stable regardless of how the ratio is computed upstream.
 
 #### M2.T10 — `lib/score/apply-malus.ts` — progressive character-by-character deletion
+> **Superseded by CR6** (see §2.9.3): the malus lowers `builtCharacters`; the city follows, and `apply-malus.ts` is gone (CR6.T5b, CR6.T9a).
 * **Objective**: when the `SITE_BLOCKED_ATTEMPT` message (from M2.T8) arrives with the "proceed" choice, the background applies the malus as the **inverse of growth**: as long as the user stays on the blocked site (or keeps a tab open on it, see below), the characters of the affected building are removed one at a time at the same 2s cadence used for construction (M2.T15), rather than being destroyed all at once.
 * **Files**: `lib/score/apply-malus.ts`
 * **Dependencies**: M2.T9, M2.T8
@@ -339,6 +340,7 @@ Each task is a standalone card, with this fixed format:
   - Pure and testable without a browser; multi-tab detection (which requires browser APIs) lives separately in a dedicated adapter (`lib/timer/tab-distraction-tracker.ts` or similar), never mixed with `apply-malus.ts`.
 
 #### M2.T11 — `citySlice` — city grid/layer state, new every session
+> **Amended by CR6** (see §2.9.3): the slice stores only the session id; the plan is derived from it (CR6.T5a, CR6.T9a).
 * **Objective**: slice with `{ layers: { background: CityGrid, middleground: CityGrid, foreground: CityGrid }, buildings: Record<domain, BuildingMeta>, themeId, sessionId }`.
 * **Files**: `store/city.slice.ts`
 * **Dependencies**: M1.T4
@@ -348,6 +350,7 @@ Each task is a standalone card, with this fixed format:
   - The slice exposes `growCity(delta)`, `applyMalusToCity(ticks)` actions that delegate to the growth engine (M2.T12) and to `apply-malus.ts` (M2.T10) respectively, without computing anything internally.
 
 #### M2.T11b — `lib/city/tile-library.ts` — library of composable ASCII modules
+> **Superseded by CR6** (see §2.9.3): the ASCII module library is replaced by data-driven archetypes in the plan generator (CR6.T2b).
 * **Objective**: static, typed dataset of reusable ASCII modules, all of compatible width (e.g. multiples of a configurable base width): bases/foundations, floor sections (office, residential, glass-front), top elements (antennas, domes, helipads).
 * **Files**: `lib/city/tile-library.ts`
 * **Dependencies**: M1.T1
@@ -357,6 +360,7 @@ Each task is a standalone card, with this fixed format:
   - Data only, no selection logic here (Open/Closed principle, Section 1.1) — selection is the job of `building-composer.ts` (M2.T11c).
 
 #### M2.T11c — `lib/city/building-composer.ts` — building composition from modules based on minutes
+> **Superseded by CR6** (see §2.9.3): the building composer is replaced by the plan generator (CR6.T2b).
 * **Objective**: pure function `composeBuilding(minutesFocused: number, rng: SeededRandom): Building` that progressively unlocks modules via minute thresholds (e.g. minute 5 → base, minute 10 → first floor, minute 20 → additional floor, minute 25 → top element), choosing the specific variant of each module pseudo-randomly via the seeded generator received as a parameter (see Section 1.4).
 * **Files**: `lib/city/building-composer.ts`
 * **Dependencies**: M2.T11b
@@ -366,6 +370,7 @@ Each task is a standalone card, with this fixed format:
   - An "unbuilt" building (minutes = 0) is representable and distinct from a building with only the base.
 
 #### M2.T12 — `lib/city/growth-engine.ts` — growth across 3 layers, capped at full grid
+> **Superseded by CR6** (see §2.9.3): the growth engine is replaced by visible floors derived from `builtCharacters` (CR6.T4).
 * **Objective**: pure engine that, given the current state of the three layers and an "elapsed focus time", computes the new state: every 2 seconds of undistracted focus, one character (from a module composed by `building-composer.ts`, M2.T11c) is inserted into a cell, distributing growth across the three layers (background with small buildings/stars, middleground with the main skyscrapers, foreground with street/cars/trees).
 * **Files**: `lib/city/growth-engine.ts`
 * **Dependencies**: M2.T11, M2.T11c, M2.T1
@@ -375,6 +380,7 @@ Each task is a standalone card, with this fixed format:
   - **Behavior at a full grid**: when all three layers are completely occupied, further growth ticks **no longer modify the grid** (no error, no extension beyond the configured dimensions) — the function returns the same unchanged city state. Score and population (M2.T9, M2.T18), which are calculated elsewhere based on elapsed time and not on the grid state, continue instead to evolve normally even beyond this point: the cap is purely visual/rendering-related, not a cap on session progress.
 
 #### M2.T12b — `lib/city/decoration-engine.ts` — procedural details
+> **Superseded by CR6** (see §2.9.3): the decoration engine is replaced by the ambient layer of the 3D view (CR6.T7).
 * **Objective**: pure function `decorate(cityState, rng: SeededRandom): CityState` that, while keeping the already-composed building structure intact, randomizes fine details: lit/unlit windows (occasionally replacing `[ ]` with `[*]`/`[#]`/`[░]`), background/foreground decorative elements (trees, streetlights, cars, clouds).
 * **Files**: `lib/city/decoration-engine.ts`
 * **Dependencies**: M2.T12
@@ -384,6 +390,7 @@ Each task is a standalone card, with this fixed format:
   - Distinct and decoupled from the growth engine: decoration is a subsequent, optional step, disableable without breaking structural growth (Separation of Concerns principle).
 
 #### M2.T13 — `lib/city/palette.ts` (domain hash → color)
+> **Superseded by CR6** (see §2.9.3): the domain hash → color is replaced by a random session palette with a hue shift (CR6.T3).
 * **Objective**: deterministic pure function `getBuildingColor(domain: string): string` that always assigns the same color to the same domain, drawing from a defined palette (blue/orange/green/yellow).
 * **Files**: `lib/city/palette.ts`
 * **Dependencies**: M1.T2
@@ -392,6 +399,7 @@ Each task is a standalone card, with this fixed format:
   - Reasonably uniform distribution over a sample of N test domains (no gross bias toward a single color) — verifiable with a simple, non-rigorous statistical test.
 
 #### M2.T13b — `lib/city/theme-registry.ts` — color themes/biomes per session
+> **Superseded by CR6** (see §2.9.3): the theme registry is replaced by the session palettes (CR6.T3).
 * **Objective**: define the available color themes/biomes as **data** (Open/Closed principle, Section 1.1) and assign one to each session **deterministically**, so the same session always renders in the same biome across a service-worker restart while different sessions vary. A biome supplies the palette the M2.T13 domain hash draws from and the CRT backdrop color, without changing the hash logic itself.
 * **Files**: `lib/city/theme-registry.ts`, `utils/hash.ts` (shared FNV-1a hash), `store/city.slice.ts` (re-export of `DEFAULT_THEME_ID`), `store/index.ts` (wiring of the `selectThemeId` port).
 * **Dependencies**: M1.T1
@@ -403,6 +411,7 @@ Each task is a standalone card, with this fixed format:
   - No internal `Date.now()`/`Math.random()` (Dependency Inversion principle).
 
 #### M2.T14 — `CityCanvas` + `CityCell` (ASCII render + CRT glow)
+> **Superseded by CR6** (see §2.9.3): `CityCanvas`/`CityCell` are replaced by the three.js view with bloom and CRT pass, and a text fallback (CR6.T6a–T8b).
 * **Objective**: React components that render the city grid as monospace `<pre>`/`<span>` with green CRT `text-shadow`, applying colors from `palette.ts`.
 * **Files**: `components/city/CityCanvas.tsx`, `components/city/CityCell.tsx`
 * **Dependencies**: M2.T12, M2.T13
@@ -412,6 +421,7 @@ Each task is a standalone card, with this fixed format:
   - A snapshot/rendering test verifies that a `destroyed` cell no longer shows the building's character/color.
 
 #### M2.T15 — Linking growth-engine ↔ timer tick
+> **Amended by CR6** (see §2.9.3): the growth tick advances session progress only; the view derives the floors (CR6.T5b).
 * **Objective**: every timer tick (M2.T1/M2.T2) invokes `growCity` on the city store with the elapsed, distraction-free time delta.
 * **Files**: `entrypoints/background.ts` (extension)
 * **Dependencies**: M2.T12, M2.T2
@@ -420,6 +430,7 @@ Each task is a standalone card, with this fixed format:
   - Integration test: a sequence of simulated ticks produces a grid consistent with the growth engine's expected output.
 
 #### M2.T16 — Linking malus ↔ building destruction
+> **Amended by CR6** (see §2.9.3): the malus wiring lowers the score; the newest floors disappear and a partly paid floor shows as damaged (CR6.T4, CR6.T5b).
 * **Objective**: the malus event (M2.T10) applies `destroyBuilding` on the actual city state in the store, not just on the isolated model.
 * **Files**: `entrypoints/background.ts` (extension)
 * **Dependencies**: M2.T10, M2.T12
@@ -544,6 +555,7 @@ Each task is a standalone card, with this fixed format:
 * **Notes/decisions**: the composition is deliberately split from the timer path (M3.T3b) and session completion (M3.T3c) so this card stays a pure composition task; its acceptance criteria depend on those two landing first. **Test seam (decision: option A)**: the integration test starts the real background in-process with `fakeBrowser` (the pattern of `tests/integration/messaging/mutation-bus.test.ts`) and renders `<App />` against the module-level `useAppStore` singleton, letting the background's writes reach the popup through `attachStoreSync` (M1.T8) — no injectable-store refactor of the components. The dead `ui.malusAlertVisible` field is dropped here: the malus alert is the content-script overlay (M2.T8), not a popup element, so the flag has no consumer.
 
 #### M3.T5 — `framer-motion` animations on building growth/destruction
+> **Superseded by CR6** (see §2.9.3): the `framer-motion` character animations are replaced by floor drop, glitch-out and damaged-floor effects in the renderer (CR6.T7).
 * **Objective**: animated transitions when a cell moves from `growing→building` or is destroyed.
 * **Files**: `components/city/CityCell.tsx` (extension)
 * **Dependencies**: M2.T14
@@ -570,6 +582,7 @@ Each task is a standalone card, with this fixed format:
   - Test: rendering with an empty history and with 5 entries, and the transition when a new session is recorded.
 
 #### M3.T8 — `ExportCityButton` — export city as JPEG/PNG at end of focus
+> **Amended by CR6** (see §2.9.3): the export serializes the text city until CR6.T10 adds the 3D frame capture (CR6.T9a, CR6.T10).
 * **Objective**: let the user export the city of a finished session as an image, so the "one city per session" result can be kept outside the extension.
 * **Files**: `lib/city/export-image.ts` (DOM/canvas serialization → JPEG/PNG), `components/city/ExportCityButton.tsx`, `entrypoints/popup/App.tsx` (composition, M3.T4).
 * **Dependencies**: M2.T14
@@ -607,6 +620,7 @@ Each task is a standalone card, with this fixed format:
 ### 1.7 Milestone 4 — Polish and Nice-to-have
 
 #### M4.T1 — *(Nice to have)* Malus proportional to time spent on the blocked site
+> **Amended by CR6** (see §2.9.3): the escalation is part of `builtCharacters`, so it lowers the score and the city alike (CR6.T5b).
 * **Objective**: extend `apply-malus.ts` (M2.T10) so that the malus grows as a function of time spent on the blocked site, not just the single event.
 * **Files**: `lib/score/apply-malus.ts` (extension)
 * **Dependencies**: M2.T10
@@ -614,6 +628,7 @@ Each task is a standalone card, with this fixed format:
   - All else being equal, more time spent on the blocked site produces a greater or equal malus, never a smaller one (monotonic property tested).
 
 #### M4.T2 — *(Nice to have)* TexturePacker / building sprite sheet integration
+> **Superseded by CR6** (see §2.9.3): the 3D view needs no sprite sheet.
 * **Objective**: replace (or complement) pure ASCII rendering with optimized sprites generated via TexturePacker to reduce rendering calls, while keeping the deterministic palette from M2.T13.
 * **Files**: `assets/ascii/` (or a new `assets/sprites/` folder), update to `CityCell.tsx`.
 * **Dependencies**: M2.T14
@@ -1214,6 +1229,459 @@ The following main-task criteria are intentionally amended by CR3. They remain i
 | M2.T18 | population is a flat `+5` per focus tick, max 3000 | tiered per-character rate by completion band plus a 7% completion bonus, max 7383 today (CR3.T3) |
 | M3.T3c | completion recomputes the population from ticks | completion recomputes `builtCharacters` from the duration (CR3.T6) |
 | §4 open point (ratio formula) | exact `distractionRatio` formula to be defined | resolved: the ratio path is removed, score derives from `builtCharacters` (CR3.T5) |
+
+### 2.7 Change request CR4 — Presets as toggles and saved custom presets
+
+**Origin.** The UI critique of 2026-11-09 (`docs/ui/ui-review-tasks.md`, UI.T2/UI.T3; snapshot `.impeccable/critique/2026-11-09T16-33-10Z__entrypoints-popup.md`). Developer decisions: presets become toggles; custom tags become saved presets.
+
+**Analysis.** Written by `CR4.T1` in `docs/features-analysis/saved-presets.md` (write/read paths, entry-source shape, persisted applied set, v3 migration, message set, lock matrix, test impact). Its decisions bind CR4.T2–CR4.T6; where they refine the rules below, the analysis wins.
+
+**Goal.** Today `applyPreset` is a one-shot insert with no state and no undo, and custom tags affect nothing: no blocking code reads `tagIds` or `customTags` (only `lib/blocking/store-snapshot.ts` validates them and `lib/blocking/legacy-blocklist.ts` migrates them). After the change a preset — built-in (Social, Video, News) or saved by the user — is a **toggle** over the single blocklist, and user-created tags no longer exist as a separate concept.
+
+**Behavioral rule after the change.**
+- Each `BlocklistEntry` records **where it came from**: its sources are any of `manual` and one or more preset ids. Today's `tagIds` cannot tell a manual entry from a preset-only one once a tag is removed, so explicit source tracking replaces `tagIds` (decided in CR4.T1: `manual: boolean` + `presetIds: string[]` per entry, a persisted `appliedPresetIds`, and `userPresets` replacing `customTags`).
+- A preset is **applied** when it is in the applied set; applying it adds its domains with that preset as a source; un-applying it removes the preset as a source and deletes only entries left with no source. A domain added manually or by another applied preset survives.
+- Removing a single entry (×) removes it whatever its sources; the presets that contributed it stay applied but no longer cover that domain until re-applied.
+- **Saved presets**: the user can create a preset (named, from the current list or empty and filled later), rename it, delete it (with confirmation or undo), and toggle it exactly like a built-in one. Built-in presets stay data in `lib/blocking/presets.ts` (Open/Closed, §1.1); user presets are persisted data with the same `Preset` shape, not new branching logic.
+- The standalone tag editor (create/assign/filter tags) is removed from the popup; the list shows each entry's sources as chips.
+- Enforcement is unchanged: `buildDnrRules` and `isDomainBlocked` read domains only, never sources.
+- Persistence `version` goes from 2 to 3 with a migration: `customTags` become user presets whose domains are the entries carrying that tag; preset `tagIds` map to preset sources; an entry with no tag becomes `manual`. Known limit (accepted, recorded): an entry that was both typed manually and tagged in v2 migrates without the `manual` source.
+- The CR2 lock still applies: every preset/blocklist mutation is `idle`-only, except the add-direction cases CR5 opens up.
+
+**Sequencing note.** Analysis first (`CR4.T1`). Pure logic with its tests (`CR4.T2`, red/green §3.1), then the store and the v3 migration (`CR4.T3`), then messages and the background handler (`CR4.T4`), then the UI (`CR4.T5`, coordinated with UI.T1's single-list layout — UI.T1 lands first), then docs and the gate (`CR4.T6`). Each task touches at most six files.
+
+#### 2.7.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR4.T1 | Analysis: preset sources, toggles, saved presets, v3 migration | — |
+| CR4.T2 | Pure preset-toggle and source logic in `lib/blocking/` | CR4.T1 |
+| CR4.T3 | Store model, slice actions and persistence v3 migration | CR4.T2 |
+| CR4.T4 | Preset mutation messages and background handler | CR4.T3 |
+| CR4.T5 | Popup: preset toggles, saved-preset management, tag editor removed | CR4.T4, UI.T1 |
+| CR4.T6 | Documentation, changelog and final verification | CR4.T1–CR4.T5 |
+
+#### 2.7.2 Task cards
+
+##### CR4.T1 — Analysis: preset sources, toggles, saved presets, v3 migration
+* **Objective**: write `docs/features-analysis/saved-presets.md` mapping the current preset/tag paths and recording the decisions the later tasks implement.
+* **Files to create/modify**: `docs/features-analysis/saved-presets.md` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - Maps every write and read path of `applyPreset`, `createTag`, `deleteTag`, `assignTag`, `unassignTag`, `tagIds` and `customTags` (store, `lib/messaging/apply-mutation.ts`, `messages.types.ts`, persistence, components, locales, tests).
+  - Decides the entry source shape (replacing `tagIds`), the applied-presets representation (derived vs persisted), the user-preset storage key and id scheme, and the v2→v3 migration including the accepted limit above.
+  - Decides the message set replacing `BLOCKLIST_APPLY_PRESET` and `TAG_*` (e.g. `PRESET_TOGGLE`, `PRESET_SAVE`, `PRESET_RENAME`, `PRESET_DELETE`) and how the CR2 lock and CR5 add-only window apply to each.
+  - Lists the tests that change and the ones that must stay untouched (enforcement: `rules.ts`, `is-domain-blocked.ts`).
+* **Notes/decisions**: no production code in this task.
+
+##### CR4.T2 — Pure preset-toggle and source logic in `lib/blocking/`
+* **Objective**: pure, browser-free functions that toggle a preset over the blocklist and maintain entry sources.
+* **Files to create/modify**: `lib/blocking/preset-toggle.types.ts`, `lib/blocking/preset-toggle.ts`, `lib/blocking/saved-presets.ts` (all new), `tests/unit/lib/blocking/preset-toggle.test.ts` and `saved-presets.test.ts` (new). The new model gets its own types so `store/store.types.ts` stays untouched and the tree stays green; CR4.T3 aligns the store types with them.
+* **Dependencies**: CR4.T1
+* **Acceptance criteria**:
+  - Tests written first: apply adds missing domains and the source; un-apply removes only entries with no remaining source; a manual entry and an entry shared by two applied presets survive un-apply; re-apply is idempotent; domains are canonicalized through `getRegistrableDomain` (DRY).
+  - Functions are pure (no `Date.now()`, no browser APIs), have explicit return types and return new arrays.
+  - Existing enforcement tests stay green untouched.
+
+##### CR4.T3 — Store model, slice actions and persistence v3 migration
+* **Objective**: move `BlocklistState` to entry sources, applied presets and user presets; migrate persisted v2 data.
+* **Files to create/modify**: `store/store.types.ts` (`BlocklistEntry`, `Preset` without `tag`, `BlocklistState`), `store/blocklist.slice.ts` (actions and selectors only), `lib/blocking/blocklist-state.ts` (new, v3 sanitizer), `lib/messaging/messages.types.ts` and `lib/messaging/apply-mutation.ts` (message types and the four preset cases, needed for the tree to compile; boundary hardening and lock tests stay in CR4.T4), `components/blocklist/PresetPicker.tsx`, `SiteList.tsx`, `entry-sources.ts` and the deletion of `TagEditor.tsx` (the minimum for the tree to compile: toggle with `aria-pressed`, chips from `presetIds`; the rest of the UI stays in CR4.T5), the tag keys in the locales, `lib/blocking/blocklist-sites.ts` (new, site helpers moved out of the slice), `store/index.ts`, `lib/blocking/legacy-blocklist.ts`, `lib/blocking/migrate-presets.ts` (new), `lib/blocking/store-snapshot.ts`, `tests/unit/store/blocklist-preset.test.ts`, `tests/unit/store/blocklist-migration-v3.test.ts` (new). Existing test fixtures move from `tagIds: []` to `manual: true, presetIds: []` through a shared helper.
+* **Dependencies**: CR4.T2
+* **Acceptance criteria**:
+  - Actions `togglePreset`, `savePreset`, `renamePreset`, `deletePreset` replace `applyPreset` and the tag actions; granular selectors expose applied state and per-preset counts.
+  - CR2 lock preserved: all of them are no-ops outside `idle` (except what CR5 opens).
+  - `version: 3`; the migration turns v2 `customTags`/`tagIds` into user presets and sources as decided in CR4.T1, with fixtures for v1 and v2 snapshots.
+  - Snapshot validation rejects malformed v3 data with a `Result`, never a throw (§1.4).
+
+##### CR4.T4 — Preset mutation messages and background handler
+* **Objective**: replace `BLOCKLIST_APPLY_PRESET` and `TAG_*` with the preset message set; the background stays the single writer.
+* **Files to create/modify**: `lib/messaging/blocklist-payload.ts` (new, runtime shape check), `lib/messaging/apply-mutation.ts`, `lib/messaging/mutation-sender.ts` (comment only), `tests/unit/lib/messaging/blocklist-payload.test.ts` (new), `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`. The message types themselves landed in CR4.T3.
+* **Dependencies**: CR4.T3
+* **Acceptance criteria**:
+  - Discriminated-union messages, validated at the boundary; unknown or malformed payloads are dropped and logged at `debug` without the payload.
+  - The lock cases from CR2.T2 are re-expressed for the new types; DNR rules still follow the blocklist through `syncRules`.
+
+##### CR4.T5 — Popup: preset toggles, saved-preset management, tag editor removed
+* **Objective**: the UI side of UI.T2/UI.T3 on top of UI.T1's single list.
+* **Files to create/modify**: `components/blocklist/PresetPicker.tsx`, `PresetToggle.tsx`, `SavedPresetControls.tsx`, `SavedPresetRow.tsx`, `PresetNameForm.tsx`, `preset-picker.styles.ts` (new, split for the 200-line rule), `lib/blocking/saved-presets.ts` (`validatePresetName`), `entrypoints/popup/App.tsx` (comment), `locales/en.yml`, `locales/it.yml` (component tests updated alongside). `SiteList` already shows source chips since CR4.T3.
+* **Dependencies**: CR4.T4, UI.T1
+* **Acceptance criteria**:
+  - Preset buttons expose `aria-pressed`, show applied state and count, and are dimmed when locked; their domains are inspectable before applying.
+  - User presets appear next to built-in ones and can be saved, renamed and deleted (confirmation or undo).
+  - List rows show source chips; no tag editor or checkbox grid remains.
+  - All strings localized in EN and IT; the i18n drift test stays green.
+
+##### CR4.T6 — Documentation, changelog and final verification
+* **Objective**: record the change and prove the gate.
+* **Files to create/modify**: `docs/features-analysis/saved-presets.md` (mark implemented), `README.md`, `DESIGN.md` (chips section if the source chip adds a pattern), `.serena/memories/core.md`, `docs/changelog.md`.
+* **Dependencies**: CR4.T1–CR4.T5
+* **Acceptance criteria**:
+  - Changelog entry per CR4 task with the v3 migration entry; `Commit: —` until committed.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, `bun run build:firefox` green; `bun run e2e` if available.
+
+#### 2.7.3 Amended acceptance criteria in Section 1
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M2.T5 | a preset expands into entries tagged with its tag | a preset is toggled; entries record it as a source (CR4.T2/T3) |
+| M3.T1 | `PresetPicker` applies a preset once | presets toggle and show applied state and count (CR4.T5) |
+| M3.T2 | `TagEditor` creates, assigns, filters and deletes custom tags | removed in CR4.T3; replaced by saved user presets (management UI in CR4.T5) |
+| CR2.T1/T2/T3b | lock covers `createTag`/`deleteTag`/`assignTag`/`unassignTag` | lock covers the preset actions/messages instead (CR4.T3/T4) |
+
+### 2.8 Change request CR5 — Allow adding sites during a session
+
+**Origin.** The UI critique of 2026-11-09 (UI.T4) and the developer's decision: a forgotten site must not cost the whole city through Reset.
+
+**Goal.** CR2 locks the blocklist outside `idle` because loosening it mid-session is an escape from the block. **Tightening** it is not, so adds become allowed during a session; removals stay locked.
+
+**Behavioral rule after the change.**
+- In `running` and `paused`, **add-direction** mutations are accepted: `addSite`, and toggling a preset **on** (CR4). Everything that loosens or reshapes the list stays `idle`-only: `removeSite`, toggling a preset **off**, saving/renaming/deleting a user preset.
+- `completed` stays fully locked until Reset (CR2 decision A unchanged): the session is over, so tightening has no effect.
+- A new pure predicate `isBlocklistAddAllowed(status)` (`idle`, `running`, `paused`) sits next to `isBlocklistEditable(status)` (`idle` only); the three enforcement layers of CR2 (store, background, UI) each use the right one.
+- A site added during `running` is enforced immediately: `syncRules` already re-runs on every store change, and the overlay content script already re-evaluates on store updates, so an already-open tab on that domain shows the overlay. Being on that tab from then on counts as distraction under the existing malus rules — no retroactive malus for time before the add.
+- No persisted field and no version bump: the window is derived from `timer.status`.
+
+**Sequencing note.** Store first (`CR5.T1`), then the authoritative background (`CR5.T2`), then the UI and copy (`CR5.T3`), then docs (`CR5.T4`). The preset-on part depends on CR4's toggle; if CR5 lands before CR4, it covers `addSite` only and CR4.T3/T4 extend the add window to `togglePreset` on.
+
+#### 2.8.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR5.T1 | `isBlocklistAddAllowed` and the add-only window in the store | — (preset-on part: CR4.T3) |
+| CR5.T2 | Background accepts add-direction mutations mid-session | CR5.T1 |
+| CR5.T3 | Popup: add field enabled mid-session, removals locked, new notice copy | CR5.T2, UI.T1 |
+| CR5.T4 | Documentation, changelog and final verification | CR5.T1–CR5.T3 |
+
+#### 2.8.2 Task cards
+
+##### CR5.T1 — `isBlocklistAddAllowed` and the add-only window in the store
+* **Objective**: let add-direction actions through in `running`/`paused` while keeping every other mutation `idle`-only.
+* **Files to create/modify**: `store/blocklist-lock.ts` (new: both predicates, so the slice stays under 200 lines), `store/blocklist.slice.ts`, `store/index.ts`, `tests/unit/store/blocklist-lock.test.ts`.
+* **Dependencies**: — (preset-on part: CR4.T3)
+* **Acceptance criteria**:
+  - `isBlocklistAddAllowed(status: TimerStatus): boolean` is pure, `true` for `idle`, `running`, `paused`; `selectBlocklistAddAllowed` is exported.
+  - Truth-table tests per action and status: `addSite` applies in `idle`/`running`/`paused`, is a no-op in `completed`; `removeSite` (and preset-off / preset management after CR4) stay no-ops outside `idle`.
+  - Existing `idle` tests stay green unmodified.
+
+##### CR5.T2 — Background accepts add-direction mutations mid-session
+* **Objective**: the background, as single writer, applies the same window so a forged remove is still rejected.
+* **Files to create/modify**: `lib/messaging/apply-mutation.ts`, `lib/messaging/blocklist-payload.ts` (`isAddDirectionMutation`), `entrypoints/background.ts` (credit the stretch and re-read the tabs around a mid-session add), `tests/unit/lib/messaging/blocklist-payload.test.ts`, `tests/integration/messaging/mutation-bus.test.ts`, `tests/integration/background/blocklist-lock.test.ts`, `tests/integration/background/dnr-rules.test.ts`, `tests/integration/background/malus.test.ts`.
+* **Dependencies**: CR5.T1
+* **Acceptance criteria**:
+  - `BLOCKLIST_ADD_SITE` (and preset-on after CR4) is accepted in `running`/`paused` and persisted once; removals and preset management are still dropped with the `debug` log of CR2.T2.
+  - A site added while `running` produces a DNR rule immediately; after Reset the rules are cleared as before.
+  - Malus: time on the newly blocked domain counts only from the add onward.
+
+##### CR5.T3 — Popup: add field enabled mid-session, removals locked, new notice copy
+* **Objective**: reflect the add-only window in the blocklist UI.
+* **Files to create/modify**: `components/blocklist/SiteList.tsx`, `components/blocklist/PresetPicker.tsx`, `components/blocklist/PresetToggle.tsx` (per-toggle disabled rule), `entrypoints/popup/App.tsx`, `locales/en.yml`, `locales/it.yml`, `tests/integration/popup/app-composition.test.tsx`, `tests/unit/i18n/i18n.test.tsx` (component tests updated alongside).
+* **Dependencies**: CR5.T2, UI.T1
+* **Acceptance criteria**:
+  - In `running`/`paused` the add field, Add button (and unapplied presets after CR4) are enabled; × buttons and applied-preset toggles are disabled; in `completed` everything is disabled.
+  - The notice copy states that sites can be added during a session and that removing needs Reset; `completed` keeps the Reset wording. Neutral voice (PRODUCT.md). Keys in EN and IT.
+
+##### CR5.T4 — Documentation, changelog and final verification
+* **Objective**: record the amendment to CR2 and prove the gate.
+* **Files to create/modify**: `docs/features-analysis/blocklist-lock.md` (amendment note), `README.md`, `.serena/memories/core.md`, `docs/changelog.md`.
+* **Dependencies**: CR5.T1–CR5.T3
+* **Acceptance criteria**:
+  - README: sites can be added during a session; removing or editing presets needs the timer idle (before Start or after Reset).
+  - Serena memory invariant updated: adds allowed in `idle`/`running`/`paused`, everything else `idle`-only, enforced in store and background.
+  - Changelog entries per task; gate green as in CR4.T6.
+
+#### 2.8.3 Amended acceptance criteria in Section 2
+
+| Task | Amended part | New rule |
+|---|---|---|
+| CR2.T1 | every blocklist action is a no-op outside `idle` | add-direction actions also apply in `running`/`paused` (CR5.T1) |
+| CR2.T2 | the background drops every blocklist mutation outside `idle` | add-direction mutations accepted in `running`/`paused` (CR5.T2) |
+| CR2.T3a | `SiteList` input and Add disabled outside `idle` | enabled in `running`/`paused`; × still disabled (CR5.T3) |
+| CR2.T3c | notice says the list is locked and Reset unlocks it | during a session it says sites can be added and removal needs Reset (CR5.T3) |
+
+### 2.9 Change request CR6 — Three.js city with a new shape every session
+
+**Origin.** The city-tab exploration of 2026-11-10/11 (sketches A, B, B′, C, D in the private artifact "City Render Options"). Developer decision: adopt sketch **D** — a three.js city with the terminal/neon look (black floor, phosphor-green grid and rain, site-colored edges and windows, bloom, CRT pass) — and give the city more room. The city must look different every session: layout, building sizes and colors change at random, while staying stable within one session. Second decision (2026-11-11): the escalating malus of M4.T1 moves into the score (option A), so the city and the score always show the same loss.
+
+**Goal.** Today the city is a 60 × 20 character grid (`components/city/city.types.ts`) filled one character per tick by `lib/city/growth-engine.ts` and stored in `city.layers`; the malus erases characters from those layers (`lib/score/apply-malus.ts`) with an escalating cost that never reaches the score. After the change the city is a **plan** generated from the session seed — lots, buildings, floors, colors, props — and what is on screen is **derived** from the plan and the session's `builtCharacters`. It is drawn with three.js in the popup's City tab, with an ASCII fallback when WebGL is unavailable.
+
+**Behavioral rule after the change.**
+- **One plan per session, different every session.** `generateCityPlan(seed)` is pure and seeded (§1.4: the PRNG is injected, never `Math.random()`). The seed comes from the session id, which is already random per session. The same seed always gives the same plan, so the city survives service-worker and popup restarts without storing geometry.
+- **Variation is data-driven (Open/Closed, §1.1).** Each session picks at random:
+  - a road layout from a set of layouts (data), with random offsets;
+  - lot footprints (1×1, 2×1, 1×2, 2×2 merged lots);
+  - a building archetype per lot from an archetype list (data: tower, slab, stepped setbacks, twin, spire, low block), with random height inside the archetype's range and 1–3 landmark towers placed at random;
+  - a neon palette from a palette list (data) plus a small per-session hue shift, assigned so that neighbors never share a color;
+  - prop placement (lamps, signs, beacons) and generated tower names for the labels.
+  The environment stays fixed so the popup keeps its identity: black floor, phosphor-green grid, rain and HUD text (`#7dfba0`, DESIGN.md).
+- **Growth is derived, not stored.** Each plan lists its floors in build order (shuffled building order, each building bottom-up). The visible part is `builtCharacters / TOTAL_CHARACTERS_PER_SESSION × plan.totalFloors`: the whole part is the number of complete floors, the remainder is a partly paid floor.
+- **The malus damages the city through the score (option A).** The M4.T1 escalation (1 character per distraction tick, then 2, then 3 as the stay lengthens) moves into `builtCharacters`, so the score, the tiers, the population and the city all lose the same amount. In the city, the newest floors disappear first, with a glitch-out animation; when focus resumes the city grows again from where it is.
+- **Every lost character is visible.** A floor is worth several characters (2–3 for a 200–300-floor plan), so a partly paid top floor is drawn in a **damaged** state (cracked, flickering red edges) instead of waiting for a whole floor to vanish.
+- **Rendering stays light** (decisions from the exploration):
+  - three.js is loaded only when the City tab opens (a separate chunk); the Timer tab never loads it;
+  - render on demand: a frame is drawn only when the visible floors change, the camera moves or the view resizes; the ambient layer (rain, cars, window flicker, beacons) runs at most 30 fps and stops when the view is hidden;
+  - instanced meshes: all floor bodies in one draw call, all window bands in another; edges in one line mesh rebuilt only when the count changes;
+  - pixel ratio capped at 1.5, `powerPreference: 'low-power'`, no MSAA, bloom at reduced resolution;
+  - everything disposed when the view unmounts; context loss falls back to the ASCII view;
+  - `prefers-reduced-motion`: no ambient layer, no drop or removal animation, no auto-rotate.
+- **Fallback and accessibility.** Without WebGL2 (or after a lost context) the City tab shows an ASCII skyline derived from the same plan. Both views carry a text summary for screen readers (buildings, floors built of total, tallest building), updated at milestones, not on every floor.
+- The background stays the single writer and never touches three.js: it keeps advancing session progress; it no longer grows or erases layers.
+- Persistence `version` goes from 3 to 4: `city.layers` and `city.buildings` are dropped; the city keeps only what the plan needs (session id, plus any palette override decided in CR6.T1).
+- **Documentation is part of every task.** CR6 changes the paradigm — from an ASCII grid filled one character per tick to a seeded plan drawn in 3D — so a task is done only when every **living** document that describes the part it changes describes the new model. CR6.T1 inventories those documents; each card below names the ones it owns in a **Docs** criterion; CR6.T13 checks that no living document still presents the old model as current. **Historical** records (changelog entries, closed issues, past plans and analyses) are not rewritten: they get a one-line "Superseded by CR6 (§2.9)" note where they describe the old city as current. Each task also adds its own changelog entry through the `changelog` skill (CLAUDE.md §4).
+
+**Sequencing note.** Analysis first (`CR6.T1`). Pure plan, colors and derivation with their tests (`CR6.T2a`, `CR6.T2b`, `CR6.T3`, `CR6.T4`, red/green §3.1). Then the store (`CR6.T5a`) and the background with the score change (`CR6.T5b`); in parallel the renderer core (`CR6.T6a`, `CR6.T6b`) and its ambient layer (`CR6.T7`). Then the popup view (`CR6.T8a`) and its fallback (`CR6.T8b`), removal of the ASCII engine (`CR6.T9a`) and of its documentation (`CR6.T9b`), export (`CR6.T10`), the optional full-city page (`CR6.T11`), performance verification (`CR6.T12`) and the final documentation consistency pass (`CR6.T13`). Documentation is not deferred to the end: each task updates the documents that describe what it changes. Each task touches at most about six production files. UI.T11's empty-city hint and UI.T12 land after CR6.T8a (see `docs/ui/ui-review-tasks.md`). The UI.T8 decision not to fix the 492 px City canvas overflow is superseded: the new view fills the tab width.
+
+#### 2.9.1 Task summary
+
+| ID | Title | Dependencies |
+|---|---|---|
+| CR6.T1 | Analysis: city plan model, derivation, renderer, budgets, migration, docs inventory | — |
+| CR6.T2a | Plan generator, part 1: seeded road layouts and lots | CR6.T1 |
+| CR6.T2b | Plan generator, part 2: archetypes, heights, landmarks, build order, names | CR6.T2a |
+| CR6.T3 | Session palettes and color assignment | CR6.T2b |
+| CR6.T4 | Visible-floor derivation, damaged top floor and pure scene data | CR6.T2b, CR6.T3 |
+| CR6.T5a | Store and persistence v4: derived city instead of layers | CR6.T4 |
+| CR6.T5b | Background and score: progress-only growth tick, escalating malus in `builtCharacters` | CR6.T5a |
+| CR6.T6a | Add three.js; renderer lifecycle and pure render scheduler | CR6.T4 |
+| CR6.T6b | City meshes from scene data, bloom and CRT pass | CR6.T6a |
+| CR6.T7 | Ambient layer, floor animations and damaged-floor effect | CR6.T6b |
+| CR6.T8a | Popup City tab: lazy 3D view and accessible summary | CR6.T5b, CR6.T7 |
+| CR6.T8b | ASCII fallback from the plan, switch on missing or lost WebGL | CR6.T8a |
+| CR6.T9a | Remove the ASCII growth engine, its components and tests | CR6.T8b |
+| CR6.T9b | Retire the old model in the documentation | CR6.T9a |
+| CR6.T10 | Export the city image from the 3D view | CR6.T8b |
+| CR6.T11 | *(Optional)* Full-city extension page | CR6.T8a |
+| CR6.T12 | Performance verification and e2e | CR6.T8b, CR6.T10 |
+| CR6.T13 | Documentation consistency pass and final verification | CR6.T1–CR6.T12 |
+
+#### 2.9.2 Task cards
+
+##### CR6.T1 — Analysis: city plan model, derivation, renderer, budgets, migration, docs inventory
+* **Status**: done (2026-11-11) — `docs/features-analysis/city-3d.md`. Two decisions amend later cards (CR6.T4, CR6.T5b); two open points are listed in its §11.
+* **Objective**: write `docs/features-analysis/city-3d.md` mapping the current city paths and recording the decisions the later tasks implement.
+* **Files to create/modify**: `docs/features-analysis/city-3d.md` (new).
+* **Dependencies**: —
+* **Acceptance criteria**:
+  - Maps every write and read path of `city.layers`, `city.buildings`, `city.themeId`, `growCityByTicks`, `applyMalus`/`applyMalusToCity`, `malusForDistractionTicks`, `MALUS_APPLIED`, `seedFromSession`, `getBuildingColor`, `selectThemeId`, `buildCityImage` and `calculateBuiltCharacters` (store, background growth and malus ticks, overlay feedback, components, export, persistence, tests, docs).
+  - Decides the `CityPlan` shape (lots, buildings, floors in build order, props, names), the seed source and its entropy (confirms `generateSessionId` is random per session), and the variation sets (road layouts, footprints, archetypes, palettes, hue shift range) with their limits so a plan always fits the frame and its total floors stay within fixed bounds.
+  - Specifies the option A malus: how the escalation schedule (`MALUS_ESCALATION_SCHEDULE`) enters `calculateBuiltCharacters` (which distraction time it counts, from the "proceed" baseline as today), what `MALUS_APPLIED` reports once there are no layers, and the effect on the CR3 bands (expected: harsher scores for long stays; recorded with an example).
+  - Specifies the visible-floor formula and the damaged top floor (when a floor counts as damaged, how it is shown).
+  - Decides the v3→v4 migration (fields dropped, an in-progress session at upgrade keeps its score and gets its plan from its session id).
+  - Decides the three.js version and import paths (`three` and `three/addons`), the module split under `components/city/three/`, the fallback (ASCII skyline from the plan), the export method and the test strategy (no WebGL in happy-dom: pure scene data in `lib/`, renderer mocked in component tests, real rendering in Playwright).
+  - Sets the performance budgets CR6.T12 checks: three.js chunk size (target ≤ 180 KB gzipped), first City frame after opening the tab (target ≤ 200 ms on the reference machine), 0 renders per second when nothing changes and motion is reduced, ambient layer ≤ 30 fps, draw calls for the city ≤ 12.
+  - Lists the modules, components and tests to delete in CR6.T9a.
+  - **Documentation inventory**: every document that describes the current city, each classified as *living* (updated, with the CR6 task that owns it) or *historical* (banner note only). At least: `CLAUDE.md` (overview stack line, §1.1 KISS/DRY rows, §1.3 persisted city state, §1.4 pure-function and dependency examples, the "two clocks" technical note), `DESIGN.md`, `PRODUCT.md`, `README.md`, `docs/project-structure.md`, `docs/testing-matrix.md`, `docs/features-analysis/score-population.md`, `docs/store-analysis.md`, `docs/ui/ui-review-tasks.md`, the Section 1 cards of this roadmap listed in §2.9.3, `.serena/memories/core.md` and `tech_stack.md`, the JSDoc of code that stays; historical: `docs/timer-duration-plan.md`, `docs/Increase-poppu-screen-size.md`, `docs/issue/I002-scattered-city-draw.md`, `docs/issue/I009-malus-already-open-blocked-tab.md`, past changelog entries.
+  - A short **reference description of the new model** (plan from seed, floors derived from `builtCharacters`, malus through the score, 3D view with ASCII fallback, fixed green environment with session palettes) that the other documents reuse, so they all say the same thing.
+* **Notes/decisions**: no production code in this task. Adding `three` is an approved exception to the minimal-dependency rule (§1.4), recorded here.
+
+##### CR6.T2a — Plan generator, part 1: seeded road layouts and lots
+* **Status**: done (2026-11-11). Built `GroundPlan` with four layouts; lot bounds measured as 30–48 (not 24–40), which CR6.T2b follows with a re-derived total-floors bound (`city-3d.md` §3).
+* **Objective**: the first half of `generateCityPlan(seed, options)`: the ground plan — roads and lots — that differs from session to session.
+* **Files to create/modify**: `lib/city/plan/city-plan.types.ts`, `lib/city/plan/generate-city-plan.ts` (entry point), `lib/city/plan/plan-lots.ts` (road placement, lot merging), `lib/city/plan/road-layouts.ts` (data), `tests/unit/lib/city/plan/plan-lots.test.ts` (all new).
+* **Dependencies**: CR6.T1
+* **Acceptance criteria**:
+  - Tests written first. Same seed → deep-equal ground plan; the PRNG is injected (§1.4).
+  - Invariants hold for 1,000 seeds: every lot off the roads, no overlapping footprints, every road connected, the plan inside the frame.
+  - Variation is measurable: over 100 seeds, the layouts, road offsets and footprint mixes are not all equal (the test asserts a minimum number of distinct values for each).
+  - Adding a road layout is an array edit, never a change to the generator.
+  - Files ≤ 200 lines, functions ≤ 40 lines, explicit return types.
+  - **Docs**: `docs/features-analysis/city-3d.md` (ground-plan section updated to what was built), `docs/testing-matrix.md` (CR6.T2a row: seeds, invariants, variation checks).
+
+##### CR6.T2b — Plan generator, part 2: archetypes, heights, landmarks, build order, names
+* **Status**: done (2026-11-11). Total floors re-derived as 200–300; two helper files were added (`fit-total-floors.ts`, `plan-props.ts`) to keep files under 200 lines; colors stay with CR6.T3.
+* **Objective**: complete the plan: a building on every lot, its floors in build order, landmarks, props and tower names.
+* **Files to create/modify**: `lib/city/plan/plan-buildings.ts` (archetype choice, heights, landmarks, props), `lib/city/plan/build-order.ts` (shuffled building order, each bottom-up), `lib/city/plan/building-archetypes.ts` (data), `lib/city/plan/tower-names.ts` (data), `lib/city/plan/generate-city-plan.ts` (wiring), `tests/unit/lib/city/plan/generate-city-plan.test.ts` (new).
+* **Dependencies**: CR6.T2a
+* **Acceptance criteria**:
+  - Same seed → deep-equal plan.
+  - Invariants hold for 1,000 seeds: every height inside its archetype range and the frame, total floors inside the bounds set in CR6.T1, at least one landmark tower, the build order lists every floor exactly once and never a floor before the one below it.
+  - Variation is measurable: over 100 seeds, archetype mixes, height profiles and landmark positions are not all equal.
+  - Adding an archetype or a name is an array edit.
+  - **Docs**: `city-3d.md` buildings section, `docs/testing-matrix.md` (CR6.T2b row).
+
+##### CR6.T3 — Session palettes and color assignment
+* **Status**: done (2026-11-11). The minimum luminance CR6.T1 left open is set here as a 4.5:1 contrast ratio on the floor; two helper files were added (`color-math.ts`, `environment-colors.ts`).
+* **Objective**: give each session a random neon palette and assign colors to buildings, windows and props.
+* **Files to create/modify**: `lib/city/plan/city-palettes.ts` (data: at least 5 palettes), `lib/city/plan/assign-colors.ts`, `lib/city/plan/generate-city-plan.ts` (call site), `tests/unit/lib/city/plan/assign-colors.test.ts` (new); docs below.
+* **Dependencies**: CR6.T2b
+* **Acceptance criteria**:
+  - The palette and the hue shift come from the seed; same seed → same colors.
+  - No two adjacent buildings share a color; every building color stays readable against the black floor (minimum luminance set in CR6.T1).
+  - Environment colors (floor, grid, rain, HUD) are constants, not part of the palette.
+  - The domain-hash coloring (`getBuildingColor`) is no longer used by the city; its removal is CR6.T9a.
+  - **Docs**: `DESIGN.md` (color section and front-matter tokens: the fixed environment colors, and session palettes as the one sanctioned exception to the single-accent rule), `city-3d.md` palette section, `docs/testing-matrix.md` row.
+
+##### CR6.T4 — Visible-floor derivation, damaged top floor and pure scene data
+* **Status**: done (2026-11-11). Scene data is a static `createScenePlan` plus a per-update `createSceneFrame`; `calculateFocusCharacters` was extracted from `lib/score/calculate-built-characters.ts` without a behavior change; `box-geometry.ts` was added.
+* **Objective**: turn a plan and the session progress into what the renderer draws, without any WebGL.
+* **Files to create/modify**: `lib/city/plan/visible-floors.ts` (complete floors and the damaged fraction), `lib/city/plan/scene-data.ts` (instance transforms, window colors, edge segments, label anchors as typed arrays, the damaged-floor marker), `lib/city/plan/plan-summary.ts` (text summary for screen readers), their unit tests (new).
+* **Dependencies**: CR6.T2b, CR6.T3
+* **Acceptance criteria**:
+  - `visibleFloors(plan, builtCharacters, total, lostCharacters)` returns `{ complete, partialFraction, damaged }` per the CR6.T1 formula (`city-3d.md` §4): nothing at 0, every floor complete at `total`, monotonic, invalid input → nothing.
+  - Lowering `builtCharacters` removes the newest floors first. The partly paid top floor is *under construction* while no character has been lost and **damaged** once `lostCharacters > 0` (`max(0, focusCharacters − built)`, derived from the `timer` accumulators), so a loss of a single character always changes the output and a growing city never flashes red.
+  - `sceneData` output for a fixed seed matches a snapshot; instance and edge counts equal the visible floors.
+  - Pure: no `Date.now()`, no browser or three.js imports.
+  - **Docs**: `city-3d.md` derivation section, `docs/testing-matrix.md` row.
+
+##### CR6.T5a — Store and persistence v4: derived city instead of layers
+* **Status**: done (2026-11-11). Expand/contract: the persisted city is `{ sessionId }` and the plan/floor selectors exist, but the ASCII `layers`/`buildings`/`themeId` stay in memory (unpersisted) so the background and its tests keep working until CR6.T5b/T9a; the popup's old City view is blank until CR6.T8a.
+* **Objective**: the store holds only what the plan needs.
+* **Files to create/modify**: `store/city.slice.ts` (state reduced to the session id and any CR6.T1 field; memoized `selectCityPlan`, `selectVisibleFloors`), `store/store.types.ts`, `store/index.ts` (version 4 and migration), `lib/city/migrate-city.ts` (new), tests for the slice and the migration.
+* **Dependencies**: CR6.T4
+* **Acceptance criteria**:
+  - `resetCityForNewSession` still runs only on `idle → running`, never on resume; a new session gets a new plan.
+  - Version 4: v3 snapshots migrate with `city.layers`/`city.buildings` dropped; malformed data is rejected with a `Result`, never a throw (§1.4); fixtures for v2 and v3.
+  - Granular selectors only (§1.3); the plan is computed once per session id, not on every render.
+  - Blocklist, timer and history tests stay green unmodified.
+  - **Docs**: `CLAUDE.md` §1.3 (the persisted city state is the plan's seed, no grid/layers/domain palettes); `docs/store-analysis.md`; `.serena/memories/core.md` (city derived from seed + `builtCharacters`, persistence v4); `docs/testing-matrix.md` row.
+
+##### CR6.T5b — Background and score: progress-only growth tick, escalating malus in `builtCharacters`
+* **Status**: done (2026-11-11). `advanceProgress` also lost its `tickMs` option and `targetTicks` result; the ASCII `growCityByTicks`/`applyMalusToCity` store actions and `applyMalus` stay, unused by the background, until CR6.T9a.
+* **Objective**: the background stops growing and erasing layers, and the escalating malus (option A) becomes part of the score, so the city and the score lose the same amount.
+* **Files to create/modify**: `lib/score/calculate-built-characters.ts` (escalated distraction cost), `lib/score/malus-escalation.ts` (new: `MALUS_ESCALATION_SCHEDULE` and `malusForDistractionTicks` moved out of `apply-malus.ts`), `lib/timer/session-progress.ts`, `entrypoints/background.ts` (growth tick keeps progress only; malus wiring without `applyMalusToCity`; `MALUS_APPLIED` computed from the `builtCharacters` drop), their unit and integration tests (score, session progress, background growth, malus).
+* **Dependencies**: CR6.T5a
+* **Acceptance criteria**:
+  - Penalty = `malusForDistractionTicks(floor(distractedMs × total / durationMs))` over the cumulative `distractedMs`; no "proceed" baseline and no immediate extra character (`city-3d.md` §5; open point 1 there).
+  - Tests written first for the score: a long stay costs more than a short one by the escalation schedule; the result stays an integer in `[0, total]`; a full undistracted session still reaches 100%.
+  - The background never writes city geometry; the city view reflects a malus within the same store update as the score.
+  - `MALUS_APPLIED` still reaches the overlay with the characters lost (now the `builtCharacters` drop).
+  - CR3 band and population tests are updated where the escalation changes expected values, with the change explained in the test names; nothing else changes.
+  - **Docs**: `CLAUDE.md` "two clocks" technical note (the fine tick advances progress; the view derives floors); `docs/features-analysis/score-population.md` (escalation now in the score, worked example from CR6.T1); `README.md` (how the city grows and how distractions damage it); `.serena/memories/core.md` (malus through `builtCharacters`; background never touches rendering); `docs/testing-matrix.md` row.
+
+##### CR6.T6a — Add three.js; renderer lifecycle and pure render scheduler
+* **Status**: done (2026-11-11). three.js 0.187.0 (exact). Two helper files were added beyond the card (`lib/city/camera-framing.ts`, `components/city/three/renderer-context.ts`); the renderer is not loaded by anything yet (the lazy view is CR6.T8a), so the build is unchanged.
+* **Objective**: a framework-free renderer shell that starts, resizes, stops and cleans up correctly, and draws a frame only when one is due.
+* **Files to create/modify**: `package.json` (`three`, `@types/three`, exact versions), `components/city/three/city-renderer.ts` (WebGL renderer, orthographic camera, limited orbit controls, resize, `dispose()`, context loss), `lib/city/render-scheduler.ts` (pure: decides when a frame is due), `tests/unit/lib/city/render-scheduler.test.ts`, a renderer test with three.js mocked.
+* **Dependencies**: CR6.T4
+* **Acceptance criteria**:
+  - Frames only on: visible-floor change, camera move, resize, or a due ambient frame; the scheduler is unit-tested for each case and for "nothing changed → no frame".
+  - Pixel ratio ≤ 1.5, `powerPreference: 'low-power'`, no MSAA.
+  - `dispose()` frees every GPU resource and the context; `webglcontextlost` is reported to the caller so the view can fall back.
+  - No `chrome.*`/`browser.*` calls and no store access inside the renderer (§1.3).
+  - **Docs**: `CLAUDE.md` overview stack line and §1.4 minimal-dependencies list (three.js added, with the reason and the lazy-loading rule); `.serena/memories/tech_stack.md`; `docs/project-structure.md` (`components/city/three/`, `lib/city/plan/`); `city-3d.md` renderer section.
+
+##### CR6.T6b — City meshes from scene data, bloom and CRT pass
+* **Status**: done (2026-11-11). Three helpers were added beyond the card (`lib/city/plan/scene-geometry.ts`, pure window bands and road geometry; the `look` scheduler reason; the 40-line rule split the meshes file into helpers). The look (bloom values, colors) is untuned: nothing renders on screen until CR6.T8a.
+* **Objective**: draw the city with the sketch D look.
+* **Files to create/modify**: `components/city/three/city-meshes.ts` (instanced bodies and window bands, edge lines, ground, grid, roads), `components/city/three/post-processing.ts` (bloom at half resolution), `components/city/three/crt-pass.ts` (scanlines, vignette, phosphor floor), `components/city/three/city-renderer.ts` (wiring), a test that the meshes follow the scene data (three.js mocked).
+* **Dependencies**: CR6.T6a
+* **Acceptance criteria**:
+  - City bodies and windows are two instanced meshes; edges one line mesh rebuilt only when the visible floors change; instance counts equal the scene data.
+  - Bloom runs at half resolution; the CRT pass can be disabled without other changes.
+  - **Docs**: `city-3d.md` (meshes and post-processing as built).
+
+##### CR6.T7 — Ambient layer, floor animations and damaged-floor effect
+* **Status**: done (2026-11-11). Beyond the card: `lib/city/floor-motion.ts` (pure timeline), `floor-slots.ts` (extracted from `city-meshes.ts`), `city-scene.ts` (the renderer's single entry to the city), `ambient-motion.ts` (rain and cars) and a `labelQuad` helper in `lib/city/plan/scene-geometry.ts`; the scheduler gained an `animating` input and an `animation` reason. Lamps, signs and beacons are scenery and also show under reduced motion; only motion (rain, cars, flicker, pulse, animations) stops. The HUD line is a DOM element and belongs to CR6.T8a.
+* **Objective**: the life of sketch D — rain, cars, lamps, window flicker, beacons, tower labels, the HUD line — plus the growth and malus effects, within the performance rules.
+* **Files to create/modify**: `components/city/three/ambient-layer.ts` (rain, cars, flicker, beacons), `components/city/three/city-labels.ts` (`> NAME` sprites on landmark towers), `components/city/three/floor-animations.ts` (new floor drops in; removed floor glitches out in red; damaged top floor cracks and flickers), `lib/city/ambient-plan.ts` (pure, seeded: car routes, flicker schedule) with its unit test.
+* **Dependencies**: CR6.T6b
+* **Acceptance criteria**:
+  - Ambient updates are capped at 30 fps and pause when the view is hidden (`visibilitychange`, element out of view, tab switch).
+  - With `prefers-reduced-motion`: no ambient layer, no animations; growth, removals and the damaged state still show, as static changes.
+  - Animations end in the rest state; a burst of malus removals never leaves a floor half-drawn.
+  - **Docs**: `DESIGN.md` motion section (ambient layer, floor drop, glitch-out, damaged floor, reduced-motion behavior, the 30 fps cap).
+
+##### CR6.T8a — Popup City tab: lazy 3D view and accessible summary
+* **Status**: done (2026-11-11). Beyond the card: `CityPanel.tsx` (the non-lazy stage, HUD line and summary), `use-city-renderer.ts` and `use-city-summary.ts` (hooks, so `CityView3D.tsx` stays small). `wxt build` confirms the chunk split (three in `CityView3D` only, 148 KB gzipped). Drag-to-rotate stays optional (no keyboard alternative); `ExportCityButton` still exports the old ASCII layers and is reworked by CR6.T10. Nothing was judged by eye in a real browser.
+* **Objective**: replace the ASCII canvas in the City tab with the 3D view, loaded only when the tab opens.
+* **Files to create/modify**: `components/city/CityView3D.tsx` (mounts the renderer, wires selectors, cleans up), `entrypoints/popup/App.tsx` or the City section component (`React.lazy` + `Suspense` placeholder sized like the view), `entrypoints/popup/App.css`, `locales/en.yml`, `locales/it.yml`, component tests (renderer mocked).
+* **Dependencies**: CR6.T5b, CR6.T7
+* **Acceptance criteria**:
+  - The three.js chunk is requested only when the City tab is shown; the Timer tab bundle does not include it.
+  - The view fills the tab width with no horizontal overflow and keeps the popup under the 600 px height cap.
+  - The screen-reader summary is localized (EN/IT) and updates at milestones; the canvas is not a keyboard trap; drag-to-rotate has a keyboard alternative or is optional.
+  - `CityEmptyHint` keeps working (idle, nothing built); i18n drift test green.
+  - **Docs**: `DESIGN.md` (City tab layout, HUD line, labels); `PRODUCT.md` (wherever it describes the ASCII city); `README.md` (feature description); `docs/ui/ui-review-tasks.md` (UI.T11 and UI.T12 point at the new view).
+
+##### CR6.T8b — ASCII fallback from the plan, switch on missing or lost WebGL
+* **Status**: done (2026-11-11). Beyond the card: `components/city/webgl-support.ts` (the capability check) and a `city.fallbackNote` line replacing T8a's `city.viewUnavailable`. The fallback is a front view (not a top view) at 60 × 20, monochrome. It was never seen in a real browser without WebGL; happy-dom stands in for "no WebGL".
+* **Objective**: keep the City tab working where WebGL2 is unavailable or the context is lost.
+* **Files to create/modify**: `lib/city/plan/plan-skyline.ts` (pure: plan + visible floors → ASCII rows) with its unit test, `components/city/CityFallback.tsx`, `components/city/CityView3D.tsx` (capability check and switch on context loss), component tests.
+* **Dependencies**: CR6.T8a
+* **Acceptance criteria**:
+  - Without WebGL2, or after `webglcontextlost`, the fallback shows the same plan and the same visible floors; no error reaches the error boundary.
+  - The fallback stays within the tab width and carries the same screen-reader summary.
+  - **Docs**: `DESIGN.md` (fallback view), `city-3d.md` (fallback as built).
+
+##### CR6.T9a — Remove the ASCII growth engine, its components and tests
+* **Status**: done (2026-11-11). Beyond the card: `export-image.ts` and `ExportCityButton.tsx` were rebased on the text city (`renderSkyline`) because they could not outlive the layers and `palette.ts`; CR6.T10 keeps that path as the no-WebGL export and adds the 3D capture. `createCitySlice` takes no dependencies any more and `StoreDependencies` lost the city part.
+* **Objective**: delete the code the plan replaced, so only one city model exists.
+* **Files to create/modify**: delete `lib/city/growth-engine.ts`, `tile-library.ts`, `building-composer.ts`, `decoration-engine.ts`, `street-props.ts`, `palette.ts`, `theme-registry.ts`, `city-size.ts` (as listed in CR6.T1), what remains of `lib/score/apply-malus.ts`, `components/city/CityCanvas.tsx`, `CityLayer.tsx`, `CityCell.tsx`, the layer types in `city.types.ts`, and their tests.
+* **Dependencies**: CR6.T8b
+* **Acceptance criteria**:
+  - No import of the removed modules remains; `bun run compile`, lint and tests green.
+  - Score, population, malus timing and history tests unchanged by this task.
+  - **Docs**: JSDoc in code that stays no longer references removed modules; `docs/project-structure.md` (removed files).
+
+##### CR6.T9b — Retire the old model in the documentation
+* **Status**: done (2026-11-11). Beyond the card: the old rows of `docs/testing-matrix.md` are marked as history, and `CLAUDE.md` also lost the `CityCanvas`/`CityCell` examples, the TexturePacker mention and the hover-on-a-city-cell UI example. `PRODUCT.md` and `README.md` were already updated by CR6.T8a/T8b and stay with CR6.T13 for the final pass.
+* **Objective**: the project rules and the historical record point at the new model.
+* **Files to create/modify**: `CLAUDE.md` (§1.1 KISS row about the tile library, DRY row about the domain-hash palette, §1.4 pure-function examples naming `building-composer.ts` and `decoration-engine.ts`, rewritten for the plan generator), the Section 1 cards of this roadmap listed in §2.9.3, the historical documents from the CR6.T1 inventory.
+* **Dependencies**: CR6.T9a
+* **Acceptance criteria**:
+  - Every Section 1 card in §2.9.3 carries a "Superseded/Amended by CR6 (§2.9)" note in the style of the CR1/CR2 notes.
+  - Every historical document in the inventory carries the one-line banner note; its body is unchanged.
+  - The rewritten `CLAUDE.md` rows use the reference description from CR6.T1.
+
+##### CR6.T10 — Export the city image from the 3D view
+* **Status**: done (2026-11-11). Beyond the card: `capture-frame.ts` (the testable capture), `city-renderer.types.ts` (types moved out to keep the renderer under 200 lines) and `components/city/city-capture.ts` (the bridge between the lazy view and the button). A failed capture falls back to the text city rather than showing an error. Never run against a real GPU: the capture is tested with a fake host and a mocked three.js; the real-browser check is CR6.T12.
+* **Objective**: keep the JPEG/PNG export (M3.T8) working with the new view.
+* **Files to create/modify**: `lib/city/export-image.ts` (frame capture and the fallback path), `lib/city/rasterize-image.ts`, `components/city/ExportCityButton.tsx`, `components/city/three/city-renderer.ts` (`captureFrame(width, height)`), their tests.
+* **Dependencies**: CR6.T8b
+* **Acceptance criteria**:
+  - The export renders one frame at the chosen size and reads it in the same task (no `preserveDrawingBuffer` kept on).
+  - Without WebGL the export uses the ASCII fallback.
+  - Errors stay inside the existing export boundary (M4.T3e).
+  - **Docs**: `README.md` (export), `DESIGN.md` if it describes the exported image.
+
+##### CR6.T11 — *(Optional)* Full-city extension page
+* **Status**: done (2026-11-11), the optional card was taken. Beyond the card: `lib/browser/open-extension-page.ts`, `components/city/OpenCityPageButton.tsx`, `components/city/city-panel.css` (the stage styles moved out of the popup's `App.css` so the page shares them) and a `freeCamera` option through `CityPanel`, `CityView3D`, `useCityRenderer` and the renderer. Not opened in a real browser; no keyboard alternative for the camera.
+* **Objective**: a "View full city" page with a large canvas and free camera, as in sketch C. Can be dropped without affecting the other tasks.
+* **Files to create/modify**: `entrypoints/city/index.html`, `entrypoints/city/main.tsx`, `entrypoints/city/App.tsx` (new), a link in the City tab, `locales/en.yml`, `locales/it.yml`.
+* **Dependencies**: CR6.T8a
+* **Acceptance criteria**:
+  - Reads the same persisted state as the popup and updates live; read-only (the background stays the single writer).
+  - Ambient layer pauses when the tab is hidden; the page works in Chrome and Firefox builds.
+  - **Docs**: `README.md`, `docs/project-structure.md` (`entrypoints/city/`), `DESIGN.md` (page layout).
+
+##### CR6.T12 — Performance verification and e2e
+* **Status**: done (2026-11-11). Measured numbers are in `docs/features-analysis/city-3d.md` §8: everything within budget except the **first City frame (about 490–740 ms against 200 ms), reported as over budget** — *resolved after CR6 (open issue #22, PERF22): 170–223 ms on the reference GPU, budget raised to 250 ms*. The e2e found and this task fixed a real bug (`disposeScene` crashed the popup when leaving the City tab since CR6.T8a). Beyond the card: `components/city/three/debug-stats.ts` and `components/city/use-city-debug.ts` (debug hooks behind `?debug=render`), the `E2E_GPU=1` switch in `tests/e2e/setup.ts`.
+* **Objective**: prove the budgets from CR6.T1 and cover the new view end to end.
+* **Files to create/modify**: `tests/e2e/city-3d.spec.ts` (new), a debug-only render counter exposed as a `data-` attribute on the view container, `docs/features-analysis/city-3d.md` (measured numbers).
+* **Dependencies**: CR6.T8b, CR6.T10
+* **Acceptance criteria**:
+  - e2e (Chromium): opening the popup on the Timer tab does not request the three.js chunk; the City tab renders a canvas with no console errors; with reduced motion emulated and no growth, the render counter stays flat; switching tabs ten times leaves one live WebGL context.
+  - Measured and recorded: chunk size, first City frame time, main-thread time per render, draw calls. Values over budget are reported, not hidden.
+  - Two sessions started in a row produce visibly different cities (different plan hash), and one session reopened produces the same city.
+  - **Docs**: `city-3d.md` (measured numbers next to the budgets), `docs/testing-matrix.md` (e2e row).
+
+##### CR6.T13 — Documentation consistency pass and final verification
+* **Status**: done (2026-11-12). Gaps fixed in `DESIGN.md`, `CLAUDE.md`, `README.md`, the structure and matrix docs and the memories; `docs/features-analysis/city-3d.md` marked implemented. The six gate commands are green; fixing the former Open issue #21 (ESLint ignores for `.claude/**`) was needed for `bun run lint`. The first-frame budget stays open (Open issues #22).
+* **Objective**: prove that the whole documentation describes one model — the new one — and that the gate is green. The per-task **Docs** criteria did the writing; this task checks and closes the gaps.
+* **Files to create/modify**: any document from the CR6.T1 inventory still out of date; `docs/features-analysis/city-3d.md` (marked implemented); `.serena/memories/core.md` (final check); `docs/changelog.md` (verification only).
+* **Dependencies**: CR6.T1–CR6.T12
+* **Acceptance criteria**:
+  - Every living document in the CR6.T1 inventory describes the plan/3D model; a search of living documents for the old terms (`growth-engine`, `tile-library`, `CityCanvas`, `city.layers`, `getBuildingColor`, `theme-registry`, `applyMalusToCity`, "character grid") finds only explanations of the change, never the old model presented as current. Historical documents carry the banner note.
+  - `CLAUDE.md`, `DESIGN.md`, `PRODUCT.md`, `README.md` and the Serena memories agree with each other and with `city-3d.md` (same reference description).
+  - Every CR6 task has its changelog entry, including the v4 migration and the score change; `Commit: —` until committed.
+  - `bun run compile`, `bun run lint`, `bun run test`, `bun run build`, `bun run build:firefox` and `bun run e2e` green.
+
+#### 2.9.3 Amended acceptance criteria in Section 1
+
+| Main task | Amended part | New rule |
+|---|---|---|
+| M2.T10 | the malus deletes characters from the city, separately from the score | the malus lowers `builtCharacters`; the city follows (CR6.T5b) |
+| M2.T11 | `citySlice` stores the grid/layers of the session | stores only what the plan needs; the plan is derived from the session seed (CR6.T5a) |
+| M2.T11b / M2.T11c | ASCII module library and composer | replaced by data-driven archetypes in the plan generator (CR6.T2b) |
+| M2.T12 | growth engine fills three character layers | visible floors are derived from `builtCharacters` (CR6.T4) |
+| M2.T12b | decoration engine (windows, trees, cars, clouds) | ambient layer of the 3D view (CR6.T7) |
+| M2.T13 / M2.T13b | domain hash → color within a session theme | random session palette with hue shift (CR6.T3) |
+| M2.T14 | multi-layer ASCII render with CRT glow | three.js view with bloom and CRT pass; ASCII only as fallback (CR6.T6a/T6b/T8a/T8b) |
+| M2.T15 | the growth tick inserts characters | the growth tick advances session progress; the view derives floors (CR6.T5b) |
+| M2.T16 | the malus wiring erases characters from the layers | the malus wiring lowers the score; the newest floors disappear, a partly paid floor shows as damaged (CR6.T4/T5b) |
+| M3.T5 | `framer-motion` animations on growth/deletion of characters | floor drop, glitch-out and damaged-floor effects in the renderer (CR6.T7) |
+| M3.T8 | export from the ASCII layers | export from a captured 3D frame, ASCII as fallback (CR6.T10) |
+| M4.T1 | the escalating malus erases extra characters from the city only | the escalation is part of `builtCharacters`, so it lowers the score and the city alike (CR6.T5b) |
+| M4.T2 | TexturePacker / building sprite sheet | superseded: the 3D view needs no sprite sheet |
 
 ---
 

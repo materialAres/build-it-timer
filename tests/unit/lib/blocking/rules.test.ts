@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildDnrRules } from '@/lib/blocking/rules';
 import type { BlocklistEntry } from '@/store/store.types';
 
-const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
+const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, manual: true, presetIds: [] });
 
 const BLOCK_RESOURCE_TYPES = ['sub_frame'];
 

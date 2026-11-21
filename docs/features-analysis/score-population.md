@@ -7,6 +7,17 @@
 > Status: **implemented by CR3.T1–T11** (see `docs/roadmap-en.md` §2.6). File/line
 > references describe the tree before the change (`main` @ `8bdbb57`) and are
 > kept as history.
+>
+> **Amended by CR6.T5b (2026-11-11).** The distraction cost is no longer linear:
+> `distractionCharacters = malusForDistractionTicks(floor(distractedMs × total /
+> durationMs))` (`lib/score/malus-escalation.ts`, the M4.T1 schedule: 1 character per
+> tick for ticks 1–5, 2 for 6–11, 3 from 12). The first stage equals the linear cost
+> described below, so only stays beyond five ticks are harsher. Worked example, 30-minute
+> session (3 s tick, total 600): **60 s on a blocked site costs 44 characters, not 20**
+> (5 + 12 + 27); 5 minutes cost 284 (47% of the city). A distraction of 10% of the
+> session moves a score from `great` to `good`, 20% from `good` to `bad`
+> (`docs/features-analysis/city-3d.md` §5 has the table). The city's floors are derived
+> from the same `builtCharacters`, so the score and the city lose the same amount.
 
 ## 1. Core idea
 
@@ -47,6 +58,12 @@ growth rate:
   recent character at its band's rate (in the `great` band it costs 20). The
   population never goes below 0. Reaching 100% therefore requires a full session
   with zero whole distraction ticks.
+- **The count is a balance of the session totals, so it can owe** *(documented
+  by I013)*: the clamp at 0 applies only to what is shown. A distraction that
+  costs more than has been built leaves a debt that later focus pays back
+  before the city and the population grow again, so they look frozen at 0 for
+  a while. In exchange, the final score depends only on how much focus and
+  distraction the session had, not on their order. See `city-3d.md` §5.
 - **Completion bonus is proportional**: 7% of the population reached
   (the maximum before the bonus, 6900 today → 483). No fixed number: it scales
   with the total and the rates. Decided in §10, point 2.

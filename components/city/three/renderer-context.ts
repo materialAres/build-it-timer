@@ -1,0 +1,103 @@
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OrthographicCamera, Scene, WebGLRenderer } from 'three';
+import {
+  CAMERA_HOME,
+  CAMERA_TARGET,
+  FREE_ORBIT_LIMITS,
+  ORBIT_LIMITS,
+  frustumFor,
+} from '@/lib/city/camera-framing';
+import { ENVIRONMENT_COLORS } from '@/lib/city/plan/environment-colors';
+import { GL_ATTRIBUTES } from '../webgl-support';
+
+/** The pixel ratio never exceeds this: sharp enough, and 4× fewer pixels than a 3× screen. */
+export const MAX_PIXEL_RATIO = 1.5;
+
+export interface GlContext {
+  readonly renderer: WebGLRenderer;
+  readonly camera: OrthographicCamera;
+  readonly scene: Scene;
+  readonly controls: OrbitControls;
+}
+
+interface Disposable {
+  dispose(): void;
+}
+
+/**
+ * three.js keeps a `_listeners` object on a material whose `dispose` key holds
+ * an array of callbacks, so "has a `dispose` property" is not enough: only a
+ * function is something to call.
+ */
+function isDisposable(value: unknown): value is Disposable {
+  return typeof (value as { dispose?: unknown } | null)?.dispose === 'function';
+}
+
+/**
+ * The WebGL renderer, the camera, the scene and the limited orbit controls.
+ * Light by construction: no MSAA, a low-power GPU, no preserved drawing buffer
+ * (a capture renders and reads in one task), a capped pixel ratio, and orbit
+ * controls without pan or damping so a still view needs no frame loop.
+ * `free` swaps the limited orbit for the full-city page's free one (CR6.T11).
+ * `canvas` is the probed one (#22): its WebGL2 context already exists, made with
+ * the same attributes, so the page does not make a second one.
+ * Throws when WebGL is unavailable; the caller turns that into a `Result`.
+ */
+export function createGlContext(host: HTMLElement, free = false, canvas?: HTMLCanvasElement): GlContext {
+  const context = canvas?.getContext('webgl2', GL_ATTRIBUTES) ?? undefined;
+  const renderer = new WebGLRenderer({ ...GL_ATTRIBUTES, canvas, context });
+  renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO));
+  renderer.setClearColor(ENVIRONMENT_COLORS.floor);
+  host.appendChild(renderer.domElement);
+
+  const camera = new OrthographicCamera();
+  camera.position.set(CAMERA_HOME.x, CAMERA_HOME.y, CAMERA_HOME.z);
+  camera.lookAt(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(CAMERA_TARGET.x, CAMERA_TARGET.y, CAMERA_TARGET.z);
+  const limits = free ? FREE_ORBIT_LIMITS : ORBIT_LIMITS;
+  controls.enablePan = free;
+  controls.enableDamping = false;
+  controls.minPolarAngle = limits.minPolar;
+  controls.maxPolarAngle = limits.maxPolar;
+  controls.minAzimuthAngle = limits.minAzimuth;
+  controls.maxAzimuthAngle = limits.maxAzimuth;
+  controls.minZoom = limits.minZoom;
+  controls.maxZoom = limits.maxZoom;
+  controls.update();
+
+  return { renderer, camera, scene: new Scene(), controls };
+}
+
+/** Fit the camera frustum to a view of `width` × `height` pixels. */
+export function applyFraming(camera: OrthographicCamera, width: number, height: number): void {
+  const frustum = frustumFor(width / height);
+  camera.left = frustum.left;
+  camera.right = frustum.right;
+  camera.top = frustum.top;
+  camera.bottom = frustum.bottom;
+  camera.updateProjectionMatrix();
+}
+
+/** The camera's right and up axes in world space, for billboards that face it. */
+export function cameraAxes(
+  camera: OrthographicCamera,
+): [right: [number, number, number], up: [number, number, number]] {
+  camera.updateMatrixWorld();
+  const e = camera.matrixWorld.elements;
+  return [[e[0], e[1], e[2]], [e[4], e[5], e[6]]];
+}
+
+/** Free the geometries, materials and textures of every object in the scene. */
+export function disposeScene(scene: Scene): void {
+  scene.traverse((object) => {
+    const { geometry, material } = object as { geometry?: unknown; material?: unknown };
+    if (isDisposable(geometry)) geometry.dispose();
+    for (const m of Array.isArray(material) ? (material as unknown[]) : [material]) {
+      if (typeof m !== 'object' || m === null) continue;
+      for (const value of Object.values(m)) if (isDisposable(value)) value.dispose();
+      if (isDisposable(m)) m.dispose();
+    }
+  });
+}

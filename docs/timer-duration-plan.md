@@ -1,5 +1,7 @@
 # Implementation Plan — User-selectable focus duration with duration-neutral city growth
 
+> Superseded by CR6 (§2.9): describes the ASCII city.
+
 - **Status**: **implemented** (see `docs/changelog.md` → I005); the three open decisions in §11 are resolved below
 - **Type**: post-roadmap feature
 - **Scope**: timer duration selection (presets) + scaling of the growth and malus cadence to the chosen duration

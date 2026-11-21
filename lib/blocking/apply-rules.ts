@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
-import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
+import type { TimerStatus } from '@/store/store.types';
+import type { BlockedEntry } from './is-domain-blocked';
 import { buildDnrRules, type DnrRule } from './rules';
 
 /**
@@ -9,7 +10,7 @@ import { buildDnrRules, type DnrRule } from './rules';
 export interface BlockingRulesSource {
   readonly timer: { readonly status: TimerStatus };
   readonly blocklist: {
-    readonly blocklist: ReadonlyArray<BlocklistEntry>;
+    readonly blocklist: ReadonlyArray<BlockedEntry>;
   };
 }
 
