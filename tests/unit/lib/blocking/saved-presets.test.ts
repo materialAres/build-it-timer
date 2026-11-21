@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   deleteUserPreset,
   generatePresetId,
+  isUserPresetId,
   MAX_PRESET_NAME_LENGTH,
   renameUserPreset,
   saveUserPreset,
@@ -49,6 +50,17 @@ describe('generatePresetId', () => {
   });
 });
 
+describe('isUserPresetId (PR7.T3)', () => {
+  it('accepts the prefix followed by something, and what generatePresetId makes', () => {
+    expect(isUserPresetId('user:1')).toBe(true);
+    expect(isUserPresetId(generatePresetId(1_700_000_000_000, 0.5))).toBe(true);
+  });
+
+  it.each(['', 'user:', 'social', 'User:1', ' user:1'])('rejects %j', (id) => {
+    expect(isUserPresetId(id)).toBe(false);
+  });
+});
+
 describe('saveUserPreset', () => {
   const listed = state({
     blocklist: [entry('a.com', true), entry('x.com', false, ['social'])],
@@ -93,6 +105,11 @@ describe('saveUserPreset', () => {
   it('rejects an id that is empty or already taken', () => {
     expect(saveUserPreset(listed, '', 'Work', BUILT_IN)).toBe(listed);
     expect(saveUserPreset(listed, 'social', 'Work', BUILT_IN)).toBe(listed);
+  });
+
+  it('rejects an id without the user prefix, even when it is free (PR7.T3)', () => {
+    expect(saveUserPreset(listed, 'work', 'Work', BUILT_IN)).toBe(listed);
+    expect(saveUserPreset(listed, 'user:', 'Work', BUILT_IN)).toBe(listed);
   });
 
   it('accepts a name of exactly the maximum length', () => {

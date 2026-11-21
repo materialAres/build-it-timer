@@ -11,6 +11,11 @@ export const MAX_PRESET_NAME_LENGTH = 24;
 /** Prefix that keeps user preset ids from ever colliding with built-in ids. */
 export const USER_PRESET_PREFIX = 'user:';
 
+/** Whether `id` has the user prefix and something after it. */
+export function isUserPresetId(id: string): boolean {
+  return id.startsWith(USER_PRESET_PREFIX) && id.length > USER_PRESET_PREFIX.length;
+}
+
 export function generatePresetId(now: number, random: number): string {
   return `${USER_PRESET_PREFIX}${now.toString(36)}-${Math.floor(random * 1_000_000).toString(36)}`;
 }
@@ -43,7 +48,7 @@ export function validatePresetName(
  * Save the whole current list as a new user preset (CR4.T1 §3.4): the preset is
  * marked applied and each captured entry takes it as a source and drops `manual`,
  * so switching the preset off removes exactly what it captured. Rejected (same
- * reference) for an empty list, a blank/long/duplicate name or a taken id.
+ * reference) for an empty list, a blank/long/duplicate name, a taken id or an id without the user prefix.
  */
 export function saveUserPreset(
   state: BlocklistState,
@@ -52,7 +57,7 @@ export function saveUserPreset(
   builtIn: ReadonlyArray<Preset>,
 ): BlocklistState {
   const known = [...builtIn, ...state.userPresets];
-  if (id.length === 0 || state.blocklist.length === 0) return state;
+  if (!isUserPresetId(id) || state.blocklist.length === 0) return state;
   if (validatePresetName(name, known) !== null) return state;
   if (known.some((preset) => preset.id === id)) return state;
   const cleaned = name.trim();

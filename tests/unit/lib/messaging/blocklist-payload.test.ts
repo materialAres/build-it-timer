@@ -31,6 +31,8 @@ describe('isWellFormedBlocklistMutation (CR4.T4)', () => {
     forged('PRESET_TOGGLE', { presetId: '', applied: true }),
     forged('PRESET_SAVE', { id: '', name: 'Work' }),
     forged('PRESET_SAVE', { id: 'user:1' }),
+    forged('PRESET_SAVE', { id: 'work', name: 'Work' }),
+    forged('PRESET_SAVE', { id: 'user:', name: 'Work' }),
     forged('PRESET_RENAME', { presetId: 'user:1', name: 7 }),
     forged('PRESET_DELETE', { presetId: null }),
     forged('PRESET_DELETE', null),

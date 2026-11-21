@@ -1,3 +1,4 @@
+import { isUserPresetId } from '@/lib/blocking/saved-presets';
 import type { MutationMessage } from './messages.types';
 
 /** The mutation variants that change the blocklist (sites and presets). */
@@ -47,7 +48,11 @@ export function isWellFormedBlocklistMutation(
         typeof payload.applied === 'boolean'
       );
     case 'PRESET_SAVE':
-      return isNonEmptyString(payload.id) && typeof payload.name === 'string';
+      return (
+        typeof payload.id === 'string' &&
+        isUserPresetId(payload.id) &&
+        typeof payload.name === 'string'
+      );
     case 'PRESET_RENAME':
       return (
         isNonEmptyString(payload.presetId) && typeof payload.name === 'string'

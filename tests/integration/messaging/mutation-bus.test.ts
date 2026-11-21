@@ -148,6 +148,7 @@ describe('cross-context mutation path (M1.T10)', () => {
     { type: 'PRESET_TOGGLE', payload: { presetId: 'social', applied: 'yes' } },
     { type: 'PRESET_TOGGLE', payload: { presetId: 42, applied: true } },
     { type: 'PRESET_SAVE', payload: { id: '', name: 'Focus' } },
+    { type: 'PRESET_SAVE', payload: { id: 'work', name: 'Focus' } },
     { type: 'PRESET_RENAME', payload: { presetId: 'user:focus', name: 7 } },
     { type: 'PRESET_DELETE', payload: {} },
     { type: 'BLOCKLIST_ADD_SITE', payload: { site: 42 } },
