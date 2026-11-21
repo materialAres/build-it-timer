@@ -43,6 +43,7 @@ let visibleCache: {
  * The cache also remembers the current fall (`advanceFall`, I015): the top
  * floor is damaged only while the city is losing characters, so the change
  * from one count to the next decides it. A new plan starts a new history.
+ * `resetVisibleCache` forgets it; production code never needs to, tests do.
  */
 export function selectVisibleFloors(state: CitySlice & ScoreSlice): VisibleFloors {
   const plan = planForSession(state.city.sessionId);
@@ -55,4 +56,8 @@ export function selectVisibleFloors(state: CitySlice & ScoreSlice): VisibleFloor
   const value = visibleFloors(plan, built, TOTAL_CHARACTERS_PER_SESSION, fall.lost);
   visibleCache = { plan, fall, value };
   return value;
+}
+
+export function resetVisibleCache(): void {
+  visibleCache = null;
 }

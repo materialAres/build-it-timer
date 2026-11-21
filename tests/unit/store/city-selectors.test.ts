@@ -3,6 +3,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { createAppStore, selectCityPlan, selectVisibleFloors } from '@/store';
 import { generateCityPlan } from '@/lib/city/plan/generate-city-plan';
 import { seedFromSession } from '@/lib/city/plan/seed';
+import { resetVisibleCache } from '@/store/city.selectors';
 import type { AppStore } from '@/store';
 
 const DURATION_S = 30 * 60;
@@ -25,6 +26,7 @@ function setProgress(s: AppStore, built: number, focusedMs: number): void {
 describe('city selectors (CR6.T5a)', () => {
   beforeEach(() => {
     fakeBrowser.reset();
+    resetVisibleCache();
   });
 
   describe('selectCityPlan', () => {
@@ -109,6 +111,22 @@ describe('city selectors (CR6.T5a)', () => {
       setSession(s, 'session-f3');
       // 15 min of focus is worth 300 characters; 251 are left from an earlier loss.
       setProgress(s, 251, 15 * 60_000);
+      expect(selectVisibleFloors(s.getState()).damaged).toBe(false);
+    });
+
+    it('forgets the fall history on reset, so a test starts from a clean view (PR7.T4)', () => {
+      const s = store();
+      setSession(s, 'session-h');
+      setProgress(s, 300, 15 * 60_000);
+      selectVisibleFloors(s.getState());
+      setProgress(s, 251, 15 * 60_000);
+      expect(selectVisibleFloors(s.getState()).damaged).toBe(true);
+
+      resetVisibleCache();
+
+      // Same session, same count: without the history it is not a fall.
+      expect(selectVisibleFloors(store().getState()).damaged).toBe(false);
+      setSession(s, 'session-h');
       expect(selectVisibleFloors(s.getState()).damaged).toBe(false);
     });
 
