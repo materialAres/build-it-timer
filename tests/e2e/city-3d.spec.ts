@@ -69,6 +69,18 @@ const liveContexts = (page: Page): Promise<number> =>
 const planHash = (page: Page): Promise<string | undefined> =>
   page.evaluate((selector) => (document.querySelector<HTMLElement>(selector))?.dataset.planHash, HOST);
 
+/**
+ * Open the City tab once in a throwaway browser, so the budget run below does not pay for a
+ * cold start: the first run after other browser work has an empty GPU shader cache and no warm
+ * disk cache, and its first frame can be twice the warm one (295 and 440 ms against 222 ms).
+ */
+async function warmUp(): Promise<void> {
+  const { context, page } = await open();
+  await seedIdleCity(page, 'e2e-warm-up-city', 600);
+  await openCityTab(page);
+  await context.close();
+}
+
 async function openCityTab(page: Page): Promise<void> {
   await showTab(page, 'City');
   await page.locator(`${HOST} canvas`).waitFor();
@@ -236,6 +248,7 @@ test.describe('the 3D city in the built extension (CR6.T12)', () => {
     expect(chunk).toBeDefined();
     const chunkGzipKb = gzipSync(readFileSync(path.join(chunkDir, chunk ?? ''))).length / 1024;
 
+    await warmUp();
     const { context, page } = await open();
     // The whole city standing: the most draw calls it will ever need.
     await seedIdleCity(page, 'e2e-measure-city', 600);
