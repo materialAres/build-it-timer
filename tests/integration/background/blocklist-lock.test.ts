@@ -365,3 +365,145 @@ describe('add-direction mutations in the background (CR5.T2)', () => {
     handle.dispose();
   });
 });
+
+/** The persisted timer status in each `storage.local.set` call, in order. */
+const persistedStatuses = (
+  setSpy: { mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> } },
+): string[] =>
+  setSpy.mock.calls.flatMap(([items]) => {
+    const raw = (items as Record<string, unknown>)[STORE_NAME];
+    if (typeof raw !== 'string') return [];
+    const parsed = JSON.parse(raw) as { state: { timer: { status: string } } };
+    return [parsed.state.timer.status];
+  });
+
+/**
+ * PR5.T1 (red until fixed) — the startup window: the mutation listeners are
+ * registered synchronously, while the persisted state is read asynchronously.
+ * The storage read is held open here so a message provably arrives before the
+ * background knows the session is running (see `docs/pr-review/pr-5-review.md`,
+ * F1). Every idle-only mutation is a no-op on the empty default state, so the
+ * window shows through CR5's add direction: an early add (legal while running)
+ * lands on the defaults and persists them, and the remove that follows is
+ * judged against the default `idle` instead of the persisted session.
+ */
+describe('blocklist lock before the startup hydration (PR5.T1)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it('judges messages that arrive before the persisted running session is loaded against that session', async () => {
+    // Persist a running session, as a previous worker would have left it.
+    const previous = createAppStore();
+    await previous.persist.rehydrate();
+    previous.setState({
+      timer: runningTimer(),
+      blocklist: {
+        blocklist: [{ domain: { value: 'facebook.com' }, manual: true, presetIds: [] }],
+        appliedPresetIds: [],
+        userPresets: [],
+      },
+    });
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+        state: { timer: { status: string } };
+      };
+      expect(parsed.state.timer.status).toBe('running');
+    });
+
+    const alarmProvider = new FakeAlarmProvider(T0);
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1_500_000);
+
+    // Hold every storage read until released: the worker has started, but the
+    // persisted state is still "in flight". The read is taken when it is
+    // issued (FIFO, like the real storage backend) and only its delivery is
+    // delayed, so a later write cannot leak into an earlier read.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const local = fakeBrowser.storage.local;
+    const realGet = local.get.bind(local) as (
+      keys: string,
+    ) => Promise<Record<string, unknown>>;
+    const delayedGet = async (keys: string): Promise<Record<string, unknown>> => {
+      const snapshot = realGet(keys);
+      await gate;
+      return snapshot;
+    };
+    const getSpy = vi
+      .spyOn(local, 'get')
+      // `storage.local.get` also has a callback overload typed as returning
+      // void; the promise form is the one the storage adapter uses.
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      .mockImplementation(delayedGet as unknown as typeof local.get);
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+
+    const records: LogRecord[] = [];
+    const logger = createLogger('lock-test', {
+      sink: (record) => records.push(record),
+      minLevel: 'debug',
+    });
+    // A fresh store, as after a worker restart (no injected `store`).
+    const handle = startBackground({ alarmProvider, now: () => T0, logger });
+
+    // Allowed while running (CR5), then locked while running (CR2).
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'x.com' } });
+    await sendMessage({ type: 'BLOCKLIST_REMOVE_SITE', payload: { site: 'x.com' } });
+    await flushAsync();
+
+    release();
+    await handle.ready;
+    await flushAsync();
+
+    const domains = (entries: ReadonlyArray<{ domain: { value: string } }>): string[] =>
+      entries.map((entry) => entry.domain.value);
+
+    // Soft assertions so one run reports every symptom of the window.
+    expect
+      .soft(
+        records.find(
+          (record) =>
+            record.message ===
+            'blocklist mutation ignored while the timer is not idle',
+        )?.details,
+        'the early removal is rejected by the CR2 lock, logging only its type',
+      )
+      .toEqual([{ type: 'BLOCKLIST_REMOVE_SITE' }]);
+    expect
+      .soft(persistedStatuses(setSpy), 'storage never receives a default idle timer')
+      .not.toContain('idle');
+    expect
+      .soft(handle.store.getState().timer.status, 'the session is still running')
+      .toBe('running');
+    expect
+      .soft(
+        domains(handle.store.getState().blocklist.blocklist),
+        'the early add is kept on top of the persisted list',
+      )
+      .toEqual(['facebook.com', 'x.com']);
+
+    getSpy.mockRestore();
+    // What the next worker restart (or a popup) would read.
+    const stored = await fakeBrowser.storage.local.get(STORE_NAME);
+    const persisted = JSON.parse(stored[STORE_NAME] as string) as {
+      state: {
+        timer: { status: string };
+        blocklist: { blocklist: ReadonlyArray<{ domain: { value: string } }> };
+      };
+    };
+    expect
+      .soft(persisted.state.timer.status, 'storage still holds the running session')
+      .toBe('running');
+    expect
+      .soft(
+        domains(persisted.state.blocklist.blocklist),
+        'storage holds the persisted list plus the early add',
+      )
+      .toEqual(['facebook.com', 'x.com']);
+
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+});
