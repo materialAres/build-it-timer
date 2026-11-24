@@ -161,3 +161,58 @@ describe('parseStoreSnapshot (M2.T8, CR1.T4)', () => {
     ).toBe(false);
   });
 });
+
+describe('parseStoreSnapshot with version-3 entries (CR4.T3)', () => {
+  const v3Entry = (value: string, presetIds: string[] = []) => ({
+    domain: { value },
+    manual: presetIds.length === 0,
+    presetIds,
+  });
+  const v3Blocklist = {
+    blocklist: [v3Entry('facebook.com', ['social']), v3Entry('x.com')],
+    appliedPresetIds: ['social'],
+    userPresets: [],
+  };
+
+  it('reads the domains of a version-3 blocklist', () => {
+    const result = parseStoreSnapshot(
+      envelope({ timer: runningTimer, blocklist: v3Blocklist }, 3),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.blocklist.map((item) => item.domain.value)).toEqual([
+      'facebook.com',
+      'x.com',
+    ]);
+  });
+
+  it.each([
+    { manual: 'yes', presetIds: [] },
+    { manual: true, presetIds: 'social' },
+    { manual: true, presetIds: [1] },
+  ])('rejects a malformed version-3 entry %j with a Result, never a throw', (bad) => {
+    const result = parseStoreSnapshot(
+      envelope(
+        {
+          timer: runningTimer,
+          blocklist: { ...v3Blocklist, blocklist: [{ domain: { value: 'x.com' }, ...bad }] },
+        },
+        3,
+      ),
+    );
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('still accepts a version-2 entry that has tags and no sources', () => {
+    const result = parseStoreSnapshot(
+      envelope({
+        timer: runningTimer,
+        blocklist: { blocklist: [{ domain: { value: 'x.com' }, tagIds: ['focus'] }], customTags: [] },
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+});

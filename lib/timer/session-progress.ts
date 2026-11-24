@@ -12,11 +12,10 @@ export interface SessionProgress {
   readonly distractedMs: number;
   /** New checkpoint: the instant up to which time has been accounted for. */
   readonly lastAccountedAt: number;
-  /** Absolute growth target: `floor(focusedMs / tickMs)`. */
-  readonly targetTicks: number;
   /**
-   * Net characters built for the same measures (CR3): the score slice derives
-   * the live population and level from it.
+   * Net characters built for the same measures (CR3, CR6.T5b): focus minus the
+   * escalating distraction cost. The score slice derives the live population
+   * and level from it, and the city derives its floors from it.
    */
   readonly builtCharacters: number;
 }
@@ -24,12 +23,10 @@ export interface SessionProgress {
 export interface AdvanceProgressOptions {
   /**
    * Whether the whole stretch since the checkpoint was spent on a blocked site.
-   * The caller supplies the current observation; the city does not grow while
+   * The caller supplies the current observation; no focus is credited while
    * distracted and the built-character count books the time as a penalty instead.
    */
   readonly distracted: boolean;
-  /** Session cadence in ms (`lib/timer/focus-presets.ts`); drives city growth only. */
-  readonly tickMs: number;
   /** Session length in ms, from which `builtCharacters` is counted (CR3). */
   readonly durationMs: number;
 }
@@ -49,9 +46,8 @@ export interface AdvanceProgressOptions {
  * not credit time past the deadline. A paused/idle/completed timer, a missing
  * checkpoint (an old persisted snapshot) or a non-positive delta is a no-op.
  *
- * Pure and total (principle D / §1.4): the clock is a parameter, inputs are
- * guarded, and a non-finite/negative `tickMs` degrades to "no derived reward"
- * rather than leaking `NaN`.
+ * Pure and total (principle D / §1.4): the clock is a parameter and inputs are
+ * guarded, so no `NaN` can leak.
  */
 export function advanceProgress(
   timer: TimerState,
@@ -87,20 +83,10 @@ export function advanceProgress(
     ? distractedBefore + elapsed
     : distractedBefore;
 
-  // An invalid cadence has no meaningful ticks: keep the time (so the
-  // checkpoint advances) but derive no growth for it. The score does not use
-  // `tickMs`: characters are counted from the duration so 100% stays reachable.
-  const tickMs =
-    Number.isFinite(options.tickMs) && options.tickMs > 0
-      ? options.tickMs
-      : Number.POSITIVE_INFINITY;
-
   return {
     focusedMs,
     distractedMs,
     lastAccountedAt: until,
-    targetTicks:
-      tickMs === Number.POSITIVE_INFINITY ? 0 : Math.floor(focusedMs / tickMs),
     builtCharacters: calculateBuiltCharacters(
       focusedMs,
       distractedMs,

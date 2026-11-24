@@ -17,23 +17,18 @@ import {
 } from '@/lib/messaging/messages.types';
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
+import { isAddDirectionMutation } from '@/lib/messaging/blocklist-payload';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
 import { calculateBuiltCharacters } from '@/lib/score/calculate-built-characters';
-import {
-  TOTAL_CHARACTERS_PER_SESSION,
-  tickMsForDurationSeconds,
-} from '@/lib/timer/focus-presets';
+import { TOTAL_CHARACTERS_PER_SESSION } from '@/lib/timer/focus-presets';
 import { TIMER_PROGRESS_ALARM, timerAlarmName } from '@/lib/timer/session';
 import { advanceProgress } from '@/lib/timer/session-progress';
-import type { SessionSummary, TimerState } from '@/store/store.types';
+import type { SessionSummary } from '@/store/store.types';
 import {
   createBrowserTabEventSource,
   createTabDistractionTracker,
-  type TabDistractionTracker,
   type TabEventSource,
 } from '@/lib/timer/tab-distraction-tracker';
-import type { CityLayers } from '@/components/city/city.types';
-import { malusForDistractionTicks } from '@/lib/score/apply-malus';
 import { createLogger, type Logger } from '@/utils/logger';
 
 /**
@@ -95,12 +90,12 @@ export interface BackgroundHandle {
  * (`lib/timer/focus-presets.ts`), so a longer focus builds the same city more
  * slowly (duration-neutral).
  *
- * The whole session ticks the accumulated focus time covers are handed to
- * `citySlice.growCityByTicks` (M2.T11), which delegates to the session-seeded
- * engine (M2.T12). Deriving the target from the *total* focus time (not the
- * per-tick delta) is what makes catch-up idempotent: any number of missed
- * samples is recovered by the next accounting step, and the leftover fraction
- * of a tick is carried by construction. Time spent while the timer is not
+ * The whole session ticks the accumulated focus time covers become
+ * `score.builtCharacters` (CR6.T5b); the city view derives its floors from that
+ * value. Deriving the target from the *total* focus time (not the per-tick
+ * delta) is what makes catch-up idempotent: any number of missed samples is
+ * recovered by the next accounting step, and the leftover fraction of a tick is
+ * carried by construction. Time spent while the timer is not
  * `running` is never credited because the checkpoint is cleared on pause/reset/
  * completion, so paused/idle time is not counted as focus.
  *
@@ -141,13 +136,6 @@ export interface GrowthTickDependencies {
   readonly isDistracted?: () => boolean;
 }
 
-/** Whole growth ticks a timer's accumulated focus time is worth, at its cadence. */
-function sessionTicks(timer: TimerState): number {
-  return Math.floor(
-    timer.focusedMs / tickMsForDurationSeconds(timer.durationSeconds),
-  );
-}
-
 /**
  * Wall-clock accounting for a running session (M2.T15/M2.T18).
  *
@@ -169,24 +157,10 @@ function createGrowthTick({
   now,
   isDistracted = () => false,
 }: GrowthTickDependencies): GrowthTickHandle {
-  let sessionId = store.getState().timer.sessionId;
-  // Growth ticks already reflected in the persisted city. Re-based when the
-  // session changes (a new session zeroes `focusedMs`); the persisted focus
-  // total is the authority, so a worker restart continues rather than replays.
-  let appliedTicks = sessionTicks(store.getState().timer);
-
-  const unsubscribe = store.subscribe(() => {
-    const state = store.getState();
-    if (state.timer.sessionId === sessionId) return;
-    sessionId = state.timer.sessionId;
-    appliedTicks = sessionTicks(state.timer);
-  });
-
   const account = (): void => {
     const { timer, score } = store.getState();
     const progress = advanceProgress(timer, now(), {
       distracted: isDistracted(),
-      tickMs: tickMsForDurationSeconds(timer.durationSeconds),
       durationMs: timer.durationSeconds * 1000,
     });
     if (progress === undefined) return;
@@ -201,14 +175,6 @@ function createGrowthTick({
         progress.lastAccountedAt,
       );
 
-    // Cumulative-target growth: the target comes from the *total* focus time,
-    // so a gap covering many ticks grows the city in one batch, and a leftover
-    // fraction is carried for free by the next accounting step.
-    if (progress.targetTicks > appliedTicks) {
-      store.getState().growCityByTicks(progress.targetTicks - appliedTicks);
-      appliedTicks = progress.targetTicks;
-    }
-
     // Live score and population (CR3): both derive from the built characters,
     // computed from the same measures as the city and the malus. The write is
     // skipped while the count is unchanged — `score` is persisted.
@@ -222,22 +188,9 @@ function createGrowthTick({
     account,
     getFocusedMs: () => store.getState().timer.focusedMs,
     getDistractedMs: () => store.getState().timer.distractedMs,
-    dispose: unsubscribe,
+    dispose: () => undefined,
   };
 }
-/**
- * How many characters the three layers currently hold. Used only to report how
- * many characters a malus application actually removed (a pending tick against
- * an already-empty city removes none).
- */
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
-
 export interface SessionCompletionDependencies {
   readonly store: AppStore;
   /** Running-only focus time accumulated by the growth tracker (M2.T15). */
@@ -342,20 +295,16 @@ export function createDistractionPredicate(
 }
 
 export interface MalusWiring {
-  /** React to the overlay's answer (M2.T8): only `proceed` starts the malus. */
+  /** React to the overlay's answer (M2.T8): only `proceed` starts reporting. */
   handleAttempt(
     message: Extract<RuntimeMessage, { type: 'SITE_BLOCKED_ATTEMPT' }>,
   ): void;
-  /** Apply the distraction ticks accrued since the previous call. */
-  handleTick(): void;
-  /** Detach the session subscription owned by the wiring. */
+  /** Detach the store subscription owned by the wiring. */
   dispose(): void;
 }
 
 export interface MalusWiringDependencies {
   readonly store: AppStore;
-  /** Distraction clock source; only the accumulated weighted ms is consumed. */
-  readonly tracker: Pick<TabDistractionTracker, 'getAccumulatedMs'>;
   /** Message sink, injectable so the wiring is testable without the bus. */
   readonly send?: (message: RuntimeMessage) => void;
 }
@@ -365,69 +314,51 @@ const defaultSend = (message: RuntimeMessage): void => {
 };
 
 /**
- * Malus wiring (M2.T16): connect the `SITE_BLOCKED_ATTEMPT` ("proceed") event
- * (M2.T8) and the accumulated distraction ticks (M2.T10) to the city store
- * (M2.T11), instead of the pure `applyMalus` model.
+ * Malus feedback (M2.T16, reworked by CR6.T5b, option A). The malus no longer
+ * removes anything: the escalating cost of time on a blocked site is part of
+ * `builtCharacters` (`calculateBuiltCharacters`), so the score, the tiers, the
+ * population and the city's floors all lose the same amount by themselves.
  *
- * The malus is one continuous stretch per focus session: choosing "proceed"
- * removes the first character immediately (the store must reflect the
- * destruction in the same update cycle, roadmap M2.T16); every subsequent 2s
- * distraction tick removes one more. A second `proceed` in close succession —
- * e.g. the overlay re-mounting on a blocked navigation (M2.T8) — does **not**
- * double-apply, because the stretch is already active. A new session resets the
- * stretch so the previous session's malus cannot bleed into the new city.
- *
- * The pre-`proceed` open time of the blocked tab is deliberately forgiven: the
- * baseline is captured at the "proceed" choice, because the malus starts only
- * after the user decides to enter (roadmap M2.T10).
+ * What remains is the report. Once the user has chosen "Open anyway" for a
+ * domain, every accounting step that lowers `builtCharacters` because
+ * distraction time grew sends `MALUS_APPLIED` with the characters lost (the
+ * drop). A drop with no new distraction time (a reset, a new session) is not a
+ * malus and sends nothing. A new session forgets the choice, so one session's
+ * "Open anyway" cannot be reported in the next.
  */
 export function createMalusWiring({
   store,
-  tracker,
   send = defaultSend,
 }: MalusWiringDependencies): MalusWiring {
   let active = false;
-  let baselineMs = 0;
-  let applied = 0;
   let domain = '';
   let sessionId = store.getState().city.sessionId;
+  let built = store.getState().score.builtCharacters;
+  let distractedMs = store.getState().timer.distractedMs;
+  // Set when distraction time grew and cleared once the count has been updated:
+  // the timer and the score are written in two steps, in this order.
+  let distractionPending = false;
 
   const unsubscribe = store.subscribe(() => {
-    const next = store.getState().city.sessionId;
-    if (next === sessionId) return;
-    sessionId = next;
-    active = false;
-    baselineMs = 0;
-    applied = 0;
+    const state = store.getState();
+    if (state.city.sessionId !== sessionId) {
+      sessionId = state.city.sessionId;
+      active = false;
+      domain = '';
+      distractionPending = false;
+    }
+    if (state.timer.distractedMs > distractedMs) distractionPending = true;
+    distractedMs = state.timer.distractedMs;
+
+    const next = state.score.builtCharacters;
+    if (next === built) return;
+    const dropped = built - next;
+    built = next;
+    const reported = active && distractionPending && dropped > 0;
+    distractionPending = false;
+    if (!reported) return;
+    send({ type: 'MALUS_APPLIED', payload: { domain, charactersRemoved: dropped } });
   });
-
-  // The remove rule lives in `applyMalus` (M2.T10): this only decides how many
-  // ticks are due and hands them to the slice, which never computes. The tick
-  // length is the *session* cadence (user-selectable duration), so destruction
-  // keeps pace with construction at every preset. The number of characters owed
-  // grows with the time spent (M4.T1): `malusForDistractionTicks` escalates the
-  // cost per tick, while the first character is still removed at the "proceed"
-  // instant itself.
-  const pump = (): void => {
-    if (!active) return;
-    const tickMs = tickMsForDurationSeconds(
-      store.getState().timer.durationSeconds,
-    );
-    const elapsedMs = tracker.getAccumulatedMs() - baselineMs;
-    const elapsedTicks = elapsedMs > 0 ? Math.floor(elapsedMs / tickMs) : 0;
-    const expected = 1 + malusForDistractionTicks(elapsedTicks);
-    const pending = expected - applied;
-    if (pending <= 0) return;
-
-    const before = countOccupied(store.getState().city.layers);
-    store.getState().applyMalusToCity(pending);
-    applied += pending;
-
-    const charactersRemoved =
-      before - countOccupied(store.getState().city.layers);
-    if (charactersRemoved <= 0) return;
-    send({ type: 'MALUS_APPLIED', payload: { domain, charactersRemoved } });
-  };
 
   return {
     handleAttempt(message): void {
@@ -436,12 +367,6 @@ export function createMalusWiring({
       if (active) return;
       active = true;
       domain = message.payload.domain;
-      baselineMs = tracker.getAccumulatedMs();
-      applied = 0;
-      pump();
-    },
-    handleTick(): void {
-      pump();
     },
     dispose(): void {
       unsubscribe();
@@ -498,10 +423,16 @@ export function startBackground(
   // accumulates how long blocked tabs stay open while a session is running, and
   // the wiring routes the overlay's "proceed" choice plus those ticks to the
   // city store.
+  // Bound once the growth tracker exists: a tab opening or closing a blocked
+  // site accounts the stretch before the state flips (I014).
+  let accountBeforeFlip = (): void => undefined;
   const distractionTracker = createTabDistractionTracker({
     eventSource: dependencies.tabEventSource ?? createBrowserTabEventSource(),
     isDistractedUrl: createDistractionPredicate(store),
     now,
+    onBeforeDistractedChange: () => {
+      accountBeforeFlip();
+    },
   });
   // The tracker's initial tab read is best-effort: a failure must not become an
   // unhandled rejection that kills the service worker (§1.4). It is awaited by
@@ -522,7 +453,7 @@ export function startBackground(
         boundary: 'tab-tracker',
       });
     });
-  const malus = createMalusWiring({ store, tracker: distractionTracker });
+  const malus = createMalusWiring({ store });
   disposers.push(() => {
     malus.dispose();
     distractionTracker.dispose();
@@ -538,6 +469,7 @@ export function startBackground(
     now,
     isDistracted: () => distractionTracker.isDistracted(),
   });
+  accountBeforeFlip = growthTick.account;
   disposers.push(() => {
     growthTick.dispose();
   });
@@ -557,7 +489,6 @@ export function startBackground(
   const handleProgressAlarm = (name: string): void => {
     if (name !== TIMER_PROGRESS_ALARM) return;
     growthTick.account();
-    malus.handleTick();
     armProgressAlarm();
   };
   disposers.push(alarmProvider.onFire(handleProgressAlarm));
@@ -603,7 +534,6 @@ export function startBackground(
   const handlePassiveMessage = (message: RuntimeMessage): void => {
     if (message.type === 'TIMER_TICK') {
       growthTick.handleTick();
-      malus.handleTick();
     } else if (message.type === 'SITE_BLOCKED_ATTEMPT') {
       malus.handleAttempt(message);
     }
@@ -634,7 +564,17 @@ export function startBackground(
           ) {
             growthTick.account();
           }
+          // CR5.T2: a site added mid-session distracts only from now on. The
+          // stretch so far is credited under the old blocklist first, then the
+          // open tabs are re-read under the new one.
+          const addsSites =
+            store.getState().timer.status === 'running' &&
+            (message.type === 'BLOCKLIST_ADD_SITE' ||
+              message.type === 'PRESET_TOGGLE') &&
+            isAddDirectionMutation(message);
+          if (addsSites) growthTick.account();
           handleMutation(message);
+          if (addsSites) void refreshDistractionTracker();
         },
         busLog,
       ),

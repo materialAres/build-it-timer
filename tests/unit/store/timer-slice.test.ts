@@ -6,7 +6,7 @@ import { timerAlarmName } from '@/lib/timer/session';
 import { generateSessionId } from '@/lib/timer/session';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { advanceProgress } from '@/lib/timer/session-progress';
-import { PRESET_MINUTES, tickMsForDurationSeconds } from '@/lib/timer/focus-presets';
+import { PRESET_MINUTES } from '@/lib/timer/focus-presets';
 
 const START_MS = 1_700_000_000_000;
 
@@ -400,7 +400,6 @@ describe('accounting checkpoint at the session boundaries (CR3 regression)', () 
 
       const progress = advanceProgress(timer, timer.endsAt ?? 0, {
         distracted: false,
-        tickMs: tickMsForDurationSeconds(seconds),
         durationMs: seconds * 1000,
       });
 

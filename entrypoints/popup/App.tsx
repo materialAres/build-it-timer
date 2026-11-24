@@ -1,6 +1,7 @@
 import {
   useAppStore,
   selectActiveTab,
+  selectBlocklistAddAllowed,
   selectBlocklistEditable,
   selectTimerStatus,
   type PopupTab,
@@ -11,18 +12,19 @@ import {
   tabButtonId,
   tabPanelId,
 } from '@/components/common/PopupTabs';
-import { TimerDisplay } from '@/components/timer/TimerDisplay';
 import { TimerControls } from '@/components/timer/TimerControls';
-import { DurationPicker } from '@/components/timer/DurationPicker';
+import { DurationDrum } from '@/components/timer/DurationDrum';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
-import { CityCanvas } from '@/components/city/CityCanvas';
+import { CityPanel } from '@/components/city/CityPanel';
+import { CityEmptyHint } from '@/components/city/CityEmptyHint';
 import { ExportCityButton } from '@/components/city/ExportCityButton';
+import { OpenCityPageButton } from '@/components/city/OpenCityPageButton';
 import { ScoreBadge } from '@/components/score/ScoreBadge';
 import { PopulationCounter } from '@/components/score/PopulationCounter';
 import { SessionHistory } from '@/components/score/SessionHistory';
+import { BlocklistSummary } from '@/components/blocklist/BlocklistSummary';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
-import { TagEditor } from '@/components/blocklist/TagEditor';
 import { SiteList } from '@/components/blocklist/SiteList';
 import './App.css';
 
@@ -34,9 +36,11 @@ import './App.css';
 function TimerSection() {
   return (
     <div className="popup-section popup-section--timer">
-      <TimerDisplay />
+      {/* UI.T9: the drum is the duration picker while idle and the clock in a
+          session, so it comes first and Start/Pause/Reset follow it. */}
+      <DurationDrum />
       <TimerControls />
-      <DurationPicker />
+      <BlocklistSummary />
     </div>
   );
 }
@@ -46,7 +50,9 @@ function CitySection() {
 
   return (
     <div className="popup-section popup-section--city">
-      <CityCanvas />
+      <CityPanel />
+      <CityEmptyHint />
+      <OpenCityPageButton />
       {/* The export is offered once the session has ended, not while it runs
           (M3.T4): `completed` is the status M3.T3c introduced for exactly this
           signal, so a finished city can be saved without exposing the button
@@ -70,17 +76,23 @@ function ScoreSection() {
 
 function BlocklistSection() {
   const editable = useAppStore(selectBlocklistEditable);
+  const addAllowed = useAppStore(selectBlocklistAddAllowed);
+  // CR5.T3: idle shows nothing; a running or paused session says what is still
+  // possible; a completed one keeps the Reset wording.
+  const notice = editable
+    ? null
+    : i18n.t(addAllowed ? 'blocklist.addOnly' : 'blocklist.locked');
 
   return (
     <div className="popup-section popup-section--blocklist">
-      {!editable ? (
+      {notice !== null ? (
         <p className="popup-section__lock" role="status" aria-live="polite">
-          {i18n.t('blocklist.locked')}
+          {notice}
         </p>
       ) : null}
-      <PresetPicker />
-      <TagEditor />
-      <SiteList />
+      {/* UI.T1: one list, shown once. CR4: presets (built-in and saved) are
+          toggles over it, so there is no separate tag editor. */}
+      <SiteList quickAdd={<PresetPicker />} />
     </div>
   );
 }

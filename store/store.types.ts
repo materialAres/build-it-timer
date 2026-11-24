@@ -71,25 +71,38 @@ export interface Domain {
   readonly value: string; // normalized domain via tldts, ex. "facebook.com"
 }
 
-export interface Tag {
-  readonly id: string;
-  readonly label: string;
-}
-
+/**
+ * One blocked site and where it came from (CR4.T1 §3.1, replaces `tagIds`).
+ * Invariant: `manual || presetIds.length > 0` — an entry that loses its last
+ * source is deleted by the logic that removed it.
+ */
 export interface BlocklistEntry {
   readonly domain: Domain;
-  readonly tagIds: ReadonlyArray<string>;
+  /** The user typed it (or kept it) themselves. */
+  readonly manual: boolean;
+  /** Ids of the applied presets, built-in or user, that contributed it. */
+  readonly presetIds: ReadonlyArray<string>;
 }
 
+/**
+ * A named set of domains that can be switched on and off: either built-in
+ * (`lib/blocking/presets.ts`, data only) or saved by the user (persisted).
+ */
 export interface Preset {
   readonly id: string;
   readonly name: string;
   readonly domains: ReadonlyArray<Domain>;
-  /**
-   * Tag applied to every domain when the preset is expanded (M2.T5). It lets a
-   * preset's sites be grouped/filtered like any other tagged entry (M3.T2).
-   */
-  readonly tag: Tag;
+}
+
+/**
+ * The blocklist state (CR4.T1 §3.2) and its persisted shape from version 3 on.
+ * The applied set is explicit, not derived from the entries, so an empty
+ * preset or one whose last domain was removed keeps its state.
+ */
+export interface BlocklistState {
+  readonly blocklist: ReadonlyArray<BlocklistEntry>;
+  readonly appliedPresetIds: ReadonlyArray<string>;
+  readonly userPresets: ReadonlyArray<Preset>;
 }
 
 // history session

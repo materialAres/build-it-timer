@@ -162,3 +162,57 @@ describe('tab distraction tracker (M2.T10)', () => {
     expect(tracker.getAccumulatedMs()).toBe(0);
   });
 });
+
+describe('tab distraction tracker: the distracted state flips (I014)', () => {
+  const setup = () => {
+    const eventSource = new FakeTabEventSource();
+    const seen: boolean[] = [];
+    const tracker = createTabDistractionTracker({
+      eventSource,
+      isDistractedUrl: (url) => url !== undefined && url.includes('x.com'),
+      now: () => 0,
+      // Records the state the tracker reports *before* the flip is applied.
+      onBeforeDistractedChange: () => seen.push(tracker.isDistracted()),
+    });
+    return { eventSource, tracker, seen };
+  };
+
+  it('calls the hook before a blocked tab opens and before the last one closes', async () => {
+    const { eventSource, tracker, seen } = setup();
+    await tracker.ready;
+
+    eventSource.emitUpdated({ id: 1, url: 'https://x.com/feed' });
+    expect(seen).toEqual([false]);
+    expect(tracker.isDistracted()).toBe(true);
+
+    eventSource.emitRemoved(1);
+    expect(seen).toEqual([false, true]);
+    expect(tracker.isDistracted()).toBe(false);
+  });
+
+  it('does not call the hook when the state stays the same', async () => {
+    const { eventSource, tracker, seen } = setup();
+    await tracker.ready;
+
+    eventSource.emitUpdated({ id: 1, url: 'https://example.com/' });
+    eventSource.emitUpdated({ id: 2, url: 'https://x.com/a' });
+    eventSource.emitUpdated({ id: 3, url: 'https://x.com/b' });
+    eventSource.emitUpdated({ id: 2, url: 'https://x.com/c' });
+    eventSource.emitRemoved(2);
+    expect(seen).toEqual([false]);
+
+    eventSource.emitUpdated({ id: 3, url: 'https://example.com/' });
+    expect(seen).toEqual([false, true]);
+  });
+
+  it('calls the hook when a refresh flips the state', async () => {
+    const { eventSource, tracker, seen } = setup();
+    await tracker.ready;
+
+    eventSource.setInitialTabs([{ id: 4, url: 'https://x.com/' }]);
+    await tracker.refresh();
+    expect(seen).toEqual([false]);
+    await tracker.refresh();
+    expect(seen).toEqual([false]);
+  });
+});

@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   migrateBlocklistState,
-  sanitizeBlocklistState,
+  sanitizeV2Blocklist,
 } from '@/lib/blocking/legacy-blocklist';
-import type { BlocklistEntry } from '@/store/store.types';
+import type { LegacyEntry } from '@/lib/blocking/legacy-blocklist';
 
 const entry = (
   value: string,
   tagIds: ReadonlyArray<string> = [],
-): BlocklistEntry => ({ domain: { value }, tagIds });
+): LegacyEntry => ({ domain: { value }, tagIds });
 
 describe('migrateBlocklistState (CR1.T3)', () => {
   it('keeps the legacy blocklist entries that were not allowlisted', () => {
@@ -109,9 +109,9 @@ describe('migrateBlocklistState (CR1.T3)', () => {
   });
 });
 
-describe('sanitizeBlocklistState (CR1.T3)', () => {
+describe('sanitizeV2Blocklist (CR1.T3)', () => {
   it('ignores a legacy allowlist instead of applying its precedence', () => {
-    const sanitized = sanitizeBlocklistState({
+    const sanitized = sanitizeV2Blocklist({
       allowlist: [entry('facebook.com')],
       blocklist: [entry('facebook.com')],
       customTags: [],
@@ -121,7 +121,7 @@ describe('sanitizeBlocklistState (CR1.T3)', () => {
   });
 
   it('keeps only the two fields of the new shape', () => {
-    const sanitized = sanitizeBlocklistState({
+    const sanitized = sanitizeV2Blocklist({
       allowlist: [entry('keep.com')],
       blocklist: [entry('x.com')],
       customTags: [{ id: 'focus', label: 'Focus' }],

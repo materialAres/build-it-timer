@@ -87,10 +87,16 @@ describe('session completion (M3.T3c)', () => {
 
   it.each([
     // [focus until (ms), expected level, expected population]
-    // built = focus characters - distraction characters, out of 600.
-    [1_620_000, 'great', 4500], // 540 - 60 = 480 (80%)
-    [1_260_000, 'good', 1500], // 420 - 180 = 240 (40%)
-    [990_000, 'bad', 300], // 330 - 270 = 60 (10%)
+    // built = focus characters - the escalating distraction cost (CR6.T5b),
+    // out of 600; a 1800 s session has a 3 s tick.
+    [1_740_000, 'great', 5620], // 580 - 44 (20 ticks: 5 + 12 + 27) = 536 (89%)
+    // Was great (480, 80%) with the old linear cost of 60: the escalation makes
+    // 60 distraction ticks cost 164 (5 + 12 + 147).
+    [1_620_000, 'good', 2860], // 540 - 164 = 376 (63%)
+    // Were good and bad: 180 and 270 distraction ticks cost 524 and 794, more
+    // than the focus earned, so nothing is left.
+    [1_260_000, 'bad', 0], // 420 - 524 -> 0
+    [990_000, 'bad', 0], // 330 - 794 -> 0
   ])(
     'a session distracted after %i ms ends as %s with population %i',
     async (focusUntilMs, level, population) => {

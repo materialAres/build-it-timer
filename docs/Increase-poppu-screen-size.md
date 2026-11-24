@@ -1,5 +1,7 @@
 # Implementation Plan — Increase popup screen size (60 × 20) without breaking the city engine
 
+> Superseded by CR6 (§2.9): describes the ASCII city.
+
 ## 1. Measured current state
 
 | Aspect | Value |

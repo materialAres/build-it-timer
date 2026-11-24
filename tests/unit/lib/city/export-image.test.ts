@@ -1,141 +1,79 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
 import {
   buildCityImage,
   CITY_CHAR_HEIGHT,
   CITY_CHAR_WIDTH,
   CITY_IMAGE_PADDING,
+  EXPORT_HEIGHT,
+  EXPORT_WIDTH,
+  exportCityImage,
+  type FrameCapture,
 } from '@/lib/city/export-image';
-import { getBuildingColor } from '@/lib/city/palette';
-import type {
-  CityCell,
-  CityGrid,
-  CityLayers,
-  Theme,
-} from '@/components/city/city.types';
+import { ENVIRONMENT_COLORS } from '@/lib/city/plan/environment-colors';
+import type * as rasterizeModule from '@/lib/city/rasterize-image';
+import { rasterizeCityImage, type RasterizedCityImage } from '@/lib/city/rasterize-image';
+import { err, ok } from '@/utils/result';
 
-const THEME: Theme = {
-  id: 'test-theme',
-  name: 'Test',
-  palette: ['#111111', '#222222', '#333333', '#444444'],
-  backgroundColor: '#0a0b0c',
-};
-
-/** Build a grid where `occupied` is keyed by `"row:col"`. */
-function makeGrid(
-  width: number,
-  height: number,
-  occupied: Readonly<Record<string, CityCell>> = {},
-): CityGrid {
-  return {
-    width,
-    height,
-    cells: Array.from({ length: height }, (_, row) =>
-      Array.from(
-        { length: width },
-        (_, col) => occupied[`${String(row)}:${String(col)}`] ?? { char: null },
-      ),
-    ),
-  };
-}
-
-function makeLayers(overrides: Partial<CityLayers> = {}): CityLayers {
-  return {
-    background: makeGrid(2, 2),
-    middleground: makeGrid(2, 2),
-    foreground: makeGrid(2, 2),
-    ...overrides,
-  };
-}
+vi.mock('@/lib/city/rasterize-image', async (importOriginal) => ({
+  ...(await importOriginal<typeof rasterizeModule>()),
+  rasterizeCityImage: vi.fn(),
+}));
 
 const countTexts = (svg: string): number => svg.split('<text').length - 1;
 
-describe('buildCityImage (M3.T8)', () => {
-  it('computes deterministic dimensions from the grid size', () => {
-    const image = buildCityImage(makeLayers({ background: makeGrid(3, 2) }), THEME);
+describe('buildCityImage (M3.T8, text city since CR6.T9a)', () => {
+  it('computes deterministic dimensions from the rows', () => {
+    const image = buildCityImage(['abc', 'def']);
 
     expect(image.width).toBe(3 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
     expect(image.height).toBe(2 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
     expect(image.svg).toContain(`width="${String(image.width)}"`);
     expect(image.svg).toContain(`height="${String(image.height)}"`);
-    expect(image.svg).toContain(
-      `viewBox="0 0 ${String(image.width)} ${String(image.height)}"`,
+    expect(image.svg).toContain(`viewBox="0 0 ${String(image.width)} ${String(image.height)}"`);
+  });
+
+  it('paints the black floor and phosphor-green text', () => {
+    const { svg } = buildCityImage(['#']);
+
+    expect(svg).toContain(`fill="${ENVIRONMENT_COLORS.floor}"`);
+    expect(svg).toContain(`fill="${ENVIRONMENT_COLORS.hud}"`);
+  });
+
+  it('emits one text per non-blank character at its grid position', () => {
+    const { svg } = buildCityImage(['#  .', ' :   ']);
+
+    expect(countTexts(svg)).toBe(3);
+    expect(svg).toContain(
+      `<text x="${String(CITY_IMAGE_PADDING)}" y="${String(CITY_IMAGE_PADDING + CITY_CHAR_HEIGHT)}">#</text>`,
+    );
+    expect(svg).toContain(
+      `<text x="${String(CITY_IMAGE_PADDING + CITY_CHAR_WIDTH)}" y="${String(CITY_IMAGE_PADDING + 2 * CITY_CHAR_HEIGHT)}">:</text>`,
     );
   });
 
-  it('uses the active theme background color', () => {
-    const image = buildCityImage(makeLayers(), THEME);
+  it('emits no text for blanks but keeps the full-grid dimensions', () => {
+    const image = buildCityImage(['   ', '   ']);
 
-    expect(image.svg).toContain(`fill="${THEME.backgroundColor}"`);
-  });
-
-  it('paints an occupied cell with the active palette color of its layer', () => {
-    const layers = makeLayers({
-      background: makeGrid(2, 2, { '0:0': { char: '#' } }),
-    });
-    const expected = getBuildingColor('background', THEME.palette);
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain(`fill="${expected}">#</text>`);
-    expect(image.svg).toContain('data-layer="background"');
-  });
-
-  it('lets a per-cell color override the layer palette color', () => {
-    const layers = makeLayers({
-      middleground: makeGrid(2, 2, { '1:1': { char: '|', color: '#ff0000' } }),
-    });
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain('fill="#ff0000">|</text>');
-  });
-
-  it('emits no text for empty cells but keeps the full-grid dimensions', () => {
-    const layers = makeLayers({
-      background: makeGrid(4, 3, { '0:0': { char: '.' } }),
-    });
-
-    const image = buildCityImage(layers, THEME);
-
-    expect(countTexts(image.svg)).toBe(1);
-    expect(image.width).toBe(4 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
-    expect(image.height).toBe(3 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
-  });
-
-  it('renders the three layers with the CityCanvas parallax ordering', () => {
-    const image = buildCityImage(makeLayers(), THEME);
-
-    const background = image.svg.indexOf('data-layer="background"');
-    const middleground = image.svg.indexOf('data-layer="middleground"');
-    const foreground = image.svg.indexOf('data-layer="foreground"');
-    expect(background).toBeGreaterThan(-1);
-    expect(background).toBeLessThan(middleground);
-    expect(middleground).toBeLessThan(foreground);
+    expect(countTexts(image.svg)).toBe(0);
+    expect(image.width).toBe(3 * CITY_CHAR_WIDTH + CITY_IMAGE_PADDING * 2);
   });
 
   it('escapes the glyphs that would break the SVG markup', () => {
-    const layers = makeLayers({
-      background: makeGrid(2, 2, { '0:0': { char: '<' }, '0:1': { char: '&' } }),
-    });
+    const { svg } = buildCityImage(['<&>"\'']);
 
-    const image = buildCityImage(layers, THEME);
-
-    expect(image.svg).toContain('&lt;</text>');
-    expect(image.svg).toContain('&amp;</text>');
+    for (const escaped of ['&lt;', '&amp;', '&gt;', '&quot;', '&apos;']) {
+      expect(svg).toContain(`${escaped}</text>`);
+    }
   });
 
   it('honors custom geometry options and defends against non-finite ones', () => {
-    const layers = makeLayers({ background: makeGrid(2, 2) });
+    const rows = ['ab', 'cd'];
 
-    const custom = buildCityImage(layers, THEME, {
-      charWidth: 10,
-      charHeight: 20,
-      padding: 5,
-    });
+    const custom = buildCityImage(rows, { charWidth: 10, charHeight: 20, padding: 5 });
     expect(custom.width).toBe(2 * 10 + 5 * 2);
     expect(custom.height).toBe(2 * 20 + 5 * 2);
 
-    const defensive = buildCityImage(layers, THEME, {
+    const defensive = buildCityImage(rows, {
       charWidth: Number.NaN,
       charHeight: -1,
       padding: Number.POSITIVE_INFINITY,
@@ -144,11 +82,72 @@ describe('buildCityImage (M3.T8)', () => {
     expect(defensive.height).toBe(2 * CITY_CHAR_HEIGHT + CITY_IMAGE_PADDING * 2);
   });
 
-  it('is deterministic: the same grid and theme yield the same image', () => {
-    const layers = makeLayers({
-      background: makeGrid(3, 2, { '0:0': { char: '#' }, '1:2': { char: '.' } }),
-    });
+  it('handles an empty city without throwing', () => {
+    const image = buildCityImage([]);
 
-    expect(buildCityImage(layers, THEME)).toEqual(buildCityImage(layers, THEME));
+    expect(image.width).toBe(CITY_IMAGE_PADDING * 2);
+    expect(image.height).toBe(CITY_IMAGE_PADDING * 2);
+    expect(countTexts(image.svg)).toBe(0);
+  });
+
+  it('is deterministic: the same rows yield the same image', () => {
+    const rows = ['#  .', ' :  '];
+
+    expect(buildCityImage(rows)).toEqual(buildCityImage(rows));
+  });
+});
+
+describe('exportCityImage (CR6.T10)', () => {
+  const FRAME: RasterizedCityImage = { dataUrl: 'data:image/png;base64,3D', mimeType: 'image/png', width: EXPORT_WIDTH, height: EXPORT_HEIGHT };
+  const TEXT: RasterizedCityImage = { dataUrl: 'data:image/png;base64,TEXT', mimeType: 'image/png', width: 10, height: 10 };
+  const rasterize = rasterizeCityImage as Mock<typeof rasterizeCityImage>;
+
+  beforeEach(() => {
+    rasterize.mockReset();
+    rasterize.mockResolvedValue(ok(TEXT));
+  });
+
+  it('exports a frame of the 3D view at the export size when it is running', async () => {
+    const capture = vi.fn<FrameCapture>(() => ok(FRAME));
+
+    const result = await exportCityImage(['#'], 'png', capture);
+
+    expect(capture).toHaveBeenCalledWith(EXPORT_WIDTH, EXPORT_HEIGHT, 'png');
+    expect(result).toEqual(ok(FRAME));
+    expect(rasterize).not.toHaveBeenCalled();
+  });
+
+  it('passes the chosen format to the capture', async () => {
+    const capture = vi.fn<FrameCapture>(() => ok(FRAME));
+    await exportCityImage(['#'], 'jpeg', capture);
+    expect(capture).toHaveBeenCalledWith(EXPORT_WIDTH, EXPORT_HEIGHT, 'jpeg');
+  });
+
+  it('exports the text city when there is no 3D view (no WebGL)', async () => {
+    const result = await exportCityImage(['#'], 'png', null);
+
+    expect(result).toEqual(ok(TEXT));
+    expect(rasterize).toHaveBeenCalledTimes(1);
+    expect(rasterize.mock.calls[0]?.[0]).toContain('<text');
+  });
+
+  it('exports the text city when no capture is given at all', async () => {
+    expect(await exportCityImage(['#'])).toEqual(ok(TEXT));
+  });
+
+  it('falls back to the text city when the capture fails', async () => {
+    const capture = vi.fn<FrameCapture>(() => err(new Error('context lost')));
+    expect(await exportCityImage(['#'], 'png', capture)).toEqual(ok(TEXT));
+  });
+
+  it('falls back to the text city, and does not throw, when the capture throws', async () => {
+    const capture = vi.fn<FrameCapture>(() => { throw new Error('boom'); });
+    expect(await exportCityImage(['#'], 'png', capture)).toEqual(ok(TEXT));
+  });
+
+  it('still reports an error when even the text city cannot be made', async () => {
+    rasterize.mockResolvedValue(err(new Error('no 2D context')));
+    const result = await exportCityImage(['#'], 'png', null);
+    expect(result.ok).toBe(false);
   });
 });

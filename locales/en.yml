@@ -10,9 +10,12 @@ timer:
   timeRemaining: Time remaining
   start: Start
   pause: Pause
+  resume: Resume
+  paused: Paused
   reset: Reset
   durationLabel: Focus duration
   durationOption: '$1 min'
+  minutesUnit: MIN
 
 tabs:
   ariaLabel: Popup sections
@@ -27,12 +30,27 @@ city:
   exportPng: Export PNG
   exportJpeg: Export JPEG
   exportError: Could not export the city image.
+  emptyHint: Your city grows while you focus. Start a session to build it.
+  loading: LOADING CITY…
+  openFull: View full city
+  openError: Could not open the full city page.
+  fallbackNote: 3D view unavailable here, showing a text version.
+  hud: '> $1/$2 FLOORS'
+  summaryEmpty: 'City: nothing built yet.'
+  summary: 'City: $1 of $2 floors built. Buildings standing: $3.'
+  summaryTallestNamed: 'Tallest: $1, levels: $2.'
+  summaryTallest: 'Tallest building, levels: $1.'
+
+cityPage:
+  title: Build-it! — Full city
+  hint: Drag to turn, scroll to zoom, right-drag to move.
 
 score:
   excellent: Excellent
   great: Great
   good: Good
   bad: Bad
+  early: Starting
   badgeAriaLabel: 'Focus score: $1'
   population: population
   populationAriaLabel: 'Population: $1'
@@ -43,25 +61,46 @@ score:
 
 blocklist:
   presets: Presets
-  applyPreset: 'Apply $1 preset'
-  tags: Tags
-  newTagName: New tag name
-  newTag: New tag
-  createTag: Create tag
-  customTags: Custom tags
-  assignTag: 'Assign $1 to $2'
-  filterByTag: 'Filter by $1'
-  deleteTag: 'Delete $1'
+  presetToggle: '$1 preset, $2 of $3 sites blocked'
+  presetDomains: 'Blocks $1'
+  presetNoSites: No sites in this preset
+  savePreset: Save list as preset
+  savePresetNote: Saves every site in the list. Switching the preset off removes them.
+  presetName: Preset name
+  save: Save
+  cancel: Cancel
+  presetNameEmpty: Enter a name.
+  presetNameTooLong: 'Use at most $1 characters.'
+  presetNameTaken: A preset with this name already exists.
+  editSavedPresets: Edit saved presets
+  savedPresets: Saved presets
+  renamePreset: Rename
+  renamePresetLabel: 'Rename $1'
+  deletePreset: Delete
+  deletePresetLabel: 'Delete $1'
+  deletePresetConfirm: 'Delete $1? Its sites stay blocked.'
+  keepPreset: Keep
   sites: Sites
-  blockedSites: Blocked sites
   blocklistName: blocklist
   addTo: 'Add to $1'
   entriesAriaLabel: '$1 entries'
   exampleDomain: example.com
+  empty: No sites blocked yet.
   invalidUrl: Enter a valid URL
   alreadyInList: '$1 is already in the $2.'
   added: 'Added $1.'
-  locked: The blocklist is locked while a session is in progress. Reset the timer to edit it.
+  addedSites: 'Added $1 sites'
+  removed: 'Removed $1.'
+  removedSites: 'Removed $1 sites'
+  invalidEmpty: Enter a site, like example.com.
+  invalidSuffix: '$1 is a domain ending, not a site. Add the site name, like example.com.'
+  invalidIp: IP addresses cannot be blocked. Enter a domain name.
+  locked: The blocklist is locked. Reset the timer to edit it.
+  addOnly: Sites can be added during a session. Removing them needs a timer reset.
+  summarySites: 'Blocks $1 sites'
+  summarySite: Blocks 1 site
+  summaryAddOnly: '$1 · add-only during a session'
+  summaryEmpty: No sites blocked
 
 overlay:
   title: Stay focused
@@ -70,8 +109,8 @@ overlay:
   # `<span>` while the sentence stays translatable as a whole.
   questionPrefix: 'You put '
   questionSuffix: ' on your blocklist. Are you sure you want to access it?'
-  yes: Yes
-  no: No
+  openAnyway: Open anyway
+  backToWork: Back to work
 
 common:
   add: Add

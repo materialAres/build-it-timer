@@ -1,24 +1,15 @@
 import { create, type StateCreator } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { createBrowserAlarmProvider } from '@/lib/timer/alarm-adapter';
-import { selectThemeId } from '@/lib/city/theme-registry';
-import { growCityByTicks } from '@/lib/city/growth-engine';
 import { browserStorage, createReadOnlyStorage, type BrowserStateStorage } from './storage-adapter';
 import { createTimerSlice, type TimerDependencies, type TimerSlice } from './timer.slice';
 import type { TimerState } from './store.types';
-import {
-  createCitySlice,
-  DEFAULT_CITY_HEIGHT,
-  DEFAULT_CITY_WIDTH,
-  type CityDependencies,
-  type CitySlice,
-} from './city.slice';
+import { createCitySlice, type CitySlice } from './city.slice';
 import { sendMessage } from '@/lib/messaging/bus';
 import type { MutationMessage } from '@/lib/messaging/messages.types';
-import {
-  migrateBlocklistState,
-  sanitizeBlocklistState,
-} from '@/lib/blocking/legacy-blocklist';
+import { sanitizeBlocklistState } from '@/lib/blocking/blocklist-state';
+import { migratePersistedBlocklist } from '@/lib/blocking/migrate-presets';
+import { migrateCity, sanitizeSessionId, type PersistedCity } from '@/lib/city/migrate-city';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
@@ -67,7 +58,7 @@ export type AppState =
 // adding an action to a slice never widens what ends up in storage.
 export interface PersistedState {
   readonly timer: TimerState;
-  readonly city: CitySlice['city'];
+  readonly city: PersistedCity;
   /**
    * The single-list blocklist shape (CR1.T3, collapsed in CR1.T5a): the
    * persisted payload is exactly the in-memory slice state, so no field can be
@@ -86,25 +77,14 @@ const initialUiState: UiSlice['ui'] = {
 };
 
 // Collaborators the slices need to act (principle D). Injected through
-// `createAppStore` so a test can substitute a fake alarm provider, growth
-// engine, theme picker and a deterministic clock/entropy source without
-// touching the browser APIs. The timer slice (M2.T1) and the city slice
-// (M2.T11) share this object; later slices extend it.
-export type StoreDependencies = TimerDependencies & CityDependencies & BlocklistDependencies;
+// `createAppStore` so a test can substitute a fake alarm provider and a
+// deterministic clock/entropy source without touching the browser APIs. The
+// city slice needs none since CR6 (the plan is derived from the session id).
+export type StoreDependencies = TimerDependencies & BlocklistDependencies;
 const defaultDependencies = (): StoreDependencies => ({
   alarmProvider: createBrowserAlarmProvider(),
   now: Date.now,
   random: Math.random,
-  // The concrete, session-seeded growth engine (M2.T12/M2.T15): `growCityByTicks`
-  // receives the whole ticks the background derived from the elapsed focus time
-  // and the session cadence, so the running app actually builds a city instead
-  // of the placeholder identity.
-  growthEngine: growCityByTicks,
-  // Each session gets a deterministic biome from the theme registry (M2.T13b),
-  // replacing the placeholder fixed default.
-  selectThemeId,
-  width: DEFAULT_CITY_WIDTH,
-  height: DEFAULT_CITY_HEIGHT,
   // A read-only context changes configuration only by asking the background
   // (M1.T9/M1.T10); the popup-facing `applyPreset` (M3.T1) and the timer
   // commands (M3.T3b) both use this sender.
@@ -117,7 +97,7 @@ const createAppState =
   (dependencies: StoreDependencies): StateCreator<AppState> =>
   (set, get, ...rest) => ({
     ...createTimerSlice(dependencies)(set, get, ...rest),
-    ...createCitySlice(dependencies)(set, get, ...rest),
+    ...createCitySlice()(set, get, ...rest),
     ...createBlocklistSlice(dependencies)(set, get, ...rest),
     ...createScoreSlice(set, get, ...rest),
     ...createSessionHistorySlice(set, get, ...rest),
@@ -137,10 +117,11 @@ const createAppState =
 
 export const partialize = (state: AppState): PersistedState => ({
   timer: state.timer,
-  city: state.city,
+  city: { sessionId: state.city.sessionId },
   blocklist: {
     blocklist: state.blocklist.blocklist,
-    customTags: state.blocklist.customTags,
+    appliedPresetIds: state.blocklist.appliedPresetIds,
+    userPresets: state.blocklist.userPresets,
   },
   score: state.score,
   sessionHistory: state.sessionHistory,
@@ -226,21 +207,30 @@ function buildStore(
       // it every hydration would churn references the app already observes
       // (breaking `selectCity`-style identity checks) and could clobber state
       // written between store creation and the async hydration completing.
-      // Version 2 (CR1.T3): the persisted blocklist is the single-list shape
-      // `{ blocklist, customTags }`. Older payloads use the legacy two-list
-      // shape and are migrated on read (`lib/blocking/legacy-blocklist.ts`).
-      version: 2,
+      // Version 3 (CR4.T3): the persisted blocklist is
+      // `{ blocklist, appliedPresetIds, userPresets }`, with source-tracked
+      // entries. Older payloads (v1 two lists, v2 tags) are migrated on read
+      // (`lib/blocking/migrate-presets.ts`).
+      // Version 4 (CR6.T5a): the persisted city is only `{ sessionId }`; the
+      // ASCII layers, building index and theme of v1–v3 are dropped on read.
+      version: 4,
       migrate: (persistedState: unknown, version: number): PersistedState => {
         const saved =
           typeof persistedState === 'object' && persistedState !== null
             ? (persistedState as Partial<PersistedState> & { blocklist?: unknown })
             : {};
-        // zustand calls `migrate` only on a version mismatch, so a version-2
+        // zustand calls `migrate` only on a version mismatch, so a version-4
         // payload is already in the current shape. `merge` sanitizes it anyway.
-        if (version >= 2) return saved as PersistedState;
+        const migrated = migrateCity((saved as { city?: unknown }).city);
+        if (!migrated.ok) {
+          logger.error('city migration rejected', migrated.error, { key: STORE_NAME, version });
+        }
+        const city = migrated.ok ? migrated.value : { sessionId: null };
+        if (version >= 3) return { ...saved, city } as PersistedState;
         return {
           ...saved,
-          blocklist: migrateBlocklistState(saved.blocklist),
+          city,
+          blocklist: migratePersistedBlocklist(saved.blocklist, version),
         } as PersistedState;
       },
       // CI-3 (M4.T3c): zustand consumes rehydration failures and keeps the
@@ -259,7 +249,10 @@ function buildStore(
           ...current,
           ...saved,
           timer: saved.timer ? { ...current.timer, ...saved.timer } : current.timer,
-          city: saved.city ? { ...current.city, ...saved.city } : current.city,
+          // Only the session id is persisted (CR6.T5a); the plan is derived from it.
+          city: saved.city
+            ? { ...current.city, sessionId: sanitizeSessionId(saved.city.sessionId) }
+            : current.city,
           blocklist: saved.blocklist
             ? { ...current.blocklist, ...sanitizeBlocklistState(saved.blocklist) }
             : current.blocklist,
@@ -289,6 +282,7 @@ export const selectActiveTab = (state: UiSlice): PopupTab => state.ui.activeTab;
 export const selectLiveRemainingSeconds = (state: UiSlice): number =>
   state.ui.liveRemainingSeconds;
 
+export { selectCityPlan, selectVisibleFloors } from './city.selectors';
 export {
   createTimerSlice,
   DEFAULT_FOCUS_SECONDS,
@@ -300,43 +294,29 @@ export {
 export type { TimerDependencies } from './timer.slice';
 export {
   createCitySlice,
-  DEFAULT_CITY_HEIGHT,
-  DEFAULT_CITY_WIDTH,
-  DEFAULT_THEME_ID,
-  identityGrowthEngine,
   selectCity,
-  selectCityBuildings,
-  selectCityLayers,
   selectCitySessionId,
-  selectCityThemeId,
 } from './city.slice';
-export type {
-  CityDependencies,
-  CityGrowthEngine,
-  CityState,
-} from './city.slice';
+export type { CityState } from './city.slice';
 export {
   createBlocklistSlice,
-  addBlocklistSite,
-  addPresetToBlocklist,
-  assignTagToSite,
-  unassignTagFromSite,
-  filterEntriesByTag,
-  generateTagId,
-  hasTagLabel,
-  isBlocklistEditable,
-  removeBlocklistSite,
-  upsertTag,
-  removeTag,
+  selectAppliedPresetIds,
   selectBlocklist,
-  selectBlocklistEditable,
-  selectCustomTags,
+  selectIsPresetApplied,
+  selectPresetCoveredCount,
+  selectUserPresets,
 } from './blocklist.slice';
 export type {
   BlocklistDependencies,
-  BlocklistLockSource,
   BlocklistState,
 } from './blocklist.slice';
+export {
+  isBlocklistAddAllowed,
+  isBlocklistEditable,
+  selectBlocklistAddAllowed,
+  selectBlocklistEditable,
+} from './blocklist-lock';
+export type { BlocklistLockSource } from './blocklist-lock';
 export {
   createSessionHistorySlice,
   appendSessionSummary,
@@ -352,6 +332,7 @@ export {
   createScoreSlice,
   selectScoreLevel,
   selectPopulation,
+  selectBuiltCharacters,
 } from './score.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';

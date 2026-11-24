@@ -1,17 +1,18 @@
 # Build-it! Timer Focus
 
-A browser extension which (hopefully) helps you stay focused on your work: the more you focus, the more your ASCII art city grows!
+A browser extension which (hopefully) helps you stay focused on your work: the more you focus, the more your neon 3D city grows!
 
 ## How it works
 
-Start a focus session and every 2 seconds of undistracted work grows your city by one ASCII character, spread across three parallax layers (background, middleground, foreground). Give in to a distraction and the malus runs the growth engine in reverse, removing characters one at a time.
+Start a focus session and every stretch of undistracted work (one 600th of the session) builds one character of progress; the city shows that progress as floors rising in the order of a plan generated for the session. Time on a blocked site takes characters back, and the longer you stay the more each moment costs: the first five moments cost one character each, then two, then three. The score, the population and the city all lose the same amount, and a damaged top floor shows the loss at once.
 
 * **Timer** — start / pause / reset a countdown session. Remaining time is persisted and reconciled with the browser alarm clock, so it survives a service-worker restart.
-* **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session. The list can only be edited while no session is in progress (before Start or after Reset).
+* **Blocklist** — block distracting sites during a session only; everything else stays allowed, and there is no blocking outside a focus session. Sites can be added at any time before the session ends, including while it is running or paused; removing a site or editing presets needs the timer to be idle (before Start or after Reset).
+* **Presets** — each built-in preset (Social, Video, …) is a toggle over the one list: switching it on adds its sites, switching it off removes only the sites nothing else asked for (a site you added by hand, or one from another active preset, stays). A preset can be switched on during a session but only off when the timer is idle. The current list can be saved as a named preset (up to 24 characters), renamed or deleted; deleting a preset never unblocks its sites.
 * **Declarative Net Request** — blocked domains are translated into `declarativeNetRequest` rules that are applied exclusively while a session is `running`.
-* **Score** — based on the percentage of the city built (focus characters minus distraction characters, never below 0): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters.
+* **Score** — based on the percentage of the city built (focus characters minus the escalating distraction cost, never below 0; 60 s on a blocked site in a 30-minute session costs 44 characters): `bad` below 30%, `good` from 30%, `great` from 70%, `excellent` only at 100%. The badge updates live and drops back if distraction removes characters. The count is a balance over the whole session: a distraction that costs more than has been built leaves a debt, so the city and the population stay at 0 until focus has earned it back. In exchange, a distraction costs the same whether it happens at the start or at the end.
 * **Population** — each character earns a rate by completion band (5 below 30%, 10 from 30%, 20 from 70%), and finishing the whole city adds a bonus of 7% of the population reached.
-* **ASCII city** — deterministic, seeded growth composed from a library of ASCII building modules, with a per-domain colour palette.
+* **3D city** — a new city every session from a seed (streets, buildings, palette), drawn with three.js in the City tab only (a separate lazy chunk, about 148 KB gzipped) with rain, cars and tower names. It grows floor by floor from your focus, a distraction takes floors back and damages the top one, `prefers-reduced-motion` turns the motion off, and the view keeps a text summary for screen readers. Once a session is completed you can export the city as a 1600 × 900 PNG or JPEG: a frame of the 3D view as you left the camera (without the HUD line), or the text city on a black floor where WebGL is unavailable. "View full city" in the City tab opens the whole city in its own tab (`city.html`) on a large canvas with a free camera (turn all the way round, zoom, pan); it is read-only and follows the session live, and its ambient layer pauses while the tab is hidden.
 
 ## Tech stack
 
@@ -20,6 +21,7 @@ Start a focus session and every 2 seconds of undistracted work grows your city b
 | Language | TypeScript 5 (strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`) |
 | UI | React 19 |
 | Extension framework | [WXT](https://wxt.dev) 0.21 (`@wxt-dev/module-react`), Manifest V3 |
+| 3D city | [three.js](https://threejs.org) 0.187 (exact), loaded lazily by the City tab only |
 | State | Zustand 5 with the `persist` middleware over `browser.storage.local` |
 | Domain parsing | `tldts` |
 | Unit / component tests | Vitest 5, Testing Library, `happy-dom`, `wxt/testing` (`fakeBrowser`) |
@@ -30,17 +32,20 @@ Start a focus session and every 2 seconds of undistracted work grows your city b
 ## Project structure
 
 ```
-entrypoints/        Extension entrypoints (background, content, popup)
+entrypoints/        Extension entrypoints (background, content, popup, city)
   background.ts     Service-worker orchestrator (store, alarms, messages, DNR)
-  content.ts        Content script
+  blocked-overlay.content.tsx  Content script (blocked-site overlay, Shadow DOM)
   popup/            React popup UI
+  city/             Full-city page (`city.html`), read-only, free camera
 components/         React components (city, timer, blocklist, score, common)
+  city/three/       The three.js renderer shell (meshes, ambient layer, animations, capture)
 store/              Zustand store, slices, storage adapter, cross-context sync
 lib/                Browser-free domain logic
   url/              Domain normalization (tldts)
   blocking/         Presets, DNR rule generation and application
-  city/             Growth/composition engines (planned)
-  score/            Score and malus logic (planned)
+  city/             Seeded city plan (`plan/`), visible floors, ambient plan, render scheduler, export
+  score/            Score, population and the escalating malus
+  browser/          Opening the extension's own pages
   timer/            Alarm adapter, timer restore, session ids
   messaging/        Typed message bus and message types
 utils/              Pure helpers (duration formatting, Result type)
@@ -82,7 +87,7 @@ To verify manually: load `.output/chrome-mv3` via `chrome://extensions` → "Loa
 bun run test          # unit + integration + component tests (Vitest)
 bun run test:watch    # watch mode
 bun run test:coverage # with coverage
-bun run e2e           # Playwright end-to-end suite
+bun run build && bun run e2e   # Playwright end-to-end suite on the built extension (E2E_GPU=1 for the real GPU)
 bun run compile       # tsc --noEmit
 bun run lint          # ESLint
 bun run format        # Prettier (write)
@@ -99,6 +104,9 @@ The project is developed task-by-task from `docs/roadmap-en.md`. As of the last 
 * **Milestone 4 — polish:** in progress (proportional malus and logging done; TexturePacker skipped; accessibility and end-to-end tests remaining).
 * **Change request CR1 — single blocklist:** completed (the blocklist is the only site list across the UI, protocol, persisted data, enforcement and tests; version-1 payloads are migrated on read).
 * **Change request CR2 — blocklist lock:** completed (the blocklist is editable only while the timer is `idle`; enforced in the store and the background handler, reflected by the disabled editors and the lock notice).
+* **Change request CR5 — adding during a session:** completed (adding a site or switching a preset on is also allowed while `running`/`paused`, in the store, the background and the popup; removals and preset management stay idle-only, and a site added mid-session counts as distraction only from the add).
+
+* **Change request CR4 — preset toggles:** completed (presets are toggles over the single list, saved presets replace custom tags, the persisted blocklist is migrated to version 3 on read).
 
 Run `bun run test`, `bun run compile`, `bun run lint` and **both** builds (`bun run build` and `bun run build:firefox`) before considering a task complete. See `docs/changelog.md` for the detailed, per-task status.
 

@@ -7,7 +7,7 @@ import type { MutationMessage } from './messages.types';
  *
  * Injectable (principle D) so the slices stay unit-testable without the message
  * bus; the store barrel supplies the real `sendMessage`. Shared by every slice
- * that owns a mutation (blocklist/tags M1.T10, timer M3.T3b) instead of being
+ * that owns a mutation (blocklist and presets M1.T10/CR4, timer M3.T3b) instead of being
  * redeclared per slice.
  */
 export interface MessagingDependencies {

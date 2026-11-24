@@ -12,7 +12,7 @@ export const IMAGE_MIME_TYPES: Readonly<Record<ImageFormat, string>> = {
 };
 
 /** JPEG quality (0..1); PNG ignores it (lossless). */
-const JPEG_QUALITY = 0.92;
+export const JPEG_QUALITY = 0.92;
 
 /** The rasterized result, ready to be handed to a download. */
 export interface RasterizedCityImage {

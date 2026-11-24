@@ -1,5 +1,12 @@
 import { i18n } from '#i18n';
-import { useAppStore, selectScoreLevel } from '@/store';
+import { isScoreTierSettled } from '@/lib/score/score-reveal';
+import { TOTAL_CHARACTERS_PER_SESSION } from '@/lib/timer/focus-presets';
+import {
+  selectBuiltCharacters,
+  selectScoreLevel,
+  selectTimerStatus,
+  useAppStore,
+} from '@/store';
 import type { ScoreLevel } from '@/store/store.types';
 
 /**
@@ -40,6 +47,7 @@ const SCORE_BADGE_STYLES = `
   .score-badge--great { color: #4dabf7; }
   .score-badge--good { color: #fcc419; }
   .score-badge--bad { color: #ff6b6b; }
+  .score-badge--early { color: #8a948e; text-shadow: none; }
 `;
 
 /**
@@ -50,8 +58,18 @@ const SCORE_BADGE_STYLES = `
  * so a level change is announced without stealing focus.
  */
 export function ScoreBadge() {
-  const level = useAppStore(selectScoreLevel);
-  const label = scoreLevelLabel(level);
+  const scoreLevel = useAppStore(selectScoreLevel);
+  const built = useAppStore(selectBuiltCharacters);
+  const status = useAppStore(selectTimerStatus);
+
+  // `bad` is the first band, so it is the only tier that would show up
+  // seconds into a session; the others are earned and need no hold-back.
+  const isEarly =
+    scoreLevel === 'bad' &&
+    status !== 'completed' &&
+    !isScoreTierSettled(built, TOTAL_CHARACTERS_PER_SESSION);
+  const level = isEarly ? 'early' : scoreLevel;
+  const label = isEarly ? i18n.t('score.early') : scoreLevelLabel(scoreLevel);
 
   return (
     <span

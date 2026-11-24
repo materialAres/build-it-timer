@@ -7,7 +7,7 @@ import {
 import type { BlocklistEntry } from '@/store/store.types';
 import { FakeRuleApplier } from '@/tests/helpers/fake-rule-applier';
 
-const entry = (value: string): BlocklistEntry => ({ domain: { value }, tagIds: [] });
+const entry = (value: string): BlocklistEntry => ({ domain: { value }, manual: true, presetIds: [] });
 
 function state(
   status: BlockingRulesSource['timer']['status'],

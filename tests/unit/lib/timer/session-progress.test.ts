@@ -29,7 +29,6 @@ function options(
 ): AdvanceProgressOptions {
   return {
     distracted: false,
-    tickMs: TICK_MS,
     durationMs: DURATION_MS,
     ...overrides,
   };
@@ -80,7 +79,6 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       focusedMs: TICK_MS * 5,
       distractedMs: 0,
       lastAccountedAt: T0 + TICK_MS * 4,
-      targetTicks: 5,
       // 15 000 ms of a 1 500 000 ms session worth 600 characters.
       builtCharacters: 6,
     });
@@ -97,7 +95,6 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
       focusedMs: TICK_MS * 5,
       distractedMs: TICK_MS * 2,
       lastAccountedAt: T0 + TICK_MS * 2,
-      targetTicks: 5,
       // 6 focus characters minus 2 distraction characters (6 000 ms).
       builtCharacters: 4,
     });
@@ -113,22 +110,19 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
 
     expect(progress?.lastAccountedAt).toBe(endsAt);
     expect(progress?.focusedMs).toBe(TICK_MS * 3);
-    expect(progress?.targetTicks).toBe(3);
   });
 
-  it('keeps the time and the score but derives no growth from an invalid cadence', () => {
-    for (const tickMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const progress = advanceProgress(
-        runningTimer(),
-        T0 + TICK_MS,
-        options({ tickMs }),
-      );
-      expect(progress?.focusedMs).toBe(TICK_MS);
-      expect(progress?.lastAccountedAt).toBe(T0 + TICK_MS);
-      expect(progress?.targetTicks).toBe(0);
-      // Characters are counted from the duration, not from the cadence.
-      expect(progress?.builtCharacters).toBe(1);
-    }
+  it('charges a long distracted stretch on the escalation schedule (CR6.T5b)', () => {
+    // A 1 500 s session worth 600 characters has a 2 500 ms tick. 750 000 ms of
+    // focus earned 300 characters; 50 000 ms (20 ticks) on a blocked site then
+    // cost 5 + 12 + 27 = 44, not 20.
+    const progress = advanceProgress(
+      runningTimer({ focusedMs: 750_000, lastAccountedAt: T0 }),
+      T0 + 50_000,
+      options({ distracted: true }),
+    );
+    expect(progress?.distractedMs).toBe(50_000);
+    expect(progress?.builtCharacters).toBe(300 - 44);
   });
 
   it('clamps untrusted accumulator values instead of leaking NaN', () => {
@@ -156,12 +150,13 @@ describe('advanceProgress (M2.T15/M2.T18 catch-up)', () => {
     expect(advanceProgress(applied, now, options())).toBeUndefined();
   });
 
-  it('counts exactly the total for a perfect session, whatever the cadence', () => {
-    for (const tickMs of [TICK_MS, 2_500, 7_777]) {
+  it('counts exactly the total for a perfect session, whatever the duration', () => {
+    for (const minutes of [5, 20, 25, 90]) {
+      const durationMs = minutes * 60_000;
       const progress = advanceProgress(
-        runningTimer(),
-        T0 + DURATION_MS,
-        options({ tickMs }),
+        runningTimer({ durationSeconds: minutes * 60, endsAt: T0 + durationMs }),
+        T0 + durationMs,
+        options({ durationMs }),
       );
       expect(progress?.builtCharacters).toBe(600);
     }

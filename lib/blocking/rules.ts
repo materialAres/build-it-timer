@@ -1,5 +1,5 @@
 import type { Browser } from 'wxt/browser';
-import type { BlocklistEntry } from '@/store/store.types';
+import type { BlockedEntry } from './is-domain-blocked';
 import { normalizeEntry } from './normalize-entry';
 
 /**
@@ -32,7 +32,7 @@ const BLOCKED_RESOURCE_TYPES: `${Browser.declarativeNetRequest.ResourceType}`[] 
  * same function the entry path uses, so the two can never diverge; an entry that
  * is not a valid registrable domain is dropped (`null`) rather than interpolated.
  */
-function toCanonicalDomain(entry: BlocklistEntry): string | null {
+function toCanonicalDomain(entry: BlockedEntry): string | null {
   const normalized = normalizeEntry(entry.domain.value);
   return normalized.ok ? normalized.value : null;
 }
@@ -49,7 +49,7 @@ function toCanonicalDomain(entry: BlocklistEntry): string | null {
  * domains, so `www.`/`m.` variants of the same registrable domain still collapse
  * onto one rule.
  */
-export function buildDnrRules(blocklist: ReadonlyArray<BlocklistEntry>): DnrRule[] {
+export function buildDnrRules(blocklist: ReadonlyArray<BlockedEntry>): DnrRule[] {
   const blocked = new Set(
     blocklist
       .map(toCanonicalDomain)

@@ -134,4 +134,29 @@ describe('TimerControls (M2.T3)', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled();
   });
+
+  it('reads Resume instead of Start while paused, and resumes (UI.T10)', async () => {
+    setTimer({ status: 'paused', sessionId: 'session-1' });
+    const requestStartTimer = vi
+      .spyOn(useAppStore.getState(), 'requestStartTimer')
+      .mockImplementation(() => {});
+
+    render(<TimerControls />);
+
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(requestStartTimer).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['idle', 'running', 'completed'] as const)(
+    'keeps the Start label while %s (UI.T10)',
+    (status) => {
+      setTimer({ status });
+
+      render(<TimerControls />);
+
+      expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
+    },
+  );
 });

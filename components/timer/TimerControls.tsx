@@ -17,6 +17,9 @@ import { useAppStore, selectTimerStatus } from '@/store';
  * timer). A `completed` session is not resumable — its whole duration has
  * already elapsed — so Start stays disabled until Reset returns it to `idle`;
  * Reset is the only action that can move it out of that state.
+ *
+ * While paused the first button reads Resume (UI.T10): it is the same request
+ * as Start (the background resumes a paused session), so only the label moves.
  */
 export function TimerControls() {
   const status = useAppStore(selectTimerStatus);
@@ -30,7 +33,7 @@ export function TimerControls() {
         }}
         disabled={status === 'running' || status === 'completed'}
       >
-        {i18n.t('timer.start')}
+        {i18n.t(status === 'paused' ? 'timer.resume' : 'timer.start')}
       </button>
       <button
         type="button"

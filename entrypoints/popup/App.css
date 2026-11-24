@@ -11,6 +11,10 @@
  */
 
 .popup {
+  /* Fixed width (CR6.T8a): the 3D view fills the tab, so the popup no longer
+     takes its width from an ASCII grid. Roughly what the old canvas needed. */
+  width: 32rem;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -42,6 +46,14 @@
   gap: 0.6rem;
 }
 
+.city-empty-hint {
+  margin: 0;
+  color: #8a948e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .popup-section--timer {
   align-items: center;
 }
@@ -51,5 +63,51 @@
   padding: 0.35rem 0.5rem;
   border: 1px solid rgba(255, 212, 59, 0.6);
   color: #ffd43b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.75rem;
+}
+
+/*
+ * Shared controls (UI.T5, DESIGN.md Buttons / Inputs). Every popup action is the
+ * outline pill by default; the rules sit in `:where()` so they carry no
+ * specificity and a component's own class (tabs, preset toggles, the summary
+ * link, the compact remove button) overrides them without a fight.
+ */
+:where(.popup) button {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid rgba(125, 251, 160, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #7dfba0;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 4px currentColor;
+}
+
+:where(.popup) button:hover:not(:disabled) {
+  background: rgba(125, 251, 160, 0.15);
+}
+
+:where(.popup) button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  text-shadow: none;
+}
+
+/* One focus ring for everything focusable, in place of the browser's white one. */
+:where(.popup) :focus-visible {
+  outline: 1px solid #7dfba0;
+  outline-offset: 2px;
+}
+
+/* The browser default (#757575) is 4.17:1 on the input field; this is 6.14:1.
+   Firefox also dims placeholders, so the opacity is set back to 1. */
+:where(.popup) input::placeholder {
+  color: #8a948e;
+  opacity: 1;
+}
+
+.timer-controls {
+  display: flex;
+  gap: 0.35rem;
 }

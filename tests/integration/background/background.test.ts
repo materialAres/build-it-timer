@@ -13,7 +13,7 @@ import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { createAppStore, DEFAULT_FOCUS_SECONDS, STORE_NAME } from '@/store';
 import { timerAlarmName } from '@/lib/timer/session';
 import { createLogger, type LogRecord } from '@/utils/logger';
-import type { Tag } from '@/store/store.types';
+import type { Preset } from '@/store/store.types';
 import type { TabEventSource } from '@/lib/timer/tab-distraction-tracker';
 
 describe('background orchestrator skeleton (M1.T7)', () => {
@@ -212,17 +212,17 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     await store.persist.rehydrate();
     const handle = startBackground({ store });
 
-    const tag: Tag = { id: 'focus', label: 'Focus' };
+    const preset: Preset = { id: 'user:focus', name: 'Focus', domains: [] };
     await fakeBrowser.storage.local.set({
       [STORE_NAME]: JSON.stringify({
         state: {
-          blocklist: { ...store.getState().blocklist, customTags: [tag] },
+          blocklist: { ...store.getState().blocklist, userPresets: [preset] },
         },
-        version: 1,
+        version: 3,
       }),
     });
 
-    expect(store.getState().blocklist.customTags).toEqual([tag]);
+    expect(store.getState().blocklist.userPresets).toEqual([preset]);
 
     handle.dispose();
   });

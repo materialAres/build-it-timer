@@ -28,7 +28,11 @@ body {
   background-color: #050805;
 }
 
-button {
+button,
+input {
   font-family: inherit;
+}
+
+button {
   cursor: pointer;
 }

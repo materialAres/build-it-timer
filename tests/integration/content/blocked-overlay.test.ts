@@ -32,7 +32,7 @@ function captureLogger(): {
   return { records, logger };
 }
 
-const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, tagIds: [] });
+const entry = (domain: string): BlocklistEntry => ({ domain: { value: domain }, manual: true, presetIds: [] });
 
 /** Store stub, so the tests never depend on the real persist envelope. */
 function fakeStoreReader(initial: StoreSnapshot | undefined) {
@@ -186,7 +186,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     });
   });
 
-  it('sends SITE_BLOCKED_ATTEMPT with "proceed" when "Yes" is chosen', async () => {
+  it('sends SITE_BLOCKED_ATTEMPT with "proceed" when "Open anyway" is chosen', async () => {
     const received: RuntimeMessage[] = [];
     const unsubscribe = onMessage('SITE_BLOCKED_ATTEMPT', (message) => {
       received.push(message);
@@ -203,14 +203,14 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('Yes');
+    clickShadowButton('Open anyway');
 
     expect(sendAttempt).toHaveBeenCalledWith('facebook.com', 'proceed');
     expect(received).toEqual([]); // the injected sender replaces the real bus
     unsubscribe();
   });
 
-  it('closes the overlay after "Yes" and leaves the page usable', async () => {
+  it('closes the overlay after "Open anyway" and leaves the page usable', async () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
@@ -223,13 +223,13 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('Yes');
+    clickShadowButton('Open anyway');
     await vi.waitFor(() => {
       expect(host()).toBeNull();
     });
   });
 
-  it('does not bring the overlay back after "Yes" when the store refreshes', async () => {
+  it('does not bring the overlay back after "Open anyway" when the store refreshes', async () => {
     // The attempt itself writes the store (distracted time, malus), so the
     // reader observes a fresh snapshot of the same running session right after
     // the click — the exact sequence that used to re-mount the overlay.
@@ -245,7 +245,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('Yes');
+    clickShadowButton('Open anyway');
     await vi.waitFor(() => {
       expect(host()).toBeNull();
     });
@@ -256,7 +256,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     expect(sendAttempt).toHaveBeenCalledTimes(1);
   });
 
-  it('reports "go-back" and navigates back when "No" is chosen, without any malus', async () => {
+  it('reports "go-back" and navigates back when "Back to work" is chosen, without any malus', async () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
     const goBack = vi.fn();
     const malus: RuntimeMessage[] = [];
@@ -275,7 +275,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('No');
+    clickShadowButton('Back to work');
 
     expect(sendAttempt).toHaveBeenCalledWith('facebook.com', 'go-back');
     expect(goBack).toHaveBeenCalledTimes(1);
@@ -298,7 +298,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('No');
+    clickShadowButton('Back to work');
 
     await vi.waitFor(() => {
       expect(overlayText()).toContain('Great! Keep focusing!');
@@ -320,7 +320,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('Yes');
+    clickShadowButton('Open anyway');
 
     await vi.waitFor(() => {
       expect(host()).toBeNull();
@@ -424,7 +424,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       expect(host()).not.toBeNull();
     });
 
-    clickShadowButton('Yes');
+    clickShadowButton('Open anyway');
 
     await vi.waitFor(() => {
       expect(

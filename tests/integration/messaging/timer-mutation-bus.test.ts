@@ -15,7 +15,6 @@ import {
   FOCUS_PRESETS,
   tickMsForDurationSeconds,
 } from '@/lib/timer/focus-presets';
-import type { CityLayers } from '@/components/city/city.types';
 
 const T0 = 1_700_000_000_000;
 /** Cadence of the default preset used by the sessions here. */
@@ -26,14 +25,6 @@ const flushAsync = (): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
-
-function countOccupied(layers: CityLayers): number {
-  return [layers.background, layers.middleground, layers.foreground].reduce(
-    (total, grid) =>
-      total + grid.cells.flat().filter((cell) => cell.char !== null).length,
-    0,
-  );
-}
 
 /**
  * M3.T3b — popup → background timer path. The popup's store is read-only
@@ -327,32 +318,31 @@ describe('popup → background timer path (M3.T3b)', () => {
     handle.dispose();
   });
 
-  it('grows the city on a command + simulated tick sequence', async () => {
+  it('builds characters on a command + simulated tick sequence', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
     await sendMessage({ type: 'TIMER_STARTED', payload: {} });
-    const empty = store.getState().city.layers;
+    expect(store.getState().score.builtCharacters).toBe(0);
 
     now = T0 + TICK_MS;
     await sendMessage({
       type: 'TIMER_TICK',
       payload: { remainingSeconds: 1_500 },
     });
-    expect(countOccupied(store.getState().city.layers)).toBe(1);
+    expect(store.getState().score.builtCharacters).toBe(1);
 
     now = T0 + TICK_MS * 2;
     await sendMessage({
       type: 'TIMER_TICK',
       payload: { remainingSeconds: 1_498 },
     });
-    expect(countOccupied(store.getState().city.layers)).toBe(2);
-    expect(store.getState().city.layers).not.toBe(empty);
+    expect(store.getState().score.builtCharacters).toBe(2);
 
     handle.dispose();
   });
 
-  it('does not grow the city when a tick follows a pause command', async () => {
+  it('builds nothing when a tick follows a pause command', async () => {
     const { store, handle } = startWiredBackground();
     await handle.ready;
 
@@ -363,7 +353,7 @@ describe('popup → background timer path (M3.T3b)', () => {
       payload: { remainingSeconds: 1_500 },
     });
     await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
-    const frozen = store.getState().city.layers;
+    const frozen = store.getState().score.builtCharacters;
 
     now = T0 + TICK_MS * 10;
     await sendMessage({
@@ -371,7 +361,7 @@ describe('popup → background timer path (M3.T3b)', () => {
       payload: { remainingSeconds: 1_480 },
     });
 
-    expect(store.getState().city.layers).toBe(frozen);
+    expect(store.getState().score.builtCharacters).toBe(frozen);
     handle.dispose();
   });
 });

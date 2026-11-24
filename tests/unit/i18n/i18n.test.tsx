@@ -32,12 +32,22 @@ describe('i18n shared instance (M3.T9)', () => {
     expect(i18n.t('timer.start')).toBe('Start');
     expect(i18n.t('overlay.title')).toBe('Stay focused');
     expect(i18n.t('score.badgeAriaLabel', ['Good'])).toBe('Focus score: Good');
-    expect(i18n.t('blocklist.assignTag', ['Focus', 'a.com'])).toBe(
-      'Assign Focus to a.com',
+    expect(i18n.t('blocklist.presetToggle', ['Social', '4', '4'])).toBe(
+      'Social preset, 4 of 4 sites blocked',
     );
     expect(i18n.t('blocklist.locked')).toBe(
-      'The blocklist is locked while a session is in progress. Reset the timer to edit it.',
+      'The blocklist is locked. Reset the timer to edit it.',
     );
+    expect(i18n.t('blocklist.addOnly')).toBe(
+      'Sites can be added during a session. Removing them needs a timer reset.',
+    );
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe('Blocks 3 sites');
+    expect(i18n.t('blocklist.summaryAddOnly', ['Blocks 3 sites'])).toBe(
+      'Blocks 3 sites · add-only during a session',
+    );
+    expect(i18n.t('timer.resume')).toBe('Resume');
+    expect(i18n.t('timer.paused')).toBe('Paused');
+    expect(i18n.t('blocklist.summaryEmpty')).toBe('No sites blocked');
   });
 
   it('renders a component\u2019s visible strings through i18n.t', () => {
@@ -63,8 +73,8 @@ describe('i18n shared instance (M3.T9)', () => {
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveTextContent('You put facebook.com on your blocklist.');
     expect(dialog).toHaveTextContent('Are you sure you want to access it?');
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to work' })).toBeInTheDocument();
   });
 });
 
@@ -86,12 +96,22 @@ describe('IT locale rendering (M3.T10)', () => {
     expect(i18n.t('score.badgeAriaLabel', ['Buono'])).toBe(
       'Punteggio di concentrazione: Buono',
     );
-    expect(i18n.t('blocklist.assignTag', ['Focus', 'a.com'])).toBe(
-      'Assegna Focus a a.com',
+    expect(i18n.t('blocklist.presetToggle', ['Social', '4', '4'])).toBe(
+      'Preset Social, 4 di 4 siti bloccati',
     );
     expect(i18n.t('blocklist.locked')).toBe(
-      'La lista dei bloccati è bloccata durante una sessione. Reimposta il timer per modificarla.',
+      'La lista è bloccata. Reimposta il timer per modificarla.',
     );
+    expect(i18n.t('blocklist.addOnly')).toBe(
+      'Durante una sessione puoi aggiungere siti. Rimuoverli richiede di reimpostare il timer.',
+    );
+    expect(i18n.t('blocklist.summarySites', ['3'])).toBe('Blocca 3 siti');
+    expect(i18n.t('blocklist.summaryAddOnly', ['Blocca 3 siti'])).toBe(
+      'Blocca 3 siti · solo aggiunte durante una sessione',
+    );
+    expect(i18n.t('timer.resume')).toBe('Riprendi');
+    expect(i18n.t('timer.paused')).toBe('In pausa');
+    expect(i18n.t('blocklist.summaryEmpty')).toBe('Nessun sito bloccato');
   });
 
   it('renders a popup component in Italian', () => {
@@ -124,7 +144,7 @@ describe('IT locale rendering (M3.T10)', () => {
       'Hai messo facebook.com nella lista dei bloccati.',
     );
     expect(dialog).toHaveTextContent('Sei sicuro di voler accedere?');
-    expect(screen.getByRole('button', { name: 'Sì' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apri comunque' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Torna al lavoro' })).toBeInTheDocument();
   });
 });

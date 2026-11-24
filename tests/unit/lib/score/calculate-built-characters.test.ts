@@ -10,10 +10,75 @@ describe('calculateBuiltCharacters (CR3.T1)', () => {
     expect(calculateBuiltCharacters(15 * MINUTE_MS, 0, 30 * MINUTE_MS, 600)).toBe(300);
   });
 
-  it('subtracts whole distraction characters', () => {
+  it('charges distraction on the escalation schedule, not 1 per tick (CR6.T5b)', () => {
+    // 3 of 30 minutes is 60 ticks: 5 at 1, 6 at 2, then 49 at 3 = 164 characters
+    // (the old linear penalty was 60, so this was 240).
     expect(
       calculateBuiltCharacters(15 * MINUTE_MS, 3 * MINUTE_MS, 30 * MINUTE_MS, 600),
-    ).toBe(240);
+    ).toBe(300 - 164);
+  });
+
+  describe('the escalating malus (CR6.T5b, option A)', () => {
+    const DURATION = 30 * MINUTE_MS;
+
+    it('keeps the first stage equal to the old linear penalty: 5 ticks cost 5', () => {
+      // 5 ticks of a 3 s cadence; every other tick of focus is kept.
+      expect(calculateBuiltCharacters(300_000, 15_000, DURATION, 600)).toBe(100 - 5);
+    });
+
+    it('costs a worked example: 60 s on a blocked site loses 44 characters, not 20', () => {
+      // 20 ticks: 5 at 1 + 6 at 2 + 9 at 3 = 44.
+      const built = calculateBuiltCharacters(15 * MINUTE_MS, 60_000, DURATION, 600);
+      expect(built).toBe(300 - 44);
+    });
+
+    it('makes a long stay cost more than a short one by the schedule', () => {
+      const focus = 20 * MINUTE_MS;
+      const short = calculateBuiltCharacters(focus, 30_000, DURATION, 600);
+      const long = calculateBuiltCharacters(focus, 300_000, DURATION, 600);
+      // 10 ticks owe 5 + 10 = 15; 100 ticks owe 5 + 12 + 89 × 3 = 284.
+      expect(400 - short).toBe(15);
+      expect(400 - long).toBe(284);
+    });
+
+    it('never gives more characters for more distraction', () => {
+      let previous = Number.POSITIVE_INFINITY;
+      for (let seconds = 0; seconds <= 600; seconds += 3) {
+        const built = calculateBuiltCharacters(20 * MINUTE_MS, seconds * 1000, DURATION, 600);
+        expect(built).toBeLessThanOrEqual(previous);
+        previous = built;
+      }
+    });
+
+    it('is the same share of the session at every preset: the same fraction costs the same', () => {
+      for (const minutes of PRESET_MINUTES) {
+        const duration = minutes * MINUTE_MS;
+        // 10% of the session on blocked sites, the other 90% focused.
+        const distracted = Math.round(duration * 0.1);
+        expect(calculateBuiltCharacters(duration - distracted, distracted, duration, 600)).toBe(
+          540 - 164,
+        );
+      }
+    });
+
+    // The effect on the CR3 bands (docs/features-analysis/city-3d.md §5): a
+    // share `d` of the session on blocked sites, the rest focused, 600 total.
+    it.each([
+      ['1% (a great score stays great)', 0.01, 587],
+      ['5% (a great score stays great)', 0.05, 496],
+      ['10% (great falls to good because of the escalation)', 0.1, 376],
+      ['20% (good falls to bad because of the escalation)', 0.2, 136],
+      ['33% (nothing is left)', 1 / 3, 0],
+    ])('with %s of the session distracted', (_label, share, expected) => {
+      const distracted = Math.round(DURATION * share);
+      expect(calculateBuiltCharacters(DURATION - distracted, distracted, DURATION, 600)).toBe(
+        expected,
+      );
+    });
+
+    it('still reaches 100% for an undistracted session', () => {
+      expect(calculateBuiltCharacters(DURATION, 0, DURATION, 600)).toBe(600);
+    });
   });
 
   it('never goes below 0', () => {
