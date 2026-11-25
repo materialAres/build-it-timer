@@ -11,7 +11,7 @@
 | PR5.T1 | Done. The red test is green; the gate is `lib/messaging/startup-gate.ts` | `9c07f5d` |
 | PR5.T2 | Done. `BLOCKLIST_MUTATION_TYPES`, `isBlocklistMutation`, an exhaustive handler | `678ff99` |
 | PR5.T3 | Done. Locked-control tests assert `disabled` and that no message is sent | — (to be committed) |
-| PR5.T4 | Open | — |
+| PR5.T4 | Done. Close-out and full gate (build, build:firefox, e2e green) | — (to be committed) |
 
 ## 1. Review summary
 
@@ -166,7 +166,7 @@ Task IDs are local to this document (`PR5.Tn`). Do them one at a time, in order.
 
 ### PR5.T4 — Close-out
 
-- **Status:** open. Depends on PR5.T1–T3.
+- **Status:** done (uncommitted). Depends on PR5.T1–T3.
 - **Files:**
   - `docs/changelog.md`
   - this document
