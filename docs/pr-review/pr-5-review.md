@@ -9,8 +9,8 @@
 | Task | Result | Commit |
 |---|---|---|
 | PR5.T1 | Done. The red test is green; the gate is `lib/messaging/startup-gate.ts` | `9c07f5d` |
-| PR5.T2 | Done. `BLOCKLIST_MUTATION_TYPES`, `isBlocklistMutation`, an exhaustive handler | — (to be committed) |
-| PR5.T3 | Open | — |
+| PR5.T2 | Done. `BLOCKLIST_MUTATION_TYPES`, `isBlocklistMutation`, an exhaustive handler | `678ff99` |
+| PR5.T3 | Done. Locked-control tests assert `disabled` and that no message is sent | — (to be committed) |
 | PR5.T4 | Open | — |
 
 ## 1. Review summary
@@ -155,7 +155,7 @@ Task IDs are local to this document (`PR5.Tn`). Do them one at a time, in order.
 
 ### PR5.T3 — Component lock tests assert that no mutation is sent (F4)
 
-- **Status:** open. Independent of the other tasks.
+- **Status:** done (uncommitted). Tests only.
 - **Files:** `tests/unit/components/blocklist/SiteList.test.tsx`, `PresetPicker.test.tsx`, `SavedPresets.test.tsx`.
 - **Work:** in each locked case, the test that interacts with a disabled control also asserts that no mutation message left the popup. The locked cases are:
   - `completed`: everything is locked;

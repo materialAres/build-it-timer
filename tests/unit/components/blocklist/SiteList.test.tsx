@@ -7,6 +7,7 @@ import {
   screen,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { SiteList } from '@/components/blocklist/SiteList';
 import { useAppStore } from '@/store';
 import type { BlocklistEntry, TimerStatus } from '@/store/store.types';
@@ -30,6 +31,19 @@ const setStatus = (status: TimerStatus): void => {
     timer: { ...useAppStore.getState().timer, status },
   });
 };
+
+/** Mutation messages that left the popup (PR5.T3); the store sends them through the bus. */
+const sent: unknown[] = [];
+const watchSentMessages = (): void => {
+  sent.length = 0;
+  vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockImplementation(
+    (message: unknown) => {
+      sent.push(message);
+    },
+  );
+};
+const sentTypes = (): unknown[] =>
+  sent.map((message) => (message as { type: unknown }).type);
 
 const currentBlocklist = () => useAppStore.getState().blocklist;
 const values = (list: ReadonlyArray<BlocklistEntry>) =>
@@ -155,10 +169,12 @@ describe.each(['running', 'paused'] as const)(
     beforeEach(() => {
       resetBlocklist([entry('a.com')]);
       setStatus(status);
+      watchSentMessages();
     });
 
     afterEach(() => {
       cleanup();
+      vi.restoreAllMocks();
     });
 
     it('keeps the add form enabled and the remove buttons disabled', () => {
@@ -187,14 +203,19 @@ describe.each(['running', 'paused'] as const)(
         'a.com',
         'facebook.com',
       ]);
+      expect(sentTypes()).toEqual(['BLOCKLIST_ADD_SITE']);
     });
 
     it('never removes a site, even when the disabled button is clicked', () => {
       render(<SiteList />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Remove a.com' }));
+      const remove = screen.getByRole('button', { name: 'Remove a.com' });
 
+      fireEvent.click(remove);
+
+      expect(remove).toBeDisabled();
       expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+      expect(sentTypes()).toEqual([]);
     });
 
     it('re-enables the remove buttons when the timer returns to idle', () => {
@@ -215,10 +236,12 @@ describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
   beforeEach(() => {
     resetBlocklist([entry('a.com')]);
     setStatus('completed');
+    watchSentMessages();
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it('disables the add form and the remove buttons', () => {
@@ -248,6 +271,17 @@ describe('SiteList once the session is completed (CR2.T3a, CR5.T3)', () => {
 
     expect(screen.queryByText('Added facebook.com.')).not.toBeInTheDocument();
     expect(values(currentBlocklist().blocklist)).toEqual(['a.com']);
+    expect(sentTypes()).toEqual([]);
+  });
+
+  it('sends no mutation when a disabled remove button is clicked', () => {
+    render(<SiteList />);
+    const remove = screen.getByRole('button', { name: 'Remove a.com' });
+
+    fireEvent.click(remove);
+
+    expect(remove).toBeDisabled();
+    expect(sentTypes()).toEqual([]);
   });
 
   it('re-enables the controls when the timer returns to idle', () => {
