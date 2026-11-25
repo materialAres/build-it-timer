@@ -1,19 +1,8 @@
 import { isUserPresetId } from '@/lib/blocking/saved-presets';
-import type { MutationMessage } from './messages.types';
+import type { BlocklistMutationMessage } from './messages.types';
 
 /** The mutation variants that change the blocklist (sites and presets). */
-export type BlocklistMutation = Extract<
-  MutationMessage,
-  {
-    type:
-      | 'BLOCKLIST_ADD_SITE'
-      | 'BLOCKLIST_REMOVE_SITE'
-      | 'PRESET_TOGGLE'
-      | 'PRESET_SAVE'
-      | 'PRESET_RENAME'
-      | 'PRESET_DELETE';
-  }
->;
+export type BlocklistMutation = BlocklistMutationMessage;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

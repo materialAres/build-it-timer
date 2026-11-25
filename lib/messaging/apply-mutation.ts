@@ -22,7 +22,11 @@ import {
   isWellFormedBlocklistMutation,
   type BlocklistMutation,
 } from './blocklist-payload';
-import type { MutationMessage } from './messages.types';
+import {
+  isBlocklistMutation,
+  type BlocklistMutationMessage,
+  type MutationMessage,
+} from './messages.types';
 import { createLogger, type Logger } from '@/utils/logger';
 
 /**
@@ -85,6 +89,42 @@ function hasEmptyPayload(payload: unknown): boolean {
   );
 }
 
+/** The blocklist family: the lock (CR2/CR5), then the payload check, then the change. */
+function handleBlocklistMutation(
+  store: AppStore,
+  logger: Logger,
+  message: BlocklistMutationMessage,
+): void {
+  // CR2.T2: the background is the single writer, so the lock must hold here
+  // too — a stale or forged message would otherwise bypass the store/UI guard.
+  // CR5.T2: a message that only adds sites has the wider window. Only the
+  // message type is logged, never the payload.
+  const { status } = store.getState().timer;
+  const allowed = isAddDirectionMutation(message)
+    ? isBlocklistAddAllowed(status)
+    : isBlocklistEditable(status);
+  if (!allowed) {
+    logger.debug('blocklist mutation ignored while the timer is not idle', {
+      type: message.type,
+    });
+    return;
+  }
+  // CR4.T4: a payload that does not match its type is dropped at the
+  // boundary, again logging the type only.
+  if (!isWellFormedBlocklistMutation(message)) {
+    logger.debug('blocklist mutation dropped: malformed payload', {
+      type: message.type,
+    });
+    return;
+  }
+  const current = store.getState().blocklist;
+  const next = applyBlocklistMutation(current, message);
+  // Identity check: an invalid or no-op payload must not persist (one write
+  // per accepted mutation, none for a rejected one).
+  if (next === current) return;
+  store.setState({ blocklist: next });
+}
+
 /**
  * Mutation handler for the cross-context path (M1.T10, extended by M3.T3b): the
  * popup sends a typed mutation, the background applies it to its single writable
@@ -100,8 +140,12 @@ function hasEmptyPayload(payload: unknown): boolean {
 export function createMutationHandler(
   store: AppStore,
   logger: Logger = createLogger('mutation'),
-) {
-  return (message: MutationMessage): void => {
+): (message: MutationMessage) => void {
+  return (message) => {
+    if (isBlocklistMutation(message)) {
+      handleBlocklistMutation(store, logger, message);
+      return;
+    }
     switch (message.type) {
       case 'TIMER_STARTED':
         if (!hasEmptyPayload(message.payload)) return;
@@ -128,37 +172,9 @@ export function createMutationHandler(
         store.getState().setFocusDuration(durationSeconds);
         return;
       }
-      default: {
-        // CR2.T2: the background is the single writer, so the lock must hold
-        // here too — a stale or forged message would otherwise bypass the
-        // store/UI guard. CR5.T2: a message that only adds sites has the wider
-        // window. Only the message type is logged, never the payload.
-        const { status } = store.getState().timer;
-        const allowed = isAddDirectionMutation(message)
-          ? isBlocklistAddAllowed(status)
-          : isBlocklistEditable(status);
-        if (!allowed) {
-          logger.debug(
-            'blocklist mutation ignored while the timer is not idle',
-            { type: message.type },
-          );
-          return;
-        }
-        // CR4.T4: a payload that does not match its type is dropped at the
-        // boundary, again logging the type only.
-        if (!isWellFormedBlocklistMutation(message)) {
-          logger.debug('blocklist mutation dropped: malformed payload', {
-            type: message.type,
-          });
-          return;
-        }
-        const current = store.getState().blocklist;
-        const next = applyBlocklistMutation(current, message);
-        // Identity check: an invalid or no-op payload must not persist (one
-        // write per accepted mutation, none for a rejected one).
-        if (next === current) return;
-        store.setState({ blocklist: next });
-      }
+      default:
+        // A new mutation type that is not handled above fails to compile here.
+        message satisfies never;
     }
   };
 }

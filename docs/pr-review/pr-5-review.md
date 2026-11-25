@@ -8,8 +8,8 @@
 
 | Task | Result | Commit |
 |---|---|---|
-| PR5.T1 | Done. The red test is green; the gate is `lib/messaging/startup-gate.ts` | — (to be committed) |
-| PR5.T2 | Open | — |
+| PR5.T1 | Done. The red test is green; the gate is `lib/messaging/startup-gate.ts` | `9c07f5d` |
+| PR5.T2 | Done. `BLOCKLIST_MUTATION_TYPES`, `isBlocklistMutation`, an exhaustive handler | — (to be committed) |
 | PR5.T3 | Open | — |
 | PR5.T4 | Open | — |
 
@@ -144,7 +144,7 @@ Task IDs are local to this document (`PR5.Tn`). Do them one at a time, in order.
 
 ### PR5.T2 — Explicit blocklist branch and exhaustive switch (F2, F3)
 
-- **Status:** open. Depends on PR5.T1 (both touch the mutation path).
+- **Status:** done (uncommitted). A refactor: no existing test changed.
 - **Files:** `lib/messaging/messages.types.ts`, `lib/messaging/apply-mutation.ts`, `tests/integration/messaging/mutation-bus.test.ts`.
 - **Work:**
   - `messages.types.ts` exports `BLOCKLIST_MUTATION_TYPES` (`as const`): every blocklist and `PRESET_*` type (recount on `main`). It also exports a type guard `isBlocklistMutation(message): message is BlocklistMutationMessage`. `MUTATION_TYPES` is composed from it plus the timer commands, so the lists cannot drift.
