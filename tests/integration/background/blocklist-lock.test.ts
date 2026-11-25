@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
@@ -41,7 +41,7 @@ describe('blocklist lock in the background (CR2.T2)', () => {
     fakeBrowser.reset();
   });
 
-  it('rejects a mutation received while a restored running session is reconciled', async () => {
+  it('rejects a mutation received after a restored running session is reconciled', async () => {
     const store = createAppStore();
     await store.persist.rehydrate();
     store.setState({
@@ -377,6 +377,82 @@ const persistedStatuses = (
     return [parsed.state.timer.status];
   });
 
+const domainNames = (
+  entries: ReadonlyArray<{ domain: { value: string } }>,
+): string[] => entries.map((entry) => entry.domain.value);
+
+const quietLogger = (): ReturnType<typeof createLogger> =>
+  createLogger('lock-test', { sink: () => undefined, minLevel: 'debug' });
+
+interface PersistedSnapshot {
+  state: {
+    timer: { status: string };
+    blocklist: { blocklist: ReadonlyArray<{ domain: { value: string } }> };
+  };
+}
+
+const readPersisted = async (): Promise<PersistedSnapshot> => {
+  const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+  return JSON.parse(raw[STORE_NAME] as string) as PersistedSnapshot;
+};
+
+// Persists a running session with the given sites, as a previous worker left it.
+const seedRunningSession = async (sites: string[]): Promise<void> => {
+  const previous = createAppStore();
+  await previous.persist.rehydrate();
+  previous.setState({
+    timer: runningTimer(),
+    blocklist: {
+      blocklist: sites.map((site) => ({
+        domain: { value: site },
+        manual: true,
+        presetIds: [],
+      })),
+      appliedPresetIds: [],
+      userPresets: [],
+    },
+  });
+  await vi.waitFor(async () => {
+    expect((await readPersisted()).state.timer.status).toBe('running');
+  });
+};
+
+// Holds every `storage.local.get` until `release()`. Each read is taken when it
+// is issued (FIFO, like the real backend) and only its delivery waits, so a
+// later write cannot leak into an earlier read.
+const holdStorageReads = (): {
+  readCount: () => number;
+  release: () => void;
+  restore: () => void;
+} => {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const local = fakeBrowser.storage.local;
+  const realGet = local.get.bind(local) as (
+    keys: string,
+  ) => Promise<Record<string, unknown>>;
+  const delayedGet = async (keys: string): Promise<Record<string, unknown>> => {
+    const snapshot = realGet(keys);
+    await gate;
+    return snapshot;
+  };
+  const getSpy = vi
+    .spyOn(local, 'get')
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    .mockImplementation(delayedGet as unknown as typeof local.get);
+  return {
+    readCount: () => getSpy.mock.calls.length,
+    release: () => {
+      release();
+    },
+    restore: () => {
+      getSpy.mockRestore();
+    },
+  };
+};
+
 /**
  * PR5.T1 (red until fixed) — the startup window: the mutation listeners are
  * registered synchronously, while the persisted state is read asynchronously.
@@ -390,6 +466,10 @@ const persistedStatuses = (
 describe('blocklist lock before the startup hydration (PR5.T1)', () => {
   beforeEach(() => {
     fakeBrowser.reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('judges messages that arrive before the persisted running session is loaded against that session', async () => {
@@ -504,6 +584,160 @@ describe('blocklist lock before the startup hydration (PR5.T1)', () => {
       .toEqual(['facebook.com', 'x.com']);
 
     setSpy.mockRestore();
+    handle.dispose();
+  });
+
+  it('credits the running stretch before an early add, and keeps the add', async () => {
+    await seedRunningSession(['facebook.com']);
+    const alarmProvider = new FakeAlarmProvider(T0);
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1_500_000);
+    let clock = T0;
+    const hold = holdStorageReads();
+    const handle = startBackground({
+      alarmProvider,
+      now: () => clock,
+      logger: quietLogger(),
+    });
+    clock = T0 + 120_000;
+
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'x.com' } });
+    await flushAsync();
+    hold.release();
+    await handle.ready;
+    await flushAsync();
+
+    expect
+      .soft(
+        domainNames(handle.store.getState().blocklist.blocklist),
+        'the early add is kept on the hydrated list',
+      )
+      .toEqual(['facebook.com', 'x.com']);
+    expect
+      .soft(
+        handle.store.getState().timer.focusedMs,
+        'the stretch since the checkpoint is credited as focus',
+      )
+      .toBe(120_000);
+    hold.restore();
+    handle.dispose();
+  });
+
+  it('applies an early pause to the hydrated running session', async () => {
+    await seedRunningSession([]);
+    const alarmProvider = new FakeAlarmProvider(T0);
+    await alarmProvider.schedule(timerAlarmName(SESSION_ID), T0 + 1_500_000);
+    let clock = T0;
+    const hold = holdStorageReads();
+    const handle = startBackground({
+      alarmProvider,
+      now: () => clock,
+      logger: quietLogger(),
+    });
+    clock = T0 + 60_000;
+
+    await sendMessage({ type: 'TIMER_PAUSED', payload: {} });
+    await flushAsync();
+    hold.release();
+    await handle.ready;
+    await flushAsync();
+
+    expect
+      .soft(handle.store.getState().timer.status, 'the pause is applied')
+      .toBe('paused');
+    expect
+      .soft(
+        handle.store.getState().timer.focusedMs,
+        'the minute since the checkpoint is credited as focus',
+      )
+      .toBe(60_000);
+    expect
+      .soft((await readPersisted()).state.timer.status, 'storage holds the pause')
+      .toBe('paused');
+    hold.restore();
+    handle.dispose();
+  });
+
+  it('applies an early add then remove to an idle list in arrival order', async () => {
+    const hold = holdStorageReads();
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(T0),
+      now: () => T0,
+      logger: quietLogger(),
+    });
+
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'a.com' } });
+    await sendMessage({ type: 'BLOCKLIST_REMOVE_SITE', payload: { site: 'a.com' } });
+    await flushAsync();
+    hold.release();
+    await handle.ready;
+    await flushAsync();
+
+    expect(domainNames(handle.store.getState().blocklist.blocklist)).toEqual([]);
+    expect((await readPersisted()).state.blocklist.blocklist).toEqual([]);
+    hold.restore();
+    handle.dispose();
+  });
+
+  it('applies an idle edit that arrives while a sync rehydration is in flight', async () => {
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(T0),
+      now: () => T0,
+      logger: quietLogger(),
+    });
+    await handle.ready;
+
+    // Another context (the popup) writes the store key; the background's own
+    // sync read is the one held below.
+    const hold = holdStorageReads();
+    const readsBefore = hold.readCount();
+    await fakeBrowser.storage.local.set({
+      [STORE_NAME]: JSON.stringify({
+        state: {
+          blocklist: {
+            blocklist: [{ domain: { value: 'other.com' }, manual: true, presetIds: [] }],
+            appliedPresetIds: [],
+            userPresets: [],
+          },
+        },
+        version: 4,
+      }),
+    });
+    await vi.waitFor(() => {
+      expect(hold.readCount()).toBeGreaterThan(readsBefore);
+    });
+
+    // A hasHydrated() gate would hold this add: the sync rehydration resets it.
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'x.com' } });
+    await flushAsync();
+    expect(
+      domainNames(handle.store.getState().blocklist.blocklist),
+      'the idle edit is applied while the sync read is still pending',
+    ).toContain('x.com');
+
+    hold.release();
+    await flushAsync();
+    hold.restore();
+    handle.dispose();
+  });
+
+  it('releases the waiting messages when the startup read fails', async () => {
+    const local = fakeBrowser.storage.local;
+    const rejectedRead = (): Promise<never> =>
+      Promise.reject(new Error('storage unavailable'));
+    vi.spyOn(local, 'get')
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      .mockImplementation(rejectedRead);
+    const handle = startBackground({
+      alarmProvider: new FakeAlarmProvider(T0),
+      now: () => T0,
+      logger: quietLogger(),
+    });
+
+    await sendMessage({ type: 'BLOCKLIST_ADD_SITE', payload: { site: 'x.com' } });
+    await handle.ready;
+    await flushAsync();
+
+    expect(domainNames(handle.store.getState().blocklist.blocklist)).toEqual(['x.com']);
     handle.dispose();
   });
 });

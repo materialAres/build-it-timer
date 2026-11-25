@@ -8,7 +8,7 @@
 
 | Task | Result | Commit |
 |---|---|---|
-| PR5.T1 | Open. The red test is in place and fails on purpose | — |
+| PR5.T1 | Done. The red test is green; the gate is `lib/messaging/startup-gate.ts` | — (to be committed) |
 | PR5.T2 | Open | — |
 | PR5.T3 | Open | — |
 | PR5.T4 | Open | — |
@@ -115,7 +115,7 @@ Task IDs are local to this document (`PR5.Tn`). Do them one at a time, in order.
 
 ### PR5.T1 — Gate background mutations on the startup hydration (F1)
 
-- **Status:** open. The red test is in place.
+- **Status:** done (uncommitted). The red test is green as written; see the changelog entry.
 - **Files:** `entrypoints/background.ts`, `tests/integration/background/blocklist-lock.test.ts`.
 - **Work:**
   - Every mutation delivery waits for the startup hydration promise (the same one `ready` awaits), then runs in arrival order.
