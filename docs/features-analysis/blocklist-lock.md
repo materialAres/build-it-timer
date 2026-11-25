@@ -310,11 +310,15 @@ already replaces the popup's optimistic entry with the persisted state. The
 integration test reproduces the stale-status race and proves the convergence;
 option (3) (a rejection reply on the bus) was not needed.
 
-**F. Startup window — persisted status. Implemented and tested in CR2.T2.** A
-mutation handled before `restoreTimer` completes is evaluated against the
-rehydrated status, which is authoritative for a running session. The
-"background restarted mid-session → mutation rejected" case has its own
-integration test.
+**F. Startup window — persisted status. Implemented in CR2.T2, closed by
+PR5.T1.** A mutation must be evaluated against the rehydrated status, which is
+authoritative for a running session. CR2.T2 only tested a mutation sent *after*
+`ready`; the window *before* it was open (PR #5 review, F1). PR5.T1 closes it:
+the background holds every mutation until the startup reconciliation settles
+(`lib/messaging/startup-gate.ts`), never gating on `persist.hasHydrated()`,
+which every sync rehydration resets. The during-the-window case is tested in
+`tests/integration/background/blocklist-lock.test.ts`, describe "blocklist lock
+before the startup hydration (PR5.T1)".
 
 **G. Feedback for a rejected message — silent + debug log. Implemented in
 CR2.T2.** The message is dropped without a user-visible error (the UI prevents

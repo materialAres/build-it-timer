@@ -13,9 +13,11 @@ import {
 import { onMessage, sendMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
+  type MutationMessage,
   type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
+import { createStartupGate } from '@/lib/messaging/startup-gate';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { isAddDirectionMutation } from '@/lib/messaging/blocklist-payload';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
@@ -547,34 +549,42 @@ export function startBackground(
   // Cross-context mutations (M1.T10): the popup requests, the background applies.
   // The timer commands (M3.T3b) travel the same path and are applied to the
   // background's own timer slice, so the alarm lives on the background's
-  // provider.
+  // provider. They wait for the startup reconciliation (PR5.T1): judged against
+  // the default state, an early message would persist defaults over the session.
   const handleMutation = createMutationHandler(store, log.child('mutation'));
+  // The store's own startup hydration is the only window to hold. A store the
+  // caller has already hydrated (tests inject one) has none, so it stays open.
+  const startup = createStartupGate(
+    log.child('mutation'),
+    store.persist.hasHydrated(),
+  );
+  const applyMutation = (message: MutationMessage): void => {
+    // Pause/reset clear the checkpoint inside the slice: credit the stretch
+    // since the last wake-up before it is lost. `account` is a no-op when the
+    // timer is not running, so this is cheap for every mutation.
+    if (message.type === 'TIMER_PAUSED' || message.type === 'TIMER_RESET') {
+      growthTick.account();
+    }
+    // CR5.T2: a site added mid-session distracts only from now on. The stretch
+    // so far is credited under the old blocklist first, then the open tabs are
+    // re-read under the new one.
+    const addsSites =
+      store.getState().timer.status === 'running' &&
+      (message.type === 'BLOCKLIST_ADD_SITE' ||
+        message.type === 'PRESET_TOGGLE') &&
+      isAddDirectionMutation(message);
+    if (addsSites) growthTick.account();
+    handleMutation(message);
+    if (addsSites) void refreshDistractionTracker();
+  };
   for (const type of MUTATION_TYPES) {
     disposers.push(
       onMessage(
         type,
         (message) => {
-          // Pause/reset clear the checkpoint inside the slice: credit the
-          // stretch since the last wake-up before it is lost. `account` is a
-          // no-op when the timer is not running, so this is cheap for every
-          // mutation.
-          if (
-            message.type === 'TIMER_PAUSED' ||
-            message.type === 'TIMER_RESET'
-          ) {
-            growthTick.account();
-          }
-          // CR5.T2: a site added mid-session distracts only from now on. The
-          // stretch so far is credited under the old blocklist first, then the
-          // open tabs are re-read under the new one.
-          const addsSites =
-            store.getState().timer.status === 'running' &&
-            (message.type === 'BLOCKLIST_ADD_SITE' ||
-              message.type === 'PRESET_TOGGLE') &&
-            isAddDirectionMutation(message);
-          if (addsSites) growthTick.account();
-          handleMutation(message);
-          if (addsSites) void refreshDistractionTracker();
+          startup.run(() => {
+            applyMutation(message);
+          });
         },
         busLog,
       ),
@@ -647,6 +657,8 @@ export function startBackground(
     // become an unhandled rejection that kills the service worker.
     log.error('startup reconciliation failed', error, { boundary: 'startup' });
   });
+
+  startup.openAfter(ready);
 
   return {
     store,

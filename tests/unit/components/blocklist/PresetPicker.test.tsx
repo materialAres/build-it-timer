@@ -7,6 +7,7 @@ import {
   screen,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
 import { PRESETS } from '@/lib/blocking/presets';
 import { useAppStore } from '@/store';
@@ -18,6 +19,19 @@ const domainValues = (): readonly string[] =>
 /** A preset toggle by name; its accessible name also carries the count. */
 const toggle = (name: string): HTMLElement =>
   screen.getByRole('button', { name: new RegExp(`^${name} preset,`) });
+
+/** Mutation messages that left the popup (PR5.T3); the store sends them through the bus. */
+const sent: unknown[] = [];
+const watchSentMessages = (): void => {
+  sent.length = 0;
+  vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockImplementation(
+    (message: unknown) => {
+      sent.push(message);
+    },
+  );
+};
+const sentTypes = (): unknown[] =>
+  sent.map((message) => (message as { type: unknown }).type);
 
 const setStatus = (status: TimerStatus): void => {
   useAppStore.setState({
@@ -158,10 +172,12 @@ describe.each(['running', 'paused'] as const)(
     beforeEach(() => {
       useAppStore.setState({ blocklist: APPLIED_SOCIAL });
       setStatus(status);
+      watchSentMessages();
     });
 
     afterEach(() => {
       cleanup();
+      vi.restoreAllMocks();
     });
 
     it('keeps the presets that are off enabled and the applied one disabled', () => {
@@ -180,13 +196,17 @@ describe.each(['running', 'paused'] as const)(
         'social',
         'video',
       ]);
+      expect(sentTypes()).toEqual(['PRESET_TOGGLE']);
     });
 
     it('does not switch an applied preset off', () => {
       render(<PresetPicker />);
+      const social = toggle('Social');
 
-      fireEvent.click(toggle('Social'));
+      fireEvent.click(social);
 
+      expect(social).toBeDisabled();
+      expect(sentTypes()).toEqual([]);
       expect(useAppStore.getState().blocklist.appliedPresetIds).toEqual([
         'social',
       ]);
@@ -196,9 +216,12 @@ describe.each(['running', 'paused'] as const)(
     it('disables saving, since it reshapes the list', () => {
       render(<PresetPicker />);
 
-      expect(
-        screen.getByRole('button', { name: 'Save list as preset' }),
-      ).toBeDisabled();
+      const save = screen.getByRole('button', { name: 'Save list as preset' });
+
+      fireEvent.click(save);
+
+      expect(save).toBeDisabled();
+      expect(sentTypes()).toEqual([]);
     });
 
     it('re-enables the applied preset when the timer returns to idle', () => {
@@ -217,10 +240,12 @@ describe('PresetPicker once the session is completed (CR2.T3a, CR5.T3)', () => {
   beforeEach(() => {
     useAppStore.setState({ blocklist: APPLIED_SOCIAL });
     setStatus('completed');
+    watchSentMessages();
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it('disables every preset button', () => {
@@ -234,8 +259,12 @@ describe('PresetPicker once the session is completed (CR2.T3a, CR5.T3)', () => {
   it('does not change the blocklist when a disabled button is clicked', () => {
     render(<PresetPicker />);
 
-    fireEvent.click(toggle('Video'));
+    const video = toggle('Video');
 
+    fireEvent.click(video);
+
+    expect(video).toBeDisabled();
+    expect(sentTypes()).toEqual([]);
     expect(useAppStore.getState().blocklist.appliedPresetIds).toEqual([
       'social',
     ]);

@@ -3,9 +3,12 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { startBackground } from '@/entrypoints/background';
 import { sendMessage } from '@/lib/messaging/bus';
 import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
-import type {
-  RuntimeMessage,
-  MutationMessage,
+import {
+  BLOCKLIST_MUTATION_TYPES,
+  MUTATION_TYPES,
+  isBlocklistMutation,
+  type RuntimeMessage,
+  type MutationMessage,
 } from '@/lib/messaging/messages.types';
 import { createLogger, type LogRecord } from '@/utils/logger';
 
@@ -379,6 +382,42 @@ describe('cross-context mutation path (M1.T10)', () => {
  * enforced here too: a message that bypasses the UI/store guard (stale tab,
  * forged sender) must not change or persist anything.
  */
+/**
+ * PR5.T2 — the blocklist family is declared as data, so the handler no longer
+ * treats "everything that is not a timer command" as a blocklist mutation.
+ */
+describe('mutation type registry (PR5.T2)', () => {
+  const TIMER_COMMANDS = [
+    'TIMER_STARTED',
+    'TIMER_PAUSED',
+    'TIMER_RESET',
+    'TIMER_SET_DURATION',
+  ];
+
+  it('lists the blocklist and preset types the lock applies to', () => {
+    expect([...BLOCKLIST_MUTATION_TYPES]).toEqual([
+      'BLOCKLIST_ADD_SITE',
+      'BLOCKLIST_REMOVE_SITE',
+      'PRESET_TOGGLE',
+      'PRESET_SAVE',
+      'PRESET_RENAME',
+      'PRESET_DELETE',
+    ]);
+  });
+
+  it('composes MUTATION_TYPES from them plus the four timer commands, with no duplicate', () => {
+    expect([...MUTATION_TYPES].sort()).toEqual(
+      [...BLOCKLIST_MUTATION_TYPES, ...TIMER_COMMANDS].sort(),
+    );
+    expect(new Set(MUTATION_TYPES).size).toBe(MUTATION_TYPES.length);
+  });
+
+  it.each([...MUTATION_TYPES])('isBlocklistMutation classifies %s', (type) => {
+    const message = { type, payload: {} } as unknown as MutationMessage;
+    expect(isBlocklistMutation(message)).toBe(!TIMER_COMMANDS.includes(type));
+  });
+});
+
 describe('blocklist lock in the mutation handler (CR2.T2, CR5.T2)', () => {
   /** Everything that loosens or reshapes the list: idle-only (CR2.T2). */
   const LOOSENING: ReadonlyArray<MutationMessage> = [

@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { PresetPicker } from '@/components/blocklist/PresetPicker';
 import { useAppStore } from '@/store';
 import type { BlocklistState, TimerStatus } from '@/store/store.types';
@@ -33,6 +34,19 @@ const WORK: BlocklistState = {
   appliedPresetIds: ['user:w'],
   userPresets: [{ id: 'user:w', name: 'Work', domains: [{ value: 'a.com' }] }],
 };
+
+/** Mutation messages that left the popup (PR5.T3); the store sends them through the bus. */
+const sent: unknown[] = [];
+const watchSentMessages = (): void => {
+  sent.length = 0;
+  vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockImplementation(
+    (message: unknown) => {
+      sent.push(message);
+    },
+  );
+};
+const sentTypes = (): unknown[] =>
+  sent.map((message) => (message as { type: unknown }).type);
 
 const button = (name: string): HTMLElement =>
   screen.getByRole('button', { name });
@@ -176,9 +190,13 @@ describe.each(['running', 'paused', 'completed'] as const)(
     beforeEach(() => {
       seed(WORK);
       setStatus(status);
+      watchSentMessages();
     });
 
-    afterEach(cleanup);
+    afterEach(() => {
+      cleanup();
+      vi.restoreAllMocks();
+    });
 
     it('disables saving, renaming and deleting', async () => {
       render(<PresetPicker />);
@@ -187,6 +205,19 @@ describe.each(['running', 'paused', 'completed'] as const)(
       await userEvent.click(button('Edit saved presets'));
       expect(button('Rename Work')).toBeDisabled();
       expect(button('Delete Work')).toBeDisabled();
+    });
+
+    it('sends no mutation when a disabled control is clicked', async () => {
+      render(<PresetPicker />);
+      await userEvent.click(button('Edit saved presets'));
+
+      for (const name of ['Save list as preset', 'Rename Work', 'Delete Work']) {
+        fireEvent.click(button(name));
+        expect(button(name)).toBeDisabled();
+      }
+
+      expect(sentTypes()).toEqual([]);
+      expect(useAppStore.getState().blocklist.userPresets).toHaveLength(1);
     });
 
     it('re-enables them when the timer returns to idle', async () => {

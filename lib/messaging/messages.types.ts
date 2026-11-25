@@ -121,6 +121,24 @@ export type RuntimeMessage =
   | PresetRenameMessage
   | PresetDeleteMessage;
 
+/** The blocklist and preset mutations: the family the lock applies to. */
+export const BLOCKLIST_MUTATION_TYPES = [
+  'BLOCKLIST_ADD_SITE',
+  'BLOCKLIST_REMOVE_SITE',
+  'PRESET_TOGGLE',
+  'PRESET_SAVE',
+  'PRESET_RENAME',
+  'PRESET_DELETE',
+] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
+
+/** The timer commands (M3.T3b), applied through the background's timer slice. */
+export const TIMER_MUTATION_TYPES = [
+  'TIMER_STARTED',
+  'TIMER_PAUSED',
+  'TIMER_RESET',
+  'TIMER_SET_DURATION',
+] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
+
 /**
  * The `type` values of `MutationMessage`, usable as a runtime list. Declared
  * first so the union below is *derived* from it: a variant added here is
@@ -132,16 +150,8 @@ export type RuntimeMessage =
  * state.
  */
 export const MUTATION_TYPES = [
-  'BLOCKLIST_ADD_SITE',
-  'BLOCKLIST_REMOVE_SITE',
-  'PRESET_TOGGLE',
-  'PRESET_SAVE',
-  'PRESET_RENAME',
-  'PRESET_DELETE',
-  'TIMER_STARTED',
-  'TIMER_PAUSED',
-  'TIMER_RESET',
-  'TIMER_SET_DURATION',
+  ...BLOCKLIST_MUTATION_TYPES,
+  ...TIMER_MUTATION_TYPES,
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
 /** The mutation variants a read-only context may send to the background. */
@@ -149,3 +159,21 @@ export type MutationMessage = Extract<
   RuntimeMessage,
   { type: (typeof MUTATION_TYPES)[number] }
 >;
+
+/** The variants the blocklist lock applies to (CR2/CR5). */
+export type BlocklistMutationMessage = Extract<
+  RuntimeMessage,
+  { type: (typeof BLOCKLIST_MUTATION_TYPES)[number] }
+>;
+
+/**
+ * Whether a mutation belongs to the blocklist family, which is the one the
+ * lock governs. Everything else is a timer command.
+ */
+export function isBlocklistMutation(
+  message: MutationMessage,
+): message is BlocklistMutationMessage {
+  return (BLOCKLIST_MUTATION_TYPES as ReadonlyArray<string>).includes(
+    message.type,
+  );
+}
