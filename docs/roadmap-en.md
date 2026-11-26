@@ -1119,7 +1119,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M5.T19 — `SoundSettings` panel (toggle, theme list, volume slider)
 * **Objective**: build the Settings tab content: an on/off toggle, the theme list with preview buttons, and a volume slider.
-* **Files**: `components/settings/SoundSettings.tsx` (new), `tests/unit/components/settings/SoundSettings.test.tsx` (new), `entrypoints/popup/App.tsx` (render `<SoundSettings />` inside `SettingsSection`).
+* **Files**: `components/settings/SoundSettings.tsx` (new), `components/settings/sound-settings.styles.ts` (new, the panel's styles, as `site-list.styles.ts` does for the site list), `tests/unit/components/settings/SoundSettings.test.tsx` (new), `entrypoints/popup/App.tsx` (render `<SoundSettings />` inside `SettingsSection`).
 * **Dependencies**: M5.T9, M5.T16, M5.T17, M5.T18
 * **Acceptance criteria**:
   - The component reads only `selectSoundEnabled`, `selectSoundThemeId` and `selectSoundVolume`. It writes only through `requestSetSoundPreferences`: never `setSoundPreferences`, never a browser API.

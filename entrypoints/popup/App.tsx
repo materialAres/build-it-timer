@@ -16,6 +16,7 @@ import { TimerControls } from '@/components/timer/TimerControls';
 import { DurationDrum } from '@/components/timer/DurationDrum';
 import { useTimerTickEmitter } from '@/components/timer/use-timer-tick-emitter';
 import { useCountdownEstimate } from '@/components/timer/use-countdown-estimate';
+import { SoundSettings } from '@/components/settings/SoundSettings';
 import { CityPanel } from '@/components/city/CityPanel';
 import { CityEmptyHint } from '@/components/city/CityEmptyHint';
 import { ExportCityButton } from '@/components/city/ExportCityButton';
@@ -98,8 +99,7 @@ function BlocklistSection() {
 }
 
 // The heading follows the other section titles (monospace, small, spaced
-// capitals). Its style is embedded, like the tab bar's, to keep this task to the
-// files it names; M5.T19 fills the section and can move it with its own styles.
+// capitals). Its style is embedded, like the tab bar's.
 const SETTINGS_TITLE_STYLES = `
   .popup-section__title {
     margin: 0;
@@ -117,6 +117,7 @@ function SettingsSection() {
     <div className="popup-section popup-section--settings">
       <style>{SETTINGS_TITLE_STYLES}</style>
       <h2 className="popup-section__title">{i18n.t('settings.title')}</h2>
+      <SoundSettings />
     </div>
   );
 }
