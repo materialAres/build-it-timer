@@ -11,6 +11,7 @@ import {
   STORE_NAME,
 } from '@/store';
 import type { Preset, SessionSummary } from '@/store/store.types';
+import { DEFAULT_SOUND_PREFERENCES } from '@/lib/sound/sound-preferences';
 import { createLogger, type LogRecord } from '@/utils/logger';
 
 const testPreset: Preset = { id: 'user:focus', name: 'Focus', domains: [] };
@@ -46,7 +47,7 @@ describe('useAppStore', () => {
     const persisted = partialize(store.getState());
 
     expect(Object.keys(persisted).sort()).toEqual(
-      ['blocklist', 'city', 'score', 'sessionHistory', 'timer'].sort(),
+      ['blocklist', 'city', 'preferences', 'score', 'sessionHistory', 'timer'].sort(),
     );
     expect(persisted).not.toHaveProperty('ui');
   });
@@ -444,5 +445,80 @@ describe('useAppStore', () => {
       'blocklist',
       'userPresets',
     ]);
+  });
+  describe('sound preferences persistence (M5.T7)', () => {
+    const waitForWrite = async (): Promise<void> => {
+      await vi.waitFor(async () => {
+        const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+        expect(raw[STORE_NAME]).toBeTypeOf('string');
+      });
+    };
+
+    const seedStorage = async (state: unknown, version = 4): Promise<void> => {
+      await fakeBrowser.storage.local.set({
+        [STORE_NAME]: JSON.stringify({ state, version }),
+      });
+    };
+
+    it('keeps the sound preferences across a simulated restart', async () => {
+      const first = createAppStore();
+      await first.persist.rehydrate();
+      const changed = { enabled: false, themeId: 'glitch', volume: 20 } as const;
+      first.getState().setSoundPreferences(changed);
+      await waitForWrite();
+
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+        state: Record<string, unknown>;
+        version: number;
+      };
+      expect(parsed.state.preferences).toEqual({ sound: changed });
+      expect(parsed.state).not.toHaveProperty('ui');
+      expect(parsed.version).toBe(4);
+
+      const restarted = createAppStore();
+      await restarted.persist.rehydrate();
+      expect(restarted.getState().preferences.sound).toEqual(changed);
+    });
+
+    it('gives the defaults to a version-4 payload saved before preferences existed', async () => {
+      await seedStorage({
+        blocklist: { blocklist: [], appliedPresetIds: [], userPresets: [] },
+      });
+
+      const store = createAppStore();
+      await store.persist.rehydrate();
+
+      expect(store.getState().preferences.sound).toEqual(DEFAULT_SOUND_PREFERENCES);
+    });
+
+    it('falls back to the default for each corrupt field, without throwing', async () => {
+      await seedStorage({
+        preferences: {
+          sound: { enabled: false, volume: 'loud', themeId: 'bogus' },
+        },
+      });
+
+      const store = createAppStore();
+      await store.persist.rehydrate();
+
+      expect(store.getState().preferences.sound).toEqual({
+        enabled: false,
+        themeId: DEFAULT_SOUND_PREFERENCES.themeId,
+        volume: DEFAULT_SOUND_PREFERENCES.volume,
+      });
+    });
+
+    it.each([[null], ['loud'], [7], [[]], [{ sound: null }]])(
+      'gives the defaults for a malformed preferences value %j',
+      async (preferences) => {
+        await seedStorage({ preferences });
+
+        const store = createAppStore();
+        await store.persist.rehydrate();
+
+        expect(store.getState().preferences.sound).toEqual(DEFAULT_SOUND_PREFERENCES);
+      },
+    );
   });
 });

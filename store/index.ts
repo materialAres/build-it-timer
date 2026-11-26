@@ -10,6 +10,7 @@ import type { MutationMessage } from '@/lib/messaging/messages.types';
 import { sanitizeBlocklistState } from '@/lib/blocking/blocklist-state';
 import { migratePersistedBlocklist } from '@/lib/blocking/migrate-presets';
 import { migrateCity, sanitizeSessionId, type PersistedCity } from '@/lib/city/migrate-city';
+import { sanitizeSoundPreferences } from '@/lib/sound/sound-preferences';
 import { createLogger, type Logger } from '@/utils/logger';
 import {
   createBlocklistSlice,
@@ -19,7 +20,11 @@ import {
 } from './blocklist.slice';
 import { createScoreSlice, deriveScoreState, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
-import { createPreferencesSlice, type PreferencesSlice } from './preferences.slice';
+import {
+  createPreferencesSlice,
+  type PreferencesSlice,
+  type PreferencesState,
+} from './preferences.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
@@ -69,6 +74,7 @@ export interface PersistedState {
   readonly blocklist: BlocklistState;
   readonly score: ScoreSlice['score'];
   readonly sessionHistory: SessionHistorySlice['sessionHistory'];
+  readonly preferences: PreferencesState;
 }
 
 export const STORE_NAME = 'timer-focus-store';
@@ -128,6 +134,7 @@ export const partialize = (state: AppState): PersistedState => ({
   },
   score: state.score,
   sessionHistory: state.sessionHistory,
+  preferences: state.preferences,
 });
 
 export type AppStore = ReturnType<typeof buildStore>;
@@ -217,6 +224,9 @@ function buildStore(
       // (`lib/blocking/migrate-presets.ts`).
       // Version 4 (CR6.T5a): the persisted city is only `{ sessionId }`; the
       // ASCII layers, building index and theme of v1–v3 are dropped on read.
+      // Sound preferences (M5.T7) add no version: a payload saved before they
+      // existed has no `preferences`, and the slice-aware merge below keeps the
+      // defaults in that case, so there is nothing for `migrate` to rewrite.
       version: 4,
       migrate: (persistedState: unknown, version: number): PersistedState => {
         const saved =
@@ -266,6 +276,9 @@ function buildStore(
           sessionHistory: saved.sessionHistory
             ? { ...current.sessionHistory, ...saved.sessionHistory }
             : current.sessionHistory,
+          preferences: saved.preferences
+            ? { sound: sanitizeSoundPreferences(saved.preferences.sound) }
+            : current.preferences,
         };
       },
     }),
