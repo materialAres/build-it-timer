@@ -79,7 +79,7 @@ On completing a roadmap task, before declaring it done, use the `changelog` skil
 
 ### 3.1 General rule — red/green/refactor cycle
 
-For every task in Milestones 1–4 that produces non-purely-declarative logic (thus excluding scaffolding-only tasks like M0.T1, M0.T5), the workflow is:
+For every task in Milestones 1–6 that produces non-purely-declarative logic (thus excluding scaffolding-only tasks like M0.T1, M0.T5), the workflow is:
 
 1. **Red** — write the test that describes the expected behavior of the acceptance criterion, verify that it fails (or doesn't compile, if the module doesn't exist yet).
 2. **Green** — write the minimum code needed to make the test pass.

@@ -1,3 +1,5 @@
+import type { SoundPreferencesPatch } from '@/lib/sound/sound-preferences';
+import type { SoundPlayRequest } from '@/lib/sound/sound-player';
 import type { SessionSummary } from '@/store/store.types';
 
 interface TimerTickMessage {
@@ -11,7 +13,7 @@ interface TimerTickMessage {
 //
 // The payloads are deliberately empty: the session id is minted by the
 // background's `startTimer` (M2.T1), and a caller-supplied id would be untrusted
-// anyway (M5.T1). `Record<string, never>` keeps the variant explicit while
+// anyway (M6.T1). `Record<string, never>` keeps the variant explicit while
 // forbidding any field.
 interface TimerStartedMessage {
   readonly type: 'TIMER_STARTED';
@@ -31,7 +33,7 @@ interface TimerResetMessage {
 // Session length (user-selectable focus duration). The popup is read-only
 // (M1.T9), so it requests the change and the background — the timer's owner —
 // validates it against the preset table and applies it. A caller-supplied value
-// is untrusted (M5.T1).
+// is untrusted (M6.T1).
 interface TimerSetDurationMessage {
   readonly type: 'TIMER_SET_DURATION';
   readonly payload: { readonly durationSeconds: number };
@@ -40,7 +42,7 @@ interface TimerSetDurationMessage {
 // The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
 // design: the content script cannot know its own tab id without the `tabs`
 // permission, and a caller-supplied id is untrusted anyway — the background
-// derives it from `sender.tab.id` (M5.T1, whose payload part landed here).
+// derives it from `sender.tab.id` (M6.T1, whose payload part landed here).
 interface SiteBlockedAttemptMessage {
   readonly type: 'SITE_BLOCKED_ATTEMPT';
   readonly payload: {
@@ -105,6 +107,22 @@ interface PresetDeleteMessage {
   readonly payload: { readonly presetId: string };
 }
 
+// Preferences (M5.T8). The patch is untrusted: `setSoundPreferences` validates
+// it in the background, so the type only says what a well-behaved sender puts
+// in. Not locked by the timer status.
+interface PreferencesSoundSetMessage {
+  readonly type: 'PREFERENCES_SOUND_SET';
+  readonly payload: SoundPreferencesPatch;
+}
+
+// Sound playback (M5.T10). The background sends it to the offscreen page,
+// which plays it. It is a command to one listener, not a request to change
+// persisted state, so it is neither a mutation nor a background listener type.
+interface PlaySoundMessage {
+  readonly type: 'PLAY_SOUND';
+  readonly payload: SoundPlayRequest;
+}
+
 export type RuntimeMessage =
   | TimerTickMessage
   | TimerStartedMessage
@@ -119,7 +137,9 @@ export type RuntimeMessage =
   | PresetToggleMessage
   | PresetSaveMessage
   | PresetRenameMessage
-  | PresetDeleteMessage;
+  | PresetDeleteMessage
+  | PreferencesSoundSetMessage
+  | PlaySoundMessage;
 
 /** The blocklist and preset mutations: the family the lock applies to. */
 export const BLOCKLIST_MUTATION_TYPES = [
@@ -139,6 +159,11 @@ export const TIMER_MUTATION_TYPES = [
   'TIMER_SET_DURATION',
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
+/** The preferences mutations (M5.T8): never locked by the timer status. */
+export const PREFERENCES_MUTATION_TYPES = [
+  'PREFERENCES_SOUND_SET',
+] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
+
 /**
  * The `type` values of `MutationMessage`, usable as a runtime list. Declared
  * first so the union below is *derived* from it: a variant added here is
@@ -152,6 +177,7 @@ export const TIMER_MUTATION_TYPES = [
 export const MUTATION_TYPES = [
   ...BLOCKLIST_MUTATION_TYPES,
   ...TIMER_MUTATION_TYPES,
+  ...PREFERENCES_MUTATION_TYPES,
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
 /** The mutation variants a read-only context may send to the background. */

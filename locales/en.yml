@@ -23,6 +23,7 @@ tabs:
   city: City
   blocklist: Blocklist
   score: Score
+  settings: Settings
 
 city:
   canvasAriaLabel: Focus city under construction
@@ -101,6 +102,21 @@ blocklist:
   summarySite: Blocks 1 site
   summaryAddOnly: '$1 · add-only during a session'
   summaryEmpty: No sites blocked
+
+settings:
+  title: Settings
+  sound:
+    heading: Sound
+    enabled: Play a sound when a session starts and ends
+    theme: Sound theme
+    themes:
+      neon: Neon
+      synthwave: Synthwave
+      glitch: Glitch
+      terminal: Terminal
+    preview: 'Preview $1'
+    volume: Volume
+    volumeValue: '$1%'
 
 overlay:
   title: Stay focused

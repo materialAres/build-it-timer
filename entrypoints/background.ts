@@ -31,6 +31,9 @@ import {
   createTabDistractionTracker,
   type TabEventSource,
 } from '@/lib/timer/tab-distraction-tracker';
+import { createPlatformSoundPlayer } from '@/lib/sound/platform-sound-player';
+import { createSoundCues } from '@/lib/sound/sound-cues';
+import type { SoundPlayer } from '@/lib/sound/sound-player';
 import { createLogger, type Logger } from '@/utils/logger';
 
 /**
@@ -63,6 +66,8 @@ export interface BackgroundDependencies {
   readonly tabEventSource?: TabEventSource;
   /** Centralized logger (M4.T3b). Injectable so tests assert records, not console text. */
   readonly logger?: Logger;
+  /** Plays the start and end sounds (M5.T15). Defaults to the platform player. */
+  readonly soundPlayer?: SoundPlayer;
 }
 
 export interface BackgroundHandle {
@@ -210,6 +215,11 @@ export interface SessionCompletionDependencies {
   readonly now: () => number;
   /** Message sink, injectable so the handler is testable without the bus. */
   readonly send?: (message: RuntimeMessage) => void;
+  /**
+   * Told once, after the session is closed, when it ended; the sound cue decides
+   * whether it is still worth a sound (M5.T15).
+   */
+  readonly onCompleted?: (endsAt: number | null) => void;
 }
 
 export interface SessionCompletion {
@@ -238,6 +248,7 @@ export function createSessionCompletion({
   account,
   now,
   send = defaultSend,
+  onCompleted,
 }: SessionCompletionDependencies): SessionCompletion {
   return {
     handleAlarm: (name: string): void => {
@@ -271,6 +282,8 @@ export function createSessionCompletion({
       };
       store.getState().recordSession(summary);
       send({ type: 'SESSION_ENDED', payload: summary });
+      // `timer` is the snapshot taken before `completeTimer` cleared `endsAt`.
+      onCompleted?.(timer.endsAt);
     },
   };
 }
@@ -399,6 +412,15 @@ export function startBackground(
   const store =
     dependencies.store ??
     createAppStore({ dependencies: { alarmProvider, now } });
+
+  // Start and end sounds (M5.T15). The background is the only context that sees
+  // both events with the popup closed; every decision lives in `lib/sound/`.
+  const soundCues = createSoundCues({
+    getPreferences: () => store.getState().preferences.sound,
+    player: dependencies.soundPlayer ?? createPlatformSoundPlayer(),
+    now,
+    logger: log.child('sound'),
+  });
 
   // Dynamic DNR rules (M2.T7): the browser's ruleset is a projection of the
   // store, so it is recomputed from *state* rather than patched at each call
@@ -574,7 +596,15 @@ export function startBackground(
         message.type === 'PRESET_TOGGLE') &&
       isAddDirectionMutation(message);
     if (addsSites) growthTick.account();
+    // Only a fresh start (idle → running) earns the start sound: a resume
+    // continues the same session, and `startTimer` ignores a running one.
+    const freshStart =
+      message.type === 'TIMER_STARTED' &&
+      store.getState().timer.status === 'idle';
     handleMutation(message);
+    if (freshStart && store.getState().timer.status === 'running') {
+      soundCues.sessionStarted();
+    }
     if (addsSites) void refreshDistractionTracker();
   };
   for (const type of MUTATION_TYPES) {
@@ -605,6 +635,9 @@ export function startBackground(
     getDistractedMs: growthTick.getDistractedMs,
     account: growthTick.account,
     now,
+    onCompleted: (endsAt) => {
+      soundCues.sessionCompleted(endsAt);
+    },
   });
   disposers.push(alarmProvider.onFire(completion.handleAlarm));
 

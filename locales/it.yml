@@ -24,6 +24,7 @@ tabs:
   city: Città
   blocklist: Blocchi
   score: Punteggio
+  settings: Impostazioni
 
 city:
   canvasAriaLabel: Città in costruzione durante la concentrazione
@@ -102,6 +103,21 @@ blocklist:
   summarySite: Blocca 1 sito
   summaryAddOnly: '$1 · solo aggiunte durante una sessione'
   summaryEmpty: Nessun sito bloccato
+
+settings:
+  title: Impostazioni
+  sound:
+    heading: Suono
+    enabled: Riproduci un suono all'inizio e alla fine della sessione
+    theme: Tema sonoro
+    themes:
+      neon: Neon
+      synthwave: Synthwave
+      glitch: Glitch
+      terminal: Terminale
+    preview: 'Ascolta $1'
+    volume: Volume
+    volumeValue: '$1%'
 
 overlay:
   title: Resta concentrato

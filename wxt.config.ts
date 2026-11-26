@@ -56,7 +56,17 @@ export default defineConfig({
     // distraction tracker regardless of host-permission timing: the tracker
     // reads the URL from `tabs.onUpdated`/`tabs.query`, and host permissions
     // alone can leave it undefined on a restricted page.
-    permissions: ['storage', 'alarms', 'declarativeNetRequest', 'tabs'],
+    // `offscreen` (M5.T12) lets the Chrome service worker open the hidden page
+    // that plays the session sounds. Firefox has no `offscreen` API (its event
+    // page plays directly) and warns on a permission it does not know, so it is
+    // declared for the Chrome build only.
+    permissions: [
+      'storage',
+      'alarms',
+      'declarativeNetRequest',
+      'tabs',
+      ...(browser === 'firefox' ? [] : ['offscreen']),
+    ],
     // The overlay (M2.T8) must be able to run on any page, because the
     // blocklist is user-defined and therefore unknown at build time. Declared
     // both as a host permission (so the script may be injected) and as a

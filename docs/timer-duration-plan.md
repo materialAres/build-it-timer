@@ -505,7 +505,7 @@ interface TimerSetDurationMessage {
 ```ts
 case 'TIMER_SET_DURATION': {
   const { durationSeconds } = message.payload;
-  // Untrusted payload (M5.T1): whole number AND one of the offered presets.
+  // Untrusted payload (M6.T1): whole number AND one of the offered presets.
   if (!Number.isInteger(durationSeconds) || !isPresetDurationSeconds(durationSeconds)) return;
   store.getState().setFocusDuration(durationSeconds);
   return;

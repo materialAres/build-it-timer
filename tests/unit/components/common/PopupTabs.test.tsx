@@ -3,6 +3,8 @@ import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PopupTabs, TAB_ORDER, tabButtonId, tabPanelId } from '@/components/common/PopupTabs';
 import { useAppStore } from '@/store';
+import App from '@/entrypoints/popup/App';
+import { setTestLocale } from '@/tests/helpers/i18n';
 
 describe('PopupTabs (M3.T4)', () => {
   beforeEach(() => {
@@ -62,7 +64,7 @@ describe('PopupTabs (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.keyboard('{ArrowLeft}');
-    expect(useAppStore.getState().ui.activeTab).toBe('score');
+    expect(useAppStore.getState().ui.activeTab).toBe('settings');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(useAppStore.getState().ui.activeTab).toBe('timer');
@@ -73,7 +75,7 @@ describe('PopupTabs (M3.T4)', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Timer' }));
     await userEvent.keyboard('{End}');
-    expect(useAppStore.getState().ui.activeTab).toBe('score');
+    expect(useAppStore.getState().ui.activeTab).toBe('settings');
 
     await userEvent.keyboard('{Home}');
     expect(useAppStore.getState().ui.activeTab).toBe('timer');
@@ -86,5 +88,77 @@ describe('PopupTabs (M3.T4)', () => {
     const tabbable = tabs.filter((tab) => tab.getAttribute('tabindex') === '0');
     expect(tabbable).toHaveLength(1);
     expect(tabbable[0]).toHaveTextContent('Timer');
+  });
+});
+
+describe('Settings gear tab (M5.T17)', () => {
+  beforeEach(() => {
+    useAppStore.getState().setActiveTab('timer');
+  });
+
+  afterEach(cleanup);
+
+  it('adds a fifth tab, last in the order', () => {
+    expect(TAB_ORDER).toEqual(['timer', 'city', 'blocklist', 'score', 'settings']);
+    render(<PopupTabs />);
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+  });
+
+  it('shows a gear icon with no visible text, named Settings', () => {
+    render(<PopupTabs />);
+
+    const gear = screen.getByRole('tab', { name: 'Settings' });
+    expect(gear.textContent).toBe('');
+    const icon = gear.querySelector('svg');
+    expect(icon).not.toBeNull();
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('names the gear in Italian when the browser is Italian', () => {
+    setTestLocale('it');
+    render(<PopupTabs />);
+    expect(screen.getByRole('tab', { name: 'Impostazioni' })).toBeInTheDocument();
+  });
+
+  it('keeps the four text tabs as they were, with no icon', () => {
+    render(<PopupTabs />);
+
+    for (const name of ['Timer', 'City', 'Blocklist', 'Score']) {
+      const tab = screen.getByRole('tab', { name });
+      expect(tab).toHaveTextContent(name);
+      expect(tab.querySelector('svg')).toBeNull();
+    }
+  });
+
+  it('is reached by ArrowRight from Score and wraps to Timer', async () => {
+    render(<PopupTabs />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Score' }));
+    await userEvent.keyboard('{ArrowRight}');
+    expect(useAppStore.getState().ui.activeTab).toBe('settings');
+    expect(screen.getByRole('tab', { name: 'Settings' })).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(useAppStore.getState().ui.activeTab).toBe('timer');
+  });
+
+  it('is wired to its panel like the other tabs', () => {
+    render(<PopupTabs />);
+    const gear = screen.getByRole('tab', { name: 'Settings' });
+    expect(gear.id).toBe(tabButtonId('settings'));
+    expect(gear.getAttribute('aria-controls')).toBe(tabPanelId('settings'));
+  });
+
+  it('shows the settings panel, with its heading, when selected', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Settings' }));
+
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('aria-labelledby', tabButtonId('settings'));
+    expect(panel).toHaveAttribute('id', tabPanelId('settings'));
+    expect(
+      screen.getByRole('heading', { name: 'Settings' }),
+    ).toBeInTheDocument();
   });
 });

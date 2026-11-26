@@ -42,7 +42,7 @@ function toCanonicalDomain(entry: BlockedEntry): string | null {
  *
  * Pure: no `browser.declarativeNetRequest` call, no I/O — the caller (M2.T7)
  * owns applying the result. Each stored domain is canonicalized defensively on
- * consumption (M2.T21); `urlFilter` escaping/validation is M5.T3's job.
+ * consumption (M2.T21); `urlFilter` escaping/validation is M6.T3's job.
  *
  * The blocklist is the only input: everything not listed stays allowed, so no
  * second list needs to be consulted. The comparison is on the canonicalized
