@@ -91,4 +91,47 @@ describe('buildDnrRules (M2.T6, CR1.T4)', () => {
       expect(buildDnrRules([entry('not a url')])).toEqual([]);
     });
   });
+
+  describe('urlFilter safety (M6.T3)', () => {
+    const SAFE_FILTER = /^\|\|[a-z0-9.-]+\^$/;
+
+    it.each([
+      '*.facebook.com',
+      'face*book.com',
+      '*',
+      '||facebook.com^',
+      '||facebook.com',
+      'facebook.com^',
+      'facebook.com|',
+      '|facebook.com',
+      'facebook.com^*',
+      'https://facebook.com/*',
+      'facebook.com/^x',
+    ])('never turns %j into a wildcard or an altered anchor', (raw) => {
+      for (const rule of buildDnrRules([entry(raw)])) {
+        expect(rule.condition.urlFilter).toMatch(SAFE_FILTER);
+      }
+    });
+
+    it.each(['*', '||facebook.com^', 'face*book.com', 'facebook.com|', '^'])(
+      'drops the unrecoverable entry %j instead of emitting a rule',
+      (raw) => {
+        expect(buildDnrRules([entry(raw)])).toEqual([]);
+      },
+    );
+
+    it('keeps the rule of a well-formed entry next to a hostile one', () => {
+      const rules = buildDnrRules([entry('*'), entry('facebook.com'), entry('||x.com^')]);
+
+      expect(rules.map((rule) => rule.condition.urlFilter)).toEqual(['||facebook.com^']);
+    });
+
+    it('only ever emits [a-z0-9.-] between the anchor and the separator', () => {
+      const raws = ['MÜNCHEN.de', 'раypal.com', 'https://user:pw@facebook.com', 'a.b.c.example.com'];
+
+      for (const rule of buildDnrRules(raws.map(entry))) {
+        expect(rule.condition.urlFilter).toMatch(SAFE_FILTER);
+      }
+    });
+  });
 });

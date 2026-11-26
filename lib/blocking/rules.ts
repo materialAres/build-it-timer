@@ -1,5 +1,6 @@
 import type { Browser } from 'wxt/browser';
 import type { BlockedEntry } from './is-domain-blocked';
+import { isCanonicalDomain } from '@/lib/url/domain';
 import { normalizeEntry } from './normalize-entry';
 
 /**
@@ -31,10 +32,14 @@ const BLOCKED_RESOURCE_TYPES: `${Browser.declarativeNetRequest.ResourceType}`[] 
  * persisted state, an import, or a hand-edited store. `normalizeEntry` is the
  * same function the entry path uses, so the two can never diverge; an entry that
  * is not a valid registrable domain is dropped (`null`) rather than interpolated.
+ *
+ * The explicit `isCanonicalDomain` check (M6.T3) is the last line of defence:
+ * `*`, `|`, `^` and `||` have special meaning in a `urlFilter`, so whatever is
+ * interpolated must be `[a-z0-9.-]` no matter how the normalizer evolves.
  */
 function toCanonicalDomain(entry: BlockedEntry): string | null {
   const normalized = normalizeEntry(entry.domain.value);
-  return normalized.ok ? normalized.value : null;
+  return normalized.ok && isCanonicalDomain(normalized.value) ? normalized.value : null;
 }
 
 /**
@@ -42,7 +47,7 @@ function toCanonicalDomain(entry: BlockedEntry): string | null {
  *
  * Pure: no `browser.declarativeNetRequest` call, no I/O — the caller (M2.T7)
  * owns applying the result. Each stored domain is canonicalized defensively on
- * consumption (M2.T21); `urlFilter` escaping/validation is M6.T3's job.
+ * consumption (M2.T21); only canonical domains reach the `urlFilter` (M6.T3).
  *
  * The blocklist is the only input: everything not listed stays allowed, so no
  * second list needs to be consulted. The comparison is on the canonicalized

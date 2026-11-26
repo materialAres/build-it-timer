@@ -21,6 +21,15 @@ const HOST_WITH_PORT = /^[^:/?#]+:\d+(?:[/?#]|$)/;
 const CANONICAL_DOMAIN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
 
 /**
+ * True when `value` is already in the canonical form `getRegistrableDomain`
+ * produces. Lets a consumer that interpolates a domain into a syntax with
+ * special characters (the DNR `urlFilter`, M6.T3) check it without re-parsing.
+ */
+export function isCanonicalDomain(value: string): boolean {
+  return CANONICAL_DOMAIN.test(value);
+}
+
+/**
  * Parses untrusted input with the browser's own URL parser, so the host is
  * read exactly as a navigation would read it: userinfo dropped, `\` treated as
  * `/`, case folded and IDN converted to punycode. Scheme-less input is read
@@ -74,7 +83,7 @@ export function getRegistrableDomain(url: string): Result<string> {
   const parsed = parse(host, { allowPrivateDomains: true });
   const domain = parsed.domain;
 
-  if (!domain || !parsed.publicSuffix || !CANONICAL_DOMAIN.test(domain)) {
+  if (!domain || !parsed.publicSuffix || !isCanonicalDomain(domain)) {
     return err(new Error(`Could not extract registrable domain from "${url}"`));
   }
 

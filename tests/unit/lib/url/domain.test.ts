@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRegistrableDomain } from '@/lib/url/domain';
+import { getRegistrableDomain, isCanonicalDomain } from '@/lib/url/domain';
 
 describe('getRegistrableDomain', () => {
   describe('valid URLs', () => {
@@ -226,6 +226,35 @@ describe('getRegistrableDomain', () => {
         expect(getRegistrableDomain(input)).toEqual(first);
         if (first.ok) expect(first.value).toMatch(CANONICAL);
       }
+    });
+  });
+
+  describe('isCanonicalDomain (M6.T3)', () => {
+    it.each(['facebook.com', 'a-b.co.uk', 'xn--mnchen-3ya.de', 'a1.b2.example.com'])(
+      'accepts %j',
+      (value) => {
+        expect(isCanonicalDomain(value)).toBe(true);
+      },
+    );
+
+    it.each([
+      '',
+      'com',
+      'Facebook.com',
+      '*.facebook.com',
+      'face*book.com',
+      '||facebook.com^',
+      'facebook.com|',
+      'facebook.com^',
+      'facebook.com/',
+      'facebook.com.',
+      '.facebook.com',
+      'facebook..com',
+      'münchen.de',
+      'face book.com',
+      'facebook.com\n',
+    ])('rejects %j', (value) => {
+      expect(isCanonicalDomain(value)).toBe(false);
     });
   });
 });
