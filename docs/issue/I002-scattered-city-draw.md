@@ -84,7 +84,7 @@ the result must be recognizable as a building.**
   separate unowned gap.
 - **M4.T2** (TexturePacker) replaces the *renderer* and explicitly requires *"no visual
   regression compared to the base ASCII behavior"* — it would faithfully render the same mess.
-- No card in Milestones 4–5 specifies that the characters must reconstruct the building's shape.
+- No card in Milestone 4 or in Milestone 6 (security hardening, then numbered 5) specifies that the characters must reconstruct the building's shape.
 
 ## Expected behaviour
 

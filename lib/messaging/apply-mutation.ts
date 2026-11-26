@@ -78,7 +78,7 @@ function applyBlocklistMutation(
 
 /**
  * Whether a timer mutation carries the empty payload its variant declares. The
- * payload is untrusted (M5.T1), so a forged message with extra fields is
+ * payload is untrusted (M6.T1), so a forged message with extra fields is
  * rejected rather than silently accepted.
  */
 function hasEmptyPayload(payload: unknown): boolean {
@@ -161,7 +161,7 @@ export function createMutationHandler(
         return;
       case 'TIMER_SET_DURATION': {
         const { durationSeconds } = message.payload;
-        // Untrusted payload (M5.T1): a whole number that is one of the offered
+        // Untrusted payload (M6.T1): a whole number that is one of the offered
         // presets. `setFocusDuration` also no-ops outside idle/completed.
         if (
           !Number.isInteger(durationSeconds) ||

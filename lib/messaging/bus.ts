@@ -12,7 +12,7 @@ import type { RuntimeMessage } from './messages.types';
  *
  * This module is deliberately thin: it only handles transport and type-safety.
  * Runtime validation of untrusted payloads and sender provenance hardening are
- * additive and land in M5.T1.
+ * additive and land in M6.T1.
  */
 
 export type MessageType = RuntimeMessage['type'];
@@ -63,7 +63,7 @@ export function onMessage<T extends MessageType>(
 ): () => void {
   const listener = (rawMessage: unknown): void => {
     // Minimal structural guard so a foreign/unknown message can never reach a
-    // typed handler. Full runtime validation is M5.T1.
+    // typed handler. Full runtime validation is M6.T1.
     if (typeof rawMessage !== 'object' || rawMessage === null) return;
     const received = (rawMessage as { type?: unknown }).type;
     if (typeof received !== 'string' || received !== type) return;

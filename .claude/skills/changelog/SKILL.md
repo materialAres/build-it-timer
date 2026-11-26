@@ -19,7 +19,7 @@ Procedure for updating `docs/changelog.md` when a task from `docs/roadmap-en.md`
 
 ### 4.1 General rule (mandatory)
 
-Every time you complete a roadmap task (Milestone 0–4), **before declaring the task done** you must update `docs/changelog.md`. The changelog is an integral part of a task's Definition of Done: a task without an entry in the changelog is to be considered not done.
+Every time you complete a roadmap task (Milestone 0–6), **before declaring the task done** you must update `docs/changelog.md`. The changelog is an integral part of a task's Definition of Done: a task without an entry in the changelog is to be considered not done.
 
 This also applies to partial tasks: if you only complete part of a task, update the entry with the actual status (e.g. `partial`) and note what remains.
 

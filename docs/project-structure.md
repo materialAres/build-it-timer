@@ -13,6 +13,9 @@ timer-focus/
 │   │   ├── main.tsx             # attaches the store sync, mounts App in the ErrorBoundary
 │   │   ├── App.tsx              # title, hint and `<CityPanel full />`
 │   │   └── style.css            # page layout; the stage styles are `components/city/city-panel.css`
+│   ├── offscreen/               # M5.T11: Chrome-only hidden page (`offscreen.html`) that plays `PLAY_SOUND`; no state, no logic
+│   │   ├── index.html
+│   │   └── main.ts              # wires `listenForPlaySound` to the direct player
 │   ├── popup/
 │   │   ├── index.html
 │   │   ├── main.tsx
@@ -62,6 +65,9 @@ timer-focus/
 │   │   ├── ScoreBadge.tsx
 │   │   ├── PopulationCounter.tsx
 │   │   └── SessionHistory.tsx   # last 5 sessions
+│   ├── settings/                # M5: Settings tab (gear icon)
+│   │   ├── SoundSettings.tsx    # toggle, theme list with preview, volume slider
+│   │   └── use-sound-preview.ts # popup-only preview playback (start then end)
 │   └── common/                  # shared buttons, modals, etc.
 ├── store/
 │   ├── index.ts                 # combines the slices, applies the persist middleware
@@ -70,6 +76,7 @@ timer-focus/
 │   ├── blocklist.slice.ts
 │   ├── score.slice.ts
 │   ├── session-history.slice.ts # history of the last 5 sessions
+│   ├── preferences.slice.ts     # M5: sound preferences (enabled, theme, volume)
 │   └── store.types.ts
 ├── lib/                         # pure domain logic, no direct browser dependencies
 │   ├── url/
@@ -93,6 +100,18 @@ timer-focus/
 │   │   ├── calculate-score.ts   # Excellent/Great/Good/Bad from the completion bands (CR3)
 │   │   ├── calculate-population.ts # tiered rate per character by completion band + 7% completion bonus (CR3)
 │   │   └── malus-escalation.ts  # the escalating malus schedule (M4.T1, moved into the score by CR6.T5b)
+│   ├── sound/                   # M5: synthesized sound cues (pure core + injected adapters; `browser.*` only through the message bus, the offscreen adapter and the platform check)
+│   │   ├── sound.types.ts       # recipe, theme, cue types
+│   │   ├── sound-themes.ts      # the four themes as data
+│   │   ├── playback-plan.ts     # recipe + volume → timed tones (pure)
+│   │   ├── waveshapes.ts        # seeded noise, bit-crush curve (pure)
+│   │   ├── web-audio-renderer.ts # plan → Web Audio nodes, context injected
+│   │   ├── sound-preferences.ts # shape, defaults, validation (pure)
+│   │   ├── sound-player.ts      # `SoundPlayer` port, direct + silent players
+│   │   ├── play-sound-listener.ts # offscreen page's `PLAY_SOUND` listener
+│   │   ├── offscreen-sound-player.ts # Chrome background player + `browser.offscreen` adapter
+│   │   ├── platform-sound-player.ts  # picks offscreen / direct / silent by feature detection
+│   │   └── sound-cues.ts        # when a cue plays, 60 s lateness guard
 │   └── timer/
 │       ├── alarm-adapter.ts     # interface + implementation for browser.alarms
 │       └── duration-drum.ts     # pure index/motion math of the Duration Drum (UI.T9)

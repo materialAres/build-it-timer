@@ -79,9 +79,29 @@ Each task is a standalone card, with this fixed format:
 | M4.T3e | Error hardening — content/export boundaries + logging guardrails | 4 | M4.T3a, M2.T8, M3.T8 |
 | M4.T4 | Popup accessibility polish | 4 | M3.T4 |
 | M4.T5 | Full multi-scenario e2e suite | 4 | M3.T6 |
-| M5.T1 | Message bus hardening: runtime validation + sender provenance | 5 | M1.T6 |
-| M5.T2 | `lib/url/domain.ts` hardening: scheme restriction + canonicalization + IDN | 5 | M1.T2 |
-| M5.T3 | Escaping/validation of `urlFilter` in DNR rule generation | 5 | M2.T6 |
+| M5.T1 | Sound types and the four sound themes (data) | 5 | — |
+| M5.T2 | `lib/sound/playback-plan.ts` — recipe + volume → timed tones (pure) | 5 | M5.T1 |
+| M5.T3 | `lib/sound/waveshapes.ts` — noise samples and bit-crush curve (pure) | 5 | — |
+| M5.T4 | Web Audio renderer behind an injected `AudioContext` | 5 | M5.T2, M5.T3 |
+| M5.T5 | Sound preferences model and validation (pure) | 5 | M5.T1 |
+| M5.T6 | `preferences.slice.ts` — sound preferences state and selectors | 5 | M5.T5, M1.T4 |
+| M5.T7 | Persist the sound preferences (no version bump) | 5 | M5.T6 |
+| M5.T8 | `PREFERENCES_SOUND_SET` mutation and its background handler | 5 | M5.T6, M1.T10 |
+| M5.T9 | Popup request action `requestSetSoundPreferences` | 5 | M5.T8 |
+| M5.T10 | `SoundPlayer` port, direct player and the `PLAY_SOUND` message | 5 | M5.T1, M5.T2, M5.T4, M1.T6 |
+| M5.T11 | Offscreen document page that plays sounds (Chrome) | 5 | M5.T10 |
+| M5.T12 | Background offscreen player + `offscreen` permission (Chrome) | 5 | M5.T10, M5.T11 |
+| M5.T13 | Platform player selection (offscreen on Chrome, direct on Firefox) | 5 | M5.T4, M5.T10, M5.T12 |
+| M5.T14 | Sound cues: start/end decisions and the 60 s lateness guard (pure) | 5 | M5.T5, M5.T10 |
+| M5.T15 | Background wiring of the start and end sounds | 5 | M5.T6, M5.T13, M5.T14, M3.T3c |
+| M5.T16 | Settings and sound locale strings (EN/IT) | 5 | M5.T1, M3.T10 |
+| M5.T17 | Settings tab with a gear icon | 5 | M5.T16, M3.T4 |
+| M5.T18 | `use-sound-preview` hook (popup preview playback) | 5 | M5.T4, M5.T10 |
+| M5.T19 | `SoundSettings` panel (toggle, theme list, volume slider) | 5 | M5.T9, M5.T16, M5.T17, M5.T18 |
+| M5.T20 | E2E: sound settings and offscreen playback | 5 | M5.T15, M5.T19, M0.T4 |
+| M6.T1 | Message bus hardening: runtime validation + sender provenance | 6 | M1.T6 |
+| M6.T2 | `lib/url/domain.ts` hardening: scheme restriction + canonicalization + IDN | 6 | M1.T2 |
+| M6.T3 | Escaping/validation of `urlFilter` in DNR rule generation | 6 | M2.T6 |
 
 ### 1.3 Milestone 0 — Project setup
 
@@ -231,7 +251,7 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - Sending a mutation message (at least one, e.g. `BLOCKLIST_ADD_SITE`) from a popup-like context results in the background store being updated and persisted exactly once (integration test with `fakeBrowser`).
   - After the background persists, the popup's read-only store converges to the new value via the M1.T8 sync bridge, with no manual rehydrate call in the test.
-  - Invalid/unknown payloads are ignored without throwing and without mutating the store (forward-compatible with M5.T1 hardening).
+  - Invalid/unknown payloads are ignored without throwing and without mutating the store (forward-compatible with M6.T1 hardening).
   - Mutation helpers are pure, so blocklist normalization (M1.T2, M2.T4) runs on the background side and the popup only requests the change.
 * **Notes**: this task defines only the **transport + background application**; the concrete CRUD semantics (normalization, dedup, allowlist/blocklist precedence, "Enter a valid URL") remain owned by M2.T4/M2.T20/M2.T21, and the DNR side-effect by M2.T7.
 * **Nice to have**: no.
@@ -315,7 +335,7 @@ Each task is a standalone card, with this fixed format:
   - The content script is registered for `<all_urls>` with `runAt: 'document_idle'` and the required `host_permissions`; mounting twice on the same page yields a single overlay (idempotence).
   - A background that does not respond (no listener, or a rejected `sendMessage`) is handled without crashing the page and without leaving the overlay in a stuck state.
 * **Notes / accepted limitations**: at `document_idle` the page is already rendered, so a brief flash of content precedes the overlay (accepted trade-off, no `document_start` pre-hide hack); pages where content scripts cannot run (Chrome Web Store, PDF viewer, other extensions' pages) cannot be gated; re-navigating to a blocked domain shows the overlay again, and malus continuity across that re-mount belongs to the background (M2.T10/M2.T16), not to the overlay. The content script reads the persisted store straight from `browser.storage.local` (light reader, no zustand in the content bundle) and subscribes to `storage.onChanged`, so list edits are picked up live and no "lists are frozen while running" restriction is needed.
-* **Follow-ups**: overlay strings are hardcoded in EN here and moved to `i18n.t(...)` in M3.T9; the `tabId` field was removed from the `SITE_BLOCKED_ATTEMPT` payload with this task (its M5.T1 removal landed early).
+* **Follow-ups**: overlay strings are hardcoded in EN here and moved to `i18n.t(...)` in M3.T9; the `tabId` field was removed from the `SITE_BLOCKED_ATTEMPT` payload with this task (its M6.T1 removal landed early).
 
 #### M2.T9 — `scoreSlice` + `lib/score/calculate-score.ts`
 * **Objective**: pure function `calculateScore(distractionRatio: number): 'excellent'|'good'|'bad'` according to the updated thresholds — Excellent (0%), Good (≤30%), Bad (>30%) — plus a slice that keeps this state for the current session. `distractionRatio` is calculated based on distraction time relative to the focus time **actually elapsed up to the moment of the check** (not the session's planned duration), so the value is recalculated at every check and can change over the course of the session.
@@ -717,7 +737,422 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - Each of the three scenarios above has at least one green e2e test on Chromium.
 
-### 1.8 Milestone 5 — Security hardening
+### 1.8 Milestone 5 — Sound cues
+
+> **Goal.** Play a short synthesized sound when a focus session **starts** and when it **ends on its own**. In a new **Settings** tab the user picks one **sound theme** (a start + end pair), sets the volume, or turns sounds off.
+>
+> **Decisions (fixed; a task does not reopen them).**
+> - **Synthesized live, no audio files.** Every sound is a *recipe* (plain data) rendered with the Web Audio API. No `.ogg`/`.wav` assets, no new dependency, no licence to track. Pre-rendering to files is out of scope.
+> - **Four themes**, defined as data (Open/Closed): `neon` (detuned chime), `synthwave` (rising arpeggio), `glitch` (bit-crushed burst), `terminal` (retro beeps). The default is `neon`.
+> - **Only two events make a sound.** A *fresh start* (`TIMER_STARTED` while `idle`, which creates a new session) plays the start sound. A *natural completion* (`createSessionCompletion` closes the session: the alarm fired, or the startup catch-up found the deadline passed) plays the end sound. Resume, pause, reset and duration changes are silent.
+> - **Lateness guard.** The end sound plays only if the completion is handled at most **60 s** after `timer.endsAt` (`END_SOUND_MAX_LATENESS_MS = 60_000`). When it is handled later (machine asleep, browser closed at the deadline), the session still completes, silently. 60 s absorbs normal alarm and worker wake-up delays.
+> - **Preferences** are `{ enabled, themeId, volume }`, defaults `{ true, 'neon', 50 }`, with `volume` an integer 0–100. They are persisted and written only by the background (single writer, M1.T9) through the `PREFERENCES_SOUND_SET` mutation. They are **not locked** during a session.
+> - **Settings UI**: a fifth popup tab, placed last and shown as a **gear icon** whose accessible name comes from `tabs.settings`. A text label could overflow the fixed 32 rem tab row in longer languages.
+> - **Where sound plays.** Both cues are triggered by the **background**, the only context that sees both events with the popup closed.
+>   - **Chrome:** the MV3 service worker has no `AudioContext`, so it plays through an **offscreen document** (`browser.offscreen`, reason `AUDIO_PLAYBACK`). The existence check uses `browser.runtime.getContexts` (Chrome 116+).
+>   - **Firefox:** the MV3 background is an event page with a DOM, so it plays **directly**.
+>   - **Popup:** plays only the theme **preview**, after a click.
+> - **No persist version bump.** The slice-aware `merge` (store-analysis CI-2) already gives a field that an older payload lacks its default value, so `version` stays 4 and `migrate` is untouched.
+>
+> **Module map.**
+> - `lib/sound/` holds pure code, testable in Node:
+>   - `sound.types.ts` and `sound-themes.ts`: the recipes.
+>   - `playback-plan.ts`: recipe + volume → timed tones.
+>   - `waveshapes.ts`: noise and bit-crush samples.
+>   - `sound-preferences.ts`: the preferences shape, defaults and validation.
+>   - `sound-cues.ts`: when to play.
+> - **Thin adapters**, each behind an injected port:
+>   - `web-audio-renderer.ts`: plan → Web Audio nodes, with the context injected.
+>   - `sound-player.ts`: the `SoundPlayer` port, the direct player and the silent player.
+>   - `offscreen-sound-player.ts`: Chrome only.
+>   - `platform-sound-player.ts`: picks the right player for the browser.
+> - **Contexts:**
+>   - the **background** decides and plays;
+>   - the **offscreen page** (`entrypoints/offscreen/`) is a *fourth context* next to background, content script and popup (§1.1 Separation of Concerns). It holds no state and no logic: it turns a validated `PLAY_SOUND` message into sound;
+>   - the **popup** shows the settings and plays previews.
+>
+> **Rules for every task in this milestone.**
+> - TDD (CLAUDE.md §3.1, red → green → refactor) applies to every task.
+> - `lib/sound/` never imports React or the store, and never reads `Date.now()` or `Math.random()`.
+> - The only code that touches `browser.offscreen` is `createBrowserOffscreenApi` (M5.T12); M5.T13 only checks that the API exists.
+> - All user-visible copy goes through `i18n.t`, with keys in both locale files.
+> - Each card lists every file it may touch. A change needed outside that list belongs to another task: stop and report it instead of widening the task.
+
+#### M5.T1 — Sound types and the four sound themes (data)
+* **Objective**: define the types that describe a synthesized sound (a *recipe*) and the four themes as plain data. No playback code.
+* **Files**: `lib/sound/sound.types.ts` (new, type-only), `lib/sound/sound-themes.ts` (new), `tests/unit/lib/sound/sound-themes.test.ts` (new).
+* **Dependencies**: —
+* **Types** (`sound.types.ts`; every field `readonly`, every array `ReadonlyArray`):
+  - `SoundCue = 'start' | 'end'`; `SoundThemeId = 'neon' | 'synthwave' | 'glitch' | 'terminal'`; `Waveform = 'sine' | 'square' | 'sawtooth' | 'triangle'`.
+  - `SoundNote { frequencyHz; startSec; durationSec; glideToHz? }`: `glideToHz` slides the pitch over the note.
+  - `SoundEnvelope { attackSec; releaseSec }`: the release starts after `durationSec`.
+  - `SoundFilter { type: 'lowpass' | 'highpass' | 'bandpass'; fromHz; toHz; q }`: the cutoff sweeps from `fromHz` to `toHz` over each note.
+  - `OscillatorVoice { kind: 'oscillator'; waveform; detuneCents: number[]; gain; envelope; notes: SoundNote[]; filter? }`: one oscillator per detune value per note (unison).
+  - `NoiseVoice { kind: 'noise'; gain; envelope; bursts: { startSec; durationSec }[]; filter? }`.
+  - `SoundEffects { delay?: { timeSec; feedback; mix }; bitcrush?: { bits } }`.
+  - `SoundRecipe { voices: (OscillatorVoice | NoiseVoice)[]; effects: SoundEffects }`; `SoundTheme { id: SoundThemeId; start: SoundRecipe; end: SoundRecipe }`.
+* **Data** (`sound-themes.ts`):
+  - `SOUND_THEMES: ReadonlyArray<SoundTheme>` in the order neon, synthwave, glitch, terminal.
+  - `DEFAULT_SOUND_THEME_ID = 'neon'`.
+  - `isSoundThemeId(value: unknown): value is SoundThemeId`.
+  - `findSoundTheme(id: SoundThemeId): SoundTheme`.
+  - Labels are **not** here: i18n belongs to the UI (M5.T16).
+* **Starting values** (to be re-tuned by ear later, as long as the criteria below still hold). Notes are written as pitch name, then frequency in Hz, then (start s, duration s):
+  - `neon` — **start**: a sawtooth voice, detune `[-8, 8]`, gain 0.3, envelope 0.005/0.25, lowpass 600→5000 Hz q 6, with notes A4 440 (0, 0.12), E5 659.25 (0.10, 0.12) and A5 880 (0.20, 0.35); plus a sine A3 220 (0.20, 0.35) at gain 0.2. Effects: delay 0.18 s, feedback 0.35, mix 0.3. **End**: the same voices with the notes reversed (A5, E5, A4; the last one 0.5 s) and the lowpass sweeping 5000→500 Hz.
+  - `synthwave` — **start**: a square voice, detune `[0]`, gain 0.25, lowpass 2000→6000 Hz, playing C5 523.25, E♭5 622.25, G5 783.99 and C6 1046.5, each 0.08 s long and 0.07 s apart. Effects: delay 0.12 s, feedback 0.4, mix 0.35. **End**: the same arpeggio descending, then a sawtooth pad of C4 261.63 + G4 392 (0.6 s) with lowpass 3000→300 Hz.
+  - `glitch` — **start**: noise bursts at 0, 0.05 and 0.10 s (0.03 s each) through a bandpass at 3000 Hz q 8, plus square blips of 1318.5, 659.25 and 1975.5 Hz (0.03 s) at the same times; bit-crush 4 bits. **End**: a 0.4 s noise burst through a bandpass sweeping 6000→400 Hz, plus a square note at 880 Hz gliding to 110 Hz over 0.5 s; bit-crush 5 bits.
+  - `terminal` — **start**: square beeps, gain 0.2, no effects: 1000 Hz (0, 0.05), 1000 Hz (0.09, 0.05), 1500 Hz (0.18, 0.12). **End**: 1500 Hz (0, 0.08), 1000 Hz (0.12, 0.08), 750 Hz (0.24, 0.25).
+* **Acceptance criteria**:
+  - Exactly four themes, ids unique and in the order above. `DEFAULT_SOUND_THEME_ID` is one of them, and `findSoundTheme` returns the matching theme for each id.
+  - `isSoundThemeId` accepts the four ids and rejects `'NEON'`, `''`, `1`, `null`, `undefined` and `{}`.
+  - Every one of the 8 recipes (4 themes × start/end) satisfies all of the following:
+    - it has at least one voice;
+    - every frequency, including `glideToHz`, is between 20 and 20 000 Hz;
+    - every `gain` is in (0, 1], and the voice gains of the recipe sum to at most 1;
+    - every note and burst ends (`start + duration + release`) within **1.5 s**;
+    - `attackSec` and `releaseSec` are > 0;
+    - `bits`, when present, is an integer from 2 to 8;
+    - `delay.feedback`, when present, is in [0, 0.8), and `delay.mix` in [0, 1].
+  - The module imports nothing from `browser`, React, the store or Web Audio: data and two helpers only.
+
+#### M5.T2 — `lib/sound/playback-plan.ts` — recipe + volume → timed tones (pure)
+* **Objective**: turn a recipe and a volume into a flat, fully timed list of tones, so the renderer only schedules and decides nothing.
+* **Files**: `lib/sound/playback-plan.ts` (new), `tests/unit/lib/sound/playback-plan.test.ts` (new).
+* **Dependencies**: M5.T1
+* **API**:
+  - `PlannedTone` is one of two shapes:
+    - `{ kind: 'oscillator'; waveform; frequencyHz; glideToHz?; detuneCents; startSec; durationSec; peakGain; attackSec; releaseSec; filter? }`, with `detuneCents` a single number;
+    - `{ kind: 'noise'; startSec; durationSec; peakGain; attackSec; releaseSec; filter? }`.
+  - `PlaybackPlan { tones: ReadonlyArray<PlannedTone>; masterGain: number; effects: SoundEffects; durationSec: number }`.
+  - `calculateVolumeGain(volume: number): number` = `(clamp(volume, 0, 100) / 100) ** 2`. The square is a perceptual curve; a non-finite volume gives 0.
+  - `calculatePlaybackPlan(recipe: SoundRecipe, volume: number): PlaybackPlan`.
+* **Acceptance criteria**:
+  - One oscillator tone per (note × detune value) and one noise tone per burst. `peakGain` is the voice's `gain`, and times are relative to 0 (the renderer adds its own clock).
+  - `masterGain` = `calculateVolumeGain(volume)`. A volume ≤ 0 or `NaN` gives `tones: []` and `durationSec: 0`.
+  - `durationSec` is the latest `startSec + durationSec + releaseSec` over all tones, plus a delay tail of `4 × delay.timeSec` when `effects.delay` is set.
+  - `calculateVolumeGain`: 0 → 0, 50 → 0.25, 100 → 1, 150 → 1, −5 → 0, `NaN` → 0.
+  - Pure: the same input gives the same output, and the input is not mutated (the test passes a deep-frozen recipe).
+  - Tests use small hand-written recipes, so re-tuning a theme never breaks them. One extra test checks that every real theme recipe at volume 100 gives a non-empty plan of at most 2.5 s.
+
+#### M5.T3 — `lib/sound/waveshapes.ts` — noise samples and bit-crush curve (pure)
+* **Objective**: provide the two sample arrays the renderer needs and that are pure math: deterministic white noise and the bit-crush shaping curve.
+* **Files**: `lib/sound/waveshapes.ts` (new), `tests/unit/lib/sound/waveshapes.test.ts` (new).
+* **Dependencies**: —
+* **API**:
+  - `calculateNoiseSamples(length: number, seed: number): Float32Array`: values in [−1, 1], drawn from `createRng(seed)` (`lib/city/plan/rng.ts`), never `Math.random`.
+  - `calculateBitcrushCurve(bits: number, size = 4096): Float32Array`: the `WaveShaperNode.curve` that maps the input range [−1, 1] onto `2 ** bits` evenly spaced output levels.
+* **Acceptance criteria**:
+  - Noise:
+    - the array has the requested length and every value is in [−1, 1];
+    - the same seed gives an identical array, and different seeds give different arrays;
+    - a length of 0 gives an empty array; a negative length counts as 0, and a non-integer length is floored.
+  - Bit-crush:
+    - the curve has `size` entries and never decreases;
+    - it has exactly `2 ** bits` distinct values for bits 2–8;
+    - the first value is −1 and the last is 1;
+    - `bits` outside 2–8 is clamped into that range.
+  - No Web Audio, `browser` or store imports.
+
+#### M5.T4 — Web Audio renderer behind an injected `AudioContext`
+* **Objective**: schedule a `PlaybackPlan` on a Web Audio context as a thin adapter with no decisions of its own, testable with a fake context.
+* **Files**: `lib/sound/web-audio-renderer.ts` (new), `tests/helpers/fake-audio-context.ts` (new), `tests/unit/lib/sound/web-audio-renderer.test.ts` (new).
+* **Dependencies**: M5.T2, M5.T3
+* **API**:
+  - `AudioContextLike`: the minimal subset of `AudioContext` the renderer uses, so the real `AudioContext` satisfies it structurally: `currentTime`, `state`, `sampleRate`, `destination`, `resume()`, `close()`, `createOscillator()`, `createGain()`, `createBiquadFilter()`, `createBufferSource()`, `createBuffer()`, `createDelay()`, `createWaveShaper()`.
+  - `SoundRenderer { play(plan: PlaybackPlan): Promise<Result<void>>; stopAll(): void; dispose(): Promise<void> }`.
+  - `createWebAudioRenderer(createContext: () => AudioContextLike): SoundRenderer`.
+* **Behaviour**:
+  - The context is created lazily on the first `play` and then reused. A `suspended` context is `resume()`d before scheduling.
+  - The signal path:
+    - each tone → its `BiquadFilterNode`, if it has a filter → its own envelope `GainNode` → one shared master `GainNode` set to `plan.masterGain`;
+    - master → a `WaveShaperNode` using `calculateBitcrushCurve`, if `bitcrush` is set → destination;
+    - when `delay` is set, a parallel branch: a `DelayNode` with a feedback gain, mixed in through a wet gain set to `mix`.
+  - Timing (every time is offset by `context.currentTime + 0.02` s):
+    - **envelope:** gain 0 at the tone's start, a linear ramp to `peakGain` at `start + attack`, a hold, then an exponential ramp to 0.0001 at `start + duration + release`, where the source stops;
+    - **filter cutoff:** an exponential ramp from `fromHz` to `toHz` over the tone's duration;
+    - **`glideToHz`:** an exponential frequency ramp over the tone's duration.
+  - Noise tones share one buffer per context: 1 s of `calculateNoiseSamples(sampleRate, NOISE_SEED)`, looped.
+  - An empty plan resolves `ok` without creating a context. A throwing factory or a failed `resume()` resolves `err(...)`; the renderer never throws (§1.4).
+  - `stopAll()` stops every source still scheduled (used by the preview, M5.T18), and `dispose()` closes the context.
+* **Acceptance criteria**:
+  - With the fake context:
+    - the number of oscillator and buffer sources equals the number of tones;
+    - start/stop times and envelope ramps match the plan plus the offset;
+    - the master gain equals `masterGain`;
+    - the bit-crush and delay nodes exist only when the plan has them.
+  - The factory is called once across two `play` calls, and a suspended fake is resumed before any `start()`.
+  - A throwing factory makes `play` resolve `{ ok: false }`; nothing reaches the caller as an exception.
+  - `stopAll()` calls `stop()` on started sources; `dispose()` calls `close()` exactly once.
+  - The fake (`tests/helpers/fake-audio-context.ts`) records the created nodes, their connections and every `AudioParam` call (`setValueAtTime`, `linearRampToValueAtTime`, `exponentialRampToValueAtTime`), so tests assert on records, not on sound.
+* **Notes**: the renderer lives in `lib/` because the context is injected and it never imports `browser.*`. It is the only module that knows Web Audio node types.
+
+#### M5.T5 — Sound preferences model and validation (pure)
+* **Objective**: one pure module that owns the shape, the defaults and the validation of the sound preferences, shared by the store, the mutation handler and the cues.
+* **Files**: `lib/sound/sound-preferences.ts` (new), `tests/unit/lib/sound/sound-preferences.test.ts` (new).
+* **Dependencies**: M5.T1
+* **API**:
+  - `SoundPreferences { readonly enabled: boolean; readonly themeId: SoundThemeId; readonly volume: number }`, with `volume` an integer 0–100; `SoundPreferencesPatch = Partial<SoundPreferences>`.
+  - `DEFAULT_SOUND_PREFERENCES = { enabled: true, themeId: DEFAULT_SOUND_THEME_ID, volume: 50 }`.
+  - `sanitizeSoundPreferences(value: unknown): SoundPreferences` — *lenient*, for persisted data. Each invalid or missing field falls back to its own default; a non-integer volume in range is rounded; an out-of-range volume is clamped.
+  - `applySoundPreferencesPatch(current: SoundPreferences, patch: unknown): Result<SoundPreferences>` — *strict*, for incoming messages.
+  - `isSoundAudible(preferences: SoundPreferences): boolean` = `enabled && volume > 0`.
+* **Acceptance criteria**:
+  - `sanitizeSoundPreferences`:
+    - `undefined`, `null`, `'x'` and `[]` give the defaults;
+    - `{ enabled: false }` gives the defaults with `enabled: false`;
+    - `{ themeId: 'bogus' }` gives the default theme;
+    - volume `49.6` → 50, `-3` → 0, `140` → 100, and `NaN` or `'50'` → 50.
+  - `applySoundPreferencesPatch` returns `err` (and leaves `current` untouched) for: a non-object, an array, `{}`, an unknown key, an `enabled` that is not boolean, an unknown `themeId`, or a `volume` that is not an integer from 0 to 100. A valid patch with one, two or three keys returns the merged preferences.
+  - `isSoundAudible` is false when sounds are disabled or the volume is 0, and true otherwise.
+  - No imports from the store, React, `browser` or Web Audio.
+
+#### M5.T6 — `preferences.slice.ts` — sound preferences state and selectors
+* **Objective**: add a `preferences` slice that holds the sound preferences, with one background-side action and granular selectors. No persistence and no messaging yet.
+* **Files**: `store/preferences.slice.ts` (new), `store/index.ts` (compose the slice and add the selectors), `tests/unit/store/preferences-slice.test.ts` (new).
+* **Dependencies**: M5.T5, M1.T4
+* **Acceptance criteria**:
+  - `PreferencesSlice { preferences: { sound: SoundPreferences }; setSoundPreferences(patch: unknown): void }`, created by `createPreferencesSlice()` with the same factory shape as the other slices and composed in `createAppState`. The initial state is `DEFAULT_SOUND_PREFERENCES`.
+  - `setSoundPreferences` applies `applySoundPreferencesPatch`. An `err` result or an unchanged value calls **no `set`**, so subscribers are not notified (checked with a subscribe spy).
+  - New granular selectors in `store/index.ts` (§1.3): `selectSoundEnabled`, `selectSoundThemeId`, `selectSoundVolume`.
+  - The action works in every timer status (`idle`, `running`, `paused`, `completed`): there is no lock.
+  - Existing tests still pass.
+
+#### M5.T7 — Persist the sound preferences (no version bump)
+* **Objective**: make `preferences.sound` survive a browser restart while keeping persist `version: 4`.
+* **Files**: `store/index.ts` (`PersistedState`, `partialize`, `merge`), `tests/integration/store/store.test.ts`.
+* **Dependencies**: M5.T6
+* **Acceptance criteria**:
+  - `PersistedState` gains `preferences: { sound: SoundPreferences }`, and `partialize` writes it.
+  - `merge` gives `{ sound: sanitizeSoundPreferences(saved.preferences.sound) }` when `saved.preferences` is present, and keeps the current defaults when it is absent (every payload saved before this task). No `migrate` branch and no version change. A comment explains why: the slice-aware merge (CI-2) already covers a missing field.
+  - Tests:
+    - round trip: change → persist → a new store rehydrates the same values;
+    - a v4 payload without `preferences` → defaults;
+    - `preferences.sound = { volume: 'loud', themeId: 'bogus' }` → defaults for those fields, without throwing;
+    - `ui` is still not persisted.
+
+#### M5.T8 — `PREFERENCES_SOUND_SET` mutation and its background handler
+* **Objective**: let the background apply a sound-preferences change that another context requests, through the existing typed mutation path.
+* **Files**: `lib/messaging/messages.types.ts`, `lib/messaging/apply-mutation.ts`, `tests/integration/messaging/mutation-bus.test.ts`.
+* **Dependencies**: M5.T6, M1.T10
+* **Acceptance criteria**:
+  - New `RuntimeMessage` variant `{ type: 'PREFERENCES_SOUND_SET'; payload: SoundPreferencesPatch }`.
+  - New `PREFERENCES_MUTATION_TYPES = ['PREFERENCES_SOUND_SET']`, spread into `MUTATION_TYPES`. The background then registers it on its own (`startBackground` loops over `MUTATION_TYPES`), and it waits for the startup gate like every other mutation.
+  - `createMutationHandler` handles it with `store.getState().setSoundPreferences(message.payload)`. The payload is untrusted and is validated inside the action (M5.T5), so the handler adds no checks of its own. The `never` exhaustiveness check still compiles.
+  - Not locked: applied in every timer status.
+  - Tests, through the bus like the existing ones:
+    - a valid patch updates and persists `preferences.sound`;
+    - an invalid payload (`{ volume: 500 }`, `{ themeId: 'x' }`, `{}`) leaves it unchanged and does not throw;
+    - a patch sent while `running` is applied.
+
+#### M5.T9 — Popup request action `requestSetSoundPreferences`
+* **Objective**: give the popup a store action that asks the background to change the sound preferences, following the existing `request*` pattern.
+* **Files**: `store/preferences.slice.ts`, `store/index.ts` (pass `dependencies` to the slice factory), `tests/unit/store/preferences-slice.test.ts`.
+* **Dependencies**: M5.T8
+* **Acceptance criteria**:
+  - The factory becomes `createPreferencesSlice(dependencies: MessagingDependencies = {})`.
+  - New action `requestSetSoundPreferences(patch: SoundPreferencesPatch): void`. It sends exactly one `{ type: 'PREFERENCES_SOUND_SET', payload: patch }` through `dependencies.sendMutation` and does **not** change local state: the popup converges through the storage sync (M1.T8).
+  - With no `sendMutation`, the action is a no-op and does not throw.
+  - Tests: one message with the given payload; local state unchanged after the call.
+
+#### M5.T10 — `SoundPlayer` port, direct player and the `PLAY_SOUND` message
+* **Objective**: define the single interface every context uses to play a cue, its direct implementation over the renderer, and the message the background sends to the offscreen page.
+* **Files**: `lib/sound/sound-player.ts` (new), `lib/messaging/messages.types.ts` (new `PLAY_SOUND` variant), `tests/unit/lib/sound/sound-player.test.ts` (new).
+* **Dependencies**: M5.T1, M5.T2, M5.T4, M1.T6
+* **API**:
+  - `SoundPlayRequest { themeId: SoundThemeId; cue: SoundCue; volume: number }`, plus `isSoundPlayRequest(value: unknown): value is SoundPlayRequest`, which requires a known theme, a cue of `'start'` or `'end'`, and an integer volume from 0 to 100.
+  - `SoundPlayer { play(request: SoundPlayRequest): Promise<Result<void>> }` is the port. Every implementation and every fake honours it and never throws (Liskov).
+  - `createDirectSoundPlayer(renderer: SoundRenderer): SoundPlayer` runs `findSoundTheme` → the recipe for the cue → `calculatePlaybackPlan(recipe, volume)` → `renderer.play(plan)`.
+  - `createSilentSoundPlayer(): SoundPlayer` always returns `ok` and plays nothing; it is used where no audio is available (M5.T13).
+  - New `RuntimeMessage` variant `{ type: 'PLAY_SOUND'; payload: SoundPlayRequest }`. It is **not** a mutation: it goes neither in `MUTATION_TYPES` nor in the background's `MESSAGE_TYPES`.
+* **Acceptance criteria**:
+  - With a fake renderer, `play({ themeId: 'neon', cue: 'end', volume: 50 })` renders the plan of `neon.end` at volume 50. `volume: 0` renders nothing and returns `ok`.
+  - An invalid request (one that fails `isSoundPlayRequest`) returns `err` without calling the renderer.
+  - A renderer that returns `err` or rejects makes `play` resolve `err`; nothing throws.
+  - `isSoundPlayRequest` rejects non-objects, unknown themes, the cue `'pause'`, and volumes `-1`, `101`, `2.5` and `'50'`.
+
+#### M5.T11 — Offscreen document page that plays sounds (Chrome)
+* **Objective**: add the hidden extension page that Chrome's background opens to play sounds. The page only listens for `PLAY_SOUND` and plays it.
+* **Files**: `entrypoints/offscreen/index.html` (new), `entrypoints/offscreen/main.ts` (new), `lib/sound/play-sound-listener.ts` (new), `tests/integration/sound/play-sound-listener.test.ts` (new).
+* **Dependencies**: M5.T10
+* **Acceptance criteria**:
+  - `index.html` is a minimal WXT unlisted page, built as `/offscreen.html`, that loads `main.ts`. A `manifest.include` meta option limits it to the Chrome build; check the exact syntax in the WXT docs for HTML entrypoint options.
+  - `listenForPlaySound(player: SoundPlayer, logger: Logger): () => void`:
+    - registers `onMessage('PLAY_SOUND', …)` from `lib/messaging/bus.ts` and returns the disposer;
+    - validates the payload with `isSoundPlayRequest` and ignores an invalid one, logging `warn` with `{ type }` only;
+    - calls `player.play`, and logs `error` on an `err` result.
+  - `main.ts` only wires: `listenForPlaySound(createDirectSoundPlayer(createWebAudioRenderer(() => new AudioContext())), createLogger('offscreen'))`. No state, no store, no other logic.
+  - Tests (`fakeBrowser` + a fake player):
+    - a valid `PLAY_SOUND` reaches `player.play` once, with its payload; an invalid payload does not;
+    - a failing player is logged and does not throw;
+    - after the disposer runs, messages are ignored.
+  - `bun run build` emits `offscreen.html`; `bun run build:firefox` does not.
+
+#### M5.T12 — Background offscreen player + `offscreen` permission (Chrome)
+* **Objective**: implement the `SoundPlayer` the Chrome background uses: make sure exactly one offscreen document exists, then send it `PLAY_SOUND`.
+* **Files**: `lib/sound/offscreen-sound-player.ts` (new), `wxt.config.ts`, `tests/unit/lib/sound/offscreen-sound-player.test.ts` (new).
+* **Dependencies**: M5.T10, M5.T11
+* **API**:
+  - `OffscreenApi { hasDocument(): Promise<boolean>; createDocument(): Promise<void>; send(message: RuntimeMessage): Promise<Result<undefined>> }`: the injected port. `send` has the same signature as the bus's `sendMessage`, which reports a failure as `err` and never rejects.
+  - `createOffscreenSoundPlayer(api: OffscreenApi): SoundPlayer`.
+  - `createBrowserOffscreenApi(): OffscreenApi`, the only code in the project that touches `browser.offscreen`:
+    - `hasDocument`: `browser.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })` returns at least one context;
+    - `createDocument`: `browser.offscreen.createDocument({ url: browser.runtime.getURL('/offscreen.html'), reasons: ['AUDIO_PLAYBACK'], justification: 'Play the focus session start and end sounds' })`;
+    - `send`: the bus's `sendMessage`.
+* **Acceptance criteria**:
+  - `play` validates the request with `isSoundPlayRequest`, makes sure the document exists, then sends one `PLAY_SOUND`.
+  - **One document at a time**: `play` calls made while the document is being created share one in-flight creation promise, so `createDocument` runs once. Test: two `play` calls without awaiting in between.
+  - When the document already exists, `createDocument` is not called.
+  - When `hasDocument` or `createDocument` rejects, `play` resolves `err` and the in-flight promise is cleared, so the next `play` retries. When `send` returns `err`, `play` resolves `err` too.
+  - `wxt.config.ts` adds the `offscreen` permission **only for the Chrome build** (`browser !== 'firefox'`), with a comment saying why: Firefox has no `offscreen` API and warns on unknown permissions.
+* **Notes**: Chrome closes an `AUDIO_PLAYBACK` document after about 30 s of silence, so the document is re-created on demand and never kept alive.
+
+#### M5.T13 — Platform player selection (offscreen on Chrome, direct on Firefox)
+* **Objective**: one factory that returns the right `SoundPlayer` for the background of the current browser.
+* **Files**: `lib/sound/platform-sound-player.ts` (new), `tests/unit/lib/sound/platform-sound-player.test.ts` (new).
+* **Dependencies**: M5.T4, M5.T10, M5.T12
+* **API**:
+  - `selectSoundPlayer(environment: { hasOffscreenApi: boolean; createAudioContext?: () => AudioContextLike }, factories = DEFAULT_PLAYER_FACTORIES): SoundPlayer`. `factories` holds `offscreen()`, `direct(createAudioContext)` and `silent()`; it is injectable for tests.
+    - `hasOffscreenApi` → the offscreen player (Chrome);
+    - otherwise, with `createAudioContext` → the direct player over `createWebAudioRenderer` (Firefox event page);
+    - otherwise → the silent player.
+  - `createPlatformSoundPlayer(): SoundPlayer` reads the real environment: `typeof browser.offscreen?.createDocument === 'function'` and `typeof AudioContext === 'function'`.
+* **Acceptance criteria**:
+  - The three branches are tested with injected flags and fake factories, never the real `browser.offscreen`.
+  - Detection is by feature, not by `import.meta.env.BROWSER`, so a Chromium-based browser without `offscreen` falls back cleanly.
+* **Notes**: Firefox may block autoplay in the background page. Check it once by hand on the Firefox build (start a session and listen). If it is blocked, record it in the changelog's open issues; this task adds no workaround.
+
+#### M5.T14 — Sound cues: start/end decisions and the 60 s lateness guard (pure)
+* **Objective**: decide whether a cue plays, and play it, in one place that knows nothing about the store or the browser.
+* **Files**: `lib/sound/sound-cues.ts` (new), `tests/unit/lib/sound/sound-cues.test.ts` (new).
+* **Dependencies**: M5.T5, M5.T10
+* **API**:
+  - `END_SOUND_MAX_LATENESS_MS = 60_000`.
+  - `shouldPlayEndSound(endsAt: number | null, now: number): boolean` is `true` when `endsAt !== null` and `now - endsAt <= END_SOUND_MAX_LATENESS_MS`. A completion before `endsAt` counts as on time.
+  - `createSoundCues({ getPreferences: () => SoundPreferences; player: SoundPlayer; now: () => number; logger: Logger }): { sessionStarted(): void; sessionCompleted(endsAt: number | null): void }`.
+* **Acceptance criteria**:
+  - Nothing plays when `isSoundAudible(preferences)` is false.
+  - `sessionStarted` plays `{ themeId, cue: 'start', volume }`, reading the preferences at call time, not at creation.
+  - `sessionCompleted(endsAt)` plays `cue: 'end'` only when `shouldPlayEndSound(endsAt, now())`. Table test: lateness 0, 3 s and 60 s play; 60.001 s, 20 min, 18 h and `endsAt: null` stay silent.
+  - Both methods are fire-and-forget (`void`). A player `err` is logged as `warn` with `{ cue }` only, and a rejecting player is caught too; nothing is ever thrown.
+  - No `Date.now()`: time comes only from `now`.
+
+#### M5.T15 — Background wiring of the start and end sounds
+* **Objective**: play the start sound on a fresh start and the end sound on a natural completion, from the background.
+* **Files**: `entrypoints/background.ts`, `tests/integration/background/sound-cues.test.ts` (new).
+* **Dependencies**: M5.T6, M5.T13, M5.T14, M3.T3c
+* **Acceptance criteria**:
+  - `BackgroundDependencies` gains `soundPlayer?: SoundPlayer`, defaulting to `createPlatformSoundPlayer()`. `startBackground` builds `createSoundCues({ getPreferences: () => store.getState().preferences.sound, player, now, logger: log.child('sound') })`.
+  - **Start sound**: in `applyMutation`, a `TIMER_STARTED` received while `timer.status === 'idle'` that leaves the timer `running` calls `cues.sessionStarted()` once (`startTimer` sets `running` synchronously). A resume (`paused` → `running`) and a `TIMER_STARTED` while already `running` play nothing.
+  - **End sound**:
+    - `SessionCompletionDependencies` gains an optional `onCompleted?: (endsAt: number | null) => void`, and the background passes `cues.sessionCompleted`;
+    - `handleAlarm` reads `timer.endsAt` **before** `completeTimer()` and calls `onCompleted(endsAt)` after it;
+    - both completion paths (the alarm firing and the startup catch-up) go through `handleAlarm`, and its `status !== 'running'` guard limits it to one call per session.
+  - Pause, reset, duration changes and blocklist mutations never call the player.
+  - Tests (fake player, `FakeAlarmProvider`, injected `now`):
+    - a fresh start → one `start` call; a pause then resume → no new call;
+    - an on-time alarm → one `end` call;
+    - an alarm 2 min late → no `end` call, but the session completes and `SESSION_ENDED` is still sent;
+    - a startup catch-up within 60 s → one `end` call;
+    - sounds disabled → no calls at all;
+    - the theme and the volume come from the store.
+* **Notes**: `entrypoints/background.ts` is already over the size guideline. Add only the wiring above: every decision lives in `lib/sound/`.
+
+#### M5.T16 — Settings and sound locale strings (EN/IT)
+* **Objective**: add every string the Settings tab needs, in both languages, before any UI uses them.
+* **Files**: `locales/en.yml`, `locales/it.yml`.
+* **Dependencies**: M5.T1, M3.T10
+* **Acceptance criteria**:
+  - Keys and their values:
+
+    | Key | EN | IT |
+    |---|---|---|
+    | `tabs.settings` (the gear's accessible name) | Settings | Impostazioni |
+    | `settings.title` | Settings | Impostazioni |
+    | `settings.sound.heading` | Sound | Suono |
+    | `settings.sound.enabled` | Play a sound when a session starts and ends | Riproduci un suono all'inizio e alla fine della sessione |
+    | `settings.sound.theme` | Sound theme | Tema sonoro |
+    | `settings.sound.themes.neon` | Neon | Neon |
+    | `settings.sound.themes.synthwave` | Synthwave | Synthwave |
+    | `settings.sound.themes.glitch` | Glitch | Glitch |
+    | `settings.sound.themes.terminal` | Terminal | Terminale |
+    | `settings.sound.preview` | Preview $1 | Ascolta $1 |
+    | `settings.sound.volume` | Volume | Volume |
+    | `settings.sound.volumeValue` | $1% | $1% |
+  - The keys under `settings.sound.themes` match `SoundThemeId` one to one.
+  - `bunx wxt prepare` regenerates the key types, and the EN/IT drift test (`tests/unit/i18n/locales.test.ts`) passes.
+  - The copy follows `PRODUCT.md` (neutral, minimal).
+
+#### M5.T17 — Settings tab with a gear icon
+* **Objective**: add a fifth popup tab, shown as a gear icon, whose panel is an empty Settings section ready for M5.T19.
+* **Files**: `store/index.ts` (`PopupTab`), `components/common/PopupTabs.tsx`, `entrypoints/popup/App.tsx`, `tests/unit/components/common/PopupTabs.test.tsx`.
+* **Dependencies**: M5.T16, M3.T4
+* **Acceptance criteria**:
+  - `PopupTab` gains `'settings'`, last in `TAB_ORDER`, with `TAB_LABEL_KEYS.settings = 'tabs.settings'`.
+  - The settings tab shows an inline SVG gear instead of text: `aria-hidden="true"`, `currentColor`, about 14 px, with no new dependency and no asset file. Its accessible name is `i18n.t('tabs.settings')`, set through `aria-label`. The text tabs are unchanged.
+  - It has the same ARIA and keyboard behaviour as the other tabs: the arrow keys, Home and End reach it, and End selects it.
+  - In `App.tsx`, `SECTIONS.settings` renders a `SettingsSection` that holds only the `settings.title` heading; the content arrives in M5.T19.
+  - The tab row still fits the fixed 32 rem popup in EN and IT, with no wrapping and no horizontal scroll.
+  - Tests:
+    - there are five tabs;
+    - the gear tab's accessible name is `Settings`, and it contains an SVG and no visible text;
+    - selecting it shows the settings panel;
+    - ArrowRight from Score reaches Settings;
+    - the existing Home/End test now expects Settings as the last tab.
+  - The visuals follow `DESIGN.md` (phosphor green, glow only on the active tab).
+
+#### M5.T18 — `use-sound-preview` hook (popup preview playback)
+* **Objective**: let the popup preview a theme (its start sound, then its end sound) at a given volume, without any component touching Web Audio.
+* **Files**: `components/settings/use-sound-preview.ts` (new), `tests/unit/components/settings/use-sound-preview.test.ts` (new).
+* **Dependencies**: M5.T4, M5.T10
+* **API**: `useSoundPreview(options?: { createRenderer?: () => SoundRenderer }): { preview(themeId: SoundThemeId, volume: number): void; previewingThemeId: SoundThemeId | null }`.
+* **Acceptance criteria**:
+  - The renderer (by default `createWebAudioRenderer(() => new AudioContext())`) is created lazily on the first `preview`, which always follows a click, so autoplay is allowed. It is disposed on unmount.
+  - `preview` plays the theme's `start` sound, then its `end` sound once the start plan's `durationSec` + 0.15 s has passed, through `createDirectSoundPlayer`.
+  - A new `preview` call first runs `stopAll()` and cancels the pending `end`, so previews never overlap. `previewingThemeId` holds the theme while it plays and goes back to `null` when the end finishes or the preview is stopped.
+  - Volume 0 plays nothing.
+  - Errors are logged and never thrown into React.
+  - Tests (fake renderer, `vi.useFakeTimers`):
+    - the order is start, then end;
+    - a second call cancels the first;
+    - unmounting disposes the renderer;
+    - no renderer is created before the first call.
+
+#### M5.T19 — `SoundSettings` panel (toggle, theme list, volume slider)
+* **Objective**: build the Settings tab content: an on/off toggle, the theme list with preview buttons, and a volume slider.
+* **Files**: `components/settings/SoundSettings.tsx` (new), `tests/unit/components/settings/SoundSettings.test.tsx` (new), `entrypoints/popup/App.tsx` (render `<SoundSettings />` inside `SettingsSection`).
+* **Dependencies**: M5.T9, M5.T16, M5.T17, M5.T18
+* **Acceptance criteria**:
+  - The component reads only `selectSoundEnabled`, `selectSoundThemeId` and `selectSoundVolume`. It writes only through `requestSetSoundPreferences`: never `setSoundPreferences`, never a browser API.
+  - **Toggle**: a labelled checkbox (`settings.sound.enabled`); a change sends `{ enabled }`.
+  - **Themes**:
+    - a `fieldset` with the legend `settings.sound.theme` and one radio per theme, in `SOUND_THEMES` order, labelled `settings.sound.themes.<id>`; selecting one sends `{ themeId }`;
+    - each row has a preview button, whose `aria-label` is `settings.sound.preview` filled with the theme name, that calls `preview(themeId, currentSliderValue)`.
+  - **Volume**:
+    - an `<input type="range" min="0" max="100" step="5">` labelled `settings.sound.volume`, with its value shown through `settings.sound.volumeValue`;
+    - while dragging, the value lives in local state. It is sent once, as `{ volume }`, on `pointerup` or `keyup`, and only if it differs from the store value: never one message per `input` event.
+  - When sounds are off, the radios, the preview buttons and the slider are `disabled`.
+  - The panel is not locked by the timer status: it works while a session runs.
+  - Tests (spying on `fakeBrowser.runtime.sendMessage`, like the blocklist lock tests):
+    - each control sends exactly the expected mutation;
+    - several `input` events followed by `pointerup` send one message;
+    - the controls are disabled when sounds are off;
+    - the preview button calls the (mocked) hook with the theme and the slider value;
+    - the texts are translated.
+  - If the component grows past about 150 lines, move the theme row into `components/settings/SoundThemeOption.tsx`. That file then counts as the task's fourth file.
+
+#### M5.T20 — E2E: sound settings and offscreen playback
+* **Objective**: prove on the built Chrome extension that the settings persist, and that starting a session opens the offscreen document only when sounds are on.
+* **Files**: `tests/e2e/sound.spec.ts` (new).
+* **Dependencies**: M5.T15, M5.T19, M0.T4
+* **Acceptance criteria**:
+  - Each scenario runs in its own context from `launchExtensionContext()` (`tests/e2e/setup.ts`), so no offscreen document or setting is left over from a previous one.
+  - **Scenario 1**: open the popup → the gear tab → turn sounds off, pick `Glitch`, change the volume → close and reopen the popup → the same values are shown.
+  - **Scenario 2** (sounds on): start a session → within 2 s, `chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })`, evaluated in the service worker, returns one document.
+  - **Scenario 3** (sounds off): start a session → no offscreen document is created.
+  - No assertion on audio output, since Playwright cannot hear; the end sound is covered by the M5.T15 integration tests.
+  - Run with `bun run build`, then `bun run e2e`; Chromium only (CLAUDE.md §3.2).
+
+### 1.9 Milestone 6 — Security hardening
 
 > **Threat model / out of scope.** The extension is *client-only* (no backend): the user is the operator of the browser itself. This determines what's actually worth defending and what isn't.
 >
@@ -725,16 +1160,16 @@ Each task is a standalone card, with this fixed format:
 >
 > **In scope.** Any *untrusted* data/code that **crosses** into the extension toward a more privileged context, even with a legitimate operator. The trust boundaries that a backend-less extension does **not** eliminate:
 > 1. **Web page → content script** — the page is arbitrary and hostile (DOM, `postMessage`, crafted navigations). A malicious site is not the user.
-> 2. **Content script → background (message bus)** — `runtime.onMessage` can receive well-formed messages forged by other code; hence runtime validation of the discriminated union, checking `sender.id === browser.runtime.id`, `tabId` derived from `sender.tab.id` and never from the payload (M5.T1).
-> 3. **Untrusted URL/domain → DNR rules / domain checks** — injection via *data* (non-http schemes, the `userinfo` trick `https://facebook.com@evil.com`, IDN/homograph, syntactic characters `*`/`|`/`^`/`||` in `urlFilter`), exactly like a SQL injection (M5.T2, M5.T3).
+> 2. **Content script → background (message bus)** — `runtime.onMessage` can receive well-formed messages forged by other code; hence runtime validation of the discriminated union, checking `sender.id === browser.runtime.id`, `tabId` derived from `sender.tab.id` and never from the payload (M6.T1).
+> 3. **Untrusted URL/domain → DNR rules / domain checks** — injection via *data* (non-http schemes, the `userinfo` trick `https://facebook.com@evil.com`, IDN/homograph, syntactic characters `*`/`|`/`^`/`||` in `urlFilter`), exactly like a SQL injection (M6.T2, M6.T3).
 >
 > **Practical consequence.** These hardening measures defend the *untrusted data/code* boundaries, not against the operator. They remain justified as pure **correctness** regardless — avoiding over/under-blocking, double normalizations, crashes from unexpected input — regardless of whether an attacker exists. They are not a speculative security framework: every task maps to a concrete, testable gap.
 
 > This milestone translates into tasks the measures that emerged from a security audit of the architecture (§2 of the audit document, "Part 2 — Could your project expose users to attacks?"). It does not add features: it makes the logic already planned in Milestones 1–2 secure and defensive. The three risks classified as **High** concern the message bus (M1.T6), domain normalization (M1.T2/M2.T21), and DNR rule generation (M2.T6).
 >
-> **Sequencing note**: these tasks are security prerequisites for the critical logic in §3.4 and should ideally land **before** the tasks that consume the respective modules (M5.T1 before M2.T10/M2.T16 — its `SITE_BLOCKED_ATTEMPT`/`tabId` part landed early, with M2.T8; M5.T2 before M2.T4/M2.T6/M2.T21; M5.T3 before M2.T7). The corresponding M2 cards remain valid; the hardening is additive and does not replace them.
+> **Sequencing note**: these tasks are security prerequisites for the critical logic in §3.4 and should ideally land **before** the tasks that consume the respective modules (M6.T1 before M2.T10/M2.T16 — its `SITE_BLOCKED_ATTEMPT`/`tabId` part landed early, with M2.T8; M6.T2 before M2.T4/M2.T6/M2.T21; M6.T3 before M2.T7). The corresponding M2 cards remain valid; the hardening is additive and does not replace them.
 
-#### M5.T1 — Message bus hardening: runtime validation and sender provenance
+#### M6.T1 — Message bus hardening: runtime validation and sender provenance
 * **Objective**: make the message bus (M1.T6) robust against malformed or forged messages — validate every `RuntimeMessage` at runtime with guards (never casts) and never trust `tabId`/identifiers coming from the payload, always deriving them from `sender`.
 * **Files**: `lib/messaging/messages.types.ts` (runtime validation guards; removal of `tabId` from the payload), `lib/messaging/bus.ts` (incoming validation + origin check), `entrypoints/background.ts`, `entrypoints/blocked-overlay.content.ts`.
 * **Dependencies**: M1.T6
@@ -745,7 +1180,7 @@ Each task is a standalone card, with this fixed format:
   - `tabId` is no longer read from the payload: variants that need it derive it from `sender.tab.id`. **Already satisfied for `SITE_BLOCKED_ATTEMPT`, whose payload lost `tabId` in M2.T8**; the remaining variants are covered here.
   - Test (integration, `fakeBrowser`): malformed/forged message → no crash, no mutation; `tabId` injected in the payload is ignored; a sender with an id different from `browser.runtime.id` is rejected; an unrecognized `type` is ignored.
 
-#### M5.T2 — Hardening of `lib/url/domain.ts`: scheme restriction, canonicalization, and IDN
+#### M6.T2 — Hardening of `lib/url/domain.ts`: scheme restriction, canonicalization, and IDN
 > **Superseded by CR1** (see §2.4): the scheme/IDN hardening stays; only the allowlist-precedence part of the criterion is dropped (CR1.T4).
 * **Objective**: make domain normalization (M1.T2, "security core of the blocking system", §3.4) robust against bypass and impersonation — accept only `http`/`https` URLs, canonicalize the host, and handle IDN/homograph, with a single canonical form shared by both entry and navigation checks.
 * **Files**: `lib/url/domain.ts`, `lib/blocking/normalize-entry.ts` (M2.T21), `entrypoints/background.ts` (navigation check).
@@ -758,7 +1193,7 @@ Each task is a standalone card, with this fixed format:
   - Test with a **hostile corpus** (not just happy-path): non-http schemes, trailing dot, uppercase, userinfo, IDN, malformed URL → deterministic and safe outcomes, no exceptions.
   - The canonical form is the same at entry (M2.T4/M2.T21) and at the navigation check (M2.T6): no divergence between the two entry points.
 
-#### M5.T3 — Escaping/validation of `urlFilter` in DNR rule generation
+#### M6.T3 — Escaping/validation of `urlFilter` in DNR rule generation
 > **Superseded by CR1** (see §2.4): the escaping/validation hardening stays; the "allow/block conflict" case no longer exists (CR1.T4).
 * **Objective**: ensure that `declarativeNetRequest` rule generation (M2.T6) uses only canonical domains and never interpolates raw input into `urlFilter`, where `*`, `|`, `^`, and `||` have special semantics.
 * **Files**: `lib/blocking/rules.ts`, `lib/blocking/normalize-entry.ts`.
@@ -928,7 +1363,7 @@ The following main-task criteria are intentionally replaced by CR1. They remain 
 | M2.T20 | Allowlist/blocklist mutual exclusion | Task is obsolete: there is no second list (CR1.T5a) |
 | M2.T21 | Allowlist precedence during navigation normalization | Navigation matches the blocklist only (CR1.T4) |
 | M3.T3 | `SiteList` generic over allowlist/blocklist and move feedback | Single blocklist `SiteList` (CR1.T1) |
-| M5.T2 / M5.T3 | References to allowlist precedence in hardening criteria | Keep scheme/IDN/`urlFilter` hardening; drop allowlist precedence (CR1.T4) |
+| M6.T2 / M6.T3 | References to allowlist precedence in hardening criteria | Keep scheme/IDN/`urlFilter` hardening; drop allowlist precedence (CR1.T4) |
 
 ### 2.5 Change request CR2 — Disable blocklist editing when the timer is not idle
 
@@ -982,7 +1417,7 @@ The following main-task criteria are intentionally replaced by CR1. They remain 
   - Startup window: a background restarted on a persisted `running` session rejects a blocklist mutation received while it reconciles, and accepts it again after a `TIMER_RESET`.
   - Race regression (decision E in `docs/features-analysis/blocklist-lock.md`): a popup whose status is still `idle` adds a site just as the session starts; the background rejects it, and once the `running` transition arrives through `attachStoreSync` the popup's blocklist matches the persisted one. No extra production code beyond CR2.T1/T2 is expected — the transition is itself a storage write that rehydrates the popup — so this is a regression test proving the invariant, not a new mechanism.
   - `bun run test` is green; the pre-existing mutation-bus cases (which run in `idle`) are unchanged.
-* **Notes/decisions**: the rejection is silent by design (consistent with invalid payloads) but logged at `debug` so a support report can distinguish "the lock worked" from "the message was lost". Sender provenance is M5.T1's concern; this task only adds the status policy.
+* **Notes/decisions**: the rejection is silent by design (consistent with invalid payloads) but logged at `debug` so a support report can distinguish "the lock worked" from "the message was lost". Sender provenance is M6.T1's concern; this task only adds the status policy.
 
 ##### CR2.T3a — Disable the site and preset editors
 * **Objective**: make the two direct blocklist editors reflect the lock — `SiteList` and `PresetPicker` cannot request a mutation outside `idle`, while their content stays readable.
@@ -1765,7 +2200,7 @@ The usual rules apply. Production code follows §1, tests follow §3 (red/green)
   - `COMPLETION_BANDS`, `COMPLETION_BONUS_SHARE`, `CompletionLevel` and `bandCutoffCharacters` are not changed.
   - In `docs/features-analysis/score-population.md` the `calculateCompletion` bullet is removed or marked "removed in PR6.T3". Its other references stay as history.
   - `bun run compile`, `bun run lint` and `bun run test` are green. The changelog gets a `### PR6.T3` entry under `## PR reviews` and a summary row. The entry says that CR3.T1's requirement for the helper is withdrawn and gives the reason.
-* **Notes/decisions**: the CR3.T1 and CR3.T7 cards and the `CR3.T1` changelog entry stay as history and are not edited. Milestone 5, M4.T4 and M4.T5 were checked: none of them needs a completion ratio, so the helper has no planned user. If a future feature needs the ratio, it should add the helper back with its caller (YAGNI, §1.1).
+* **Notes/decisions**: the CR3.T1 and CR3.T7 cards and the `CR3.T1` changelog entry stay as history and are not edited. Milestone 6 (security hardening, then numbered 5), M4.T4 and M4.T5 were checked: none of them needs a completion ratio, so the helper has no planned user. If a future feature needs the ratio, it should add the helper back with its caller (YAGNI, §1.1).
 
 ##### PR6.T4 — Update the PR #6 description (commit list, unrelated changes, review outcome)
 * **Objective**: make the PR #6 description match what the branch actually contains.
@@ -1783,7 +2218,7 @@ The usual rules apply. Production code follows §1, tests follow §3 (red/green)
 #### 3.1.3 Open questions
 
 - **Q1 — `+Infinity` contract.** **Answered: (c).** `calculateScore(+Infinity)` returned `'excellent'` while `calculatePopulation(+Infinity)` returns `0`. Both matched the CR3.T3 card and the case can't happen through the slice, but the developer chose to make `calculateScore` treat any non-finite count as `'bad'` (PR6.T2), so both functions treat it as invalid input. Rejected: (a) leaving it as is and (b) clamping `+Infinity` to `total` in `calculatePopulation`.
-- **Q2 — `calculateCompletion`.** **Answered: (b).** CR3.T1 required it, but nothing in production uses it, and Milestone 5, M4.T4 and M4.T5 (the only unfinished roadmap tasks) don't need a completion ratio either. It is removed in PR6.T3 (YAGNI, §1.1). Rejected: (a) keeping it as a tested public helper and (c) using it in a new production caller.
+- **Q2 — `calculateCompletion`.** **Answered: (b).** CR3.T1 required it, but nothing in production uses it, and Milestone 6 (security hardening, then numbered 5), M4.T4 and M4.T5 (the only unfinished roadmap tasks) don't need a completion ratio either. It is removed in PR6.T3 (YAGNI, §1.1). Rejected: (a) keeping it as a tested public helper and (c) using it in a new production caller.
 - **Q3 — Unrelated changes in PR #6.** **Answered: (a).** The skills, the commit-policy change and the Serena memories stay in this PR and are listed in the description (PR6.T4). Rejected: (b) moving them to a separate PR, which needs a history rewrite and a force push.
 - **Q4 — Commit titles.** **Answered: (a).** `7faa8e6` and `1dc7d50` are left as they are. The `commit` skill will be updated later (outside this review) so that it generates shorter messages. Rejected: (b) rewording them with an interactive rebase and a force push.
 - **Q5 — Oversized files.** **Deferred**: to be discussed with the developer later; no task for now. `entrypoints/background.ts`, `store/timer.slice.ts` and `store/index.ts` are well over 200 lines (§1.2). The problem predates PR #6. Options when it is discussed:

@@ -11,7 +11,7 @@ interface TimerTickMessage {
 //
 // The payloads are deliberately empty: the session id is minted by the
 // background's `startTimer` (M2.T1), and a caller-supplied id would be untrusted
-// anyway (M5.T1). `Record<string, never>` keeps the variant explicit while
+// anyway (M6.T1). `Record<string, never>` keeps the variant explicit while
 // forbidding any field.
 interface TimerStartedMessage {
   readonly type: 'TIMER_STARTED';
@@ -31,7 +31,7 @@ interface TimerResetMessage {
 // Session length (user-selectable focus duration). The popup is read-only
 // (M1.T9), so it requests the change and the background — the timer's owner —
 // validates it against the preset table and applies it. A caller-supplied value
-// is untrusted (M5.T1).
+// is untrusted (M6.T1).
 interface TimerSetDurationMessage {
   readonly type: 'TIMER_SET_DURATION';
   readonly payload: { readonly durationSeconds: number };
@@ -40,7 +40,7 @@ interface TimerSetDurationMessage {
 // The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
 // design: the content script cannot know its own tab id without the `tabs`
 // permission, and a caller-supplied id is untrusted anyway — the background
-// derives it from `sender.tab.id` (M5.T1, whose payload part landed here).
+// derives it from `sender.tab.id` (M6.T1, whose payload part landed here).
 interface SiteBlockedAttemptMessage {
   readonly type: 'SITE_BLOCKED_ATTEMPT';
   readonly payload: {

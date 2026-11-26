@@ -13,7 +13,7 @@ const isNonEmptyString = (value: unknown): value is string =>
 
 /**
  * Whether a blocklist mutation's payload has the shape its type declares
- * (CR4.T4). Messages cross an untrusted boundary (M5.T1): the static type says
+ * (CR4.T4). Messages cross an untrusted boundary (M6.T1): the static type says
  * nothing about what a forged or stale sender put on the wire, so every field
  * is checked at runtime. Only the *shape* is checked here — whether a site
  * normalizes, a preset exists or a name is free is the pure helpers' decision,
