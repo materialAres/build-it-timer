@@ -64,7 +64,7 @@ describe('sound cues in the background (M5.T15)', () => {
 
       await sendMessage({ type: 'TIMER_STARTED', payload: {} });
 
-      expect(played).toEqual([{ themeId: 'neon', cue: 'start', volume: 50 }]);
+      expect(played).toEqual([{ themeId: 'glitch', cue: 'start', volume: 50 }]);
       handle.dispose();
     });
 

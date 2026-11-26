@@ -86,7 +86,7 @@ test.describe('sound settings and offscreen playback (M5.T20)', () => {
     const page = await openPopup();
     await showSettings(page);
 
-    await page.getByRole('radio', { name: 'Glitch' }).click();
+    await page.getByRole('radio', { name: 'Synthwave' }).click();
     const slider = page.getByRole('slider', { name: 'Volume' });
     await slider.fill('20');
     // The value is sent once, when the slider is released.
@@ -96,7 +96,7 @@ test.describe('sound settings and offscreen playback (M5.T20)', () => {
     // A real round trip: popup -> background -> storage.
     await expect
       .poll(() => storedSound(page))
-      .toEqual({ enabled: false, themeId: 'glitch', volume: 20 });
+      .toEqual({ enabled: false, themeId: 'synthwave', volume: 20 });
 
     await page.close();
     expect(context).toBeDefined();
@@ -104,7 +104,7 @@ test.describe('sound settings and offscreen playback (M5.T20)', () => {
     await showSettings(reopened);
 
     await expect(reopened.getByRole('checkbox', { name: SOUND_LABEL })).not.toBeChecked();
-    await expect(reopened.getByRole('radio', { name: 'Glitch' })).toBeChecked();
+    await expect(reopened.getByRole('radio', { name: 'Synthwave' })).toBeChecked();
     await expect(reopened.getByRole('slider', { name: 'Volume' })).toHaveValue('20');
   });
 

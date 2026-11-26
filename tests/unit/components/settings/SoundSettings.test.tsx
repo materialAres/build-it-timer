@@ -114,14 +114,14 @@ describe('SoundSettings (M5.T19)', () => {
 
     it('sends { themeId } when a theme is selected', async () => {
       render(<SoundSettings />);
-      await userEvent.click(screen.getByRole('radio', { name: 'Glitch' }));
-      expect(sent).toEqual([setMessage({ themeId: 'glitch' })]);
+      await userEvent.click(screen.getByRole('radio', { name: 'Neon' }));
+      expect(sent).toEqual([setMessage({ themeId: 'neon' })]);
     });
 
     it('never writes the local store: it only asks', async () => {
       render(<SoundSettings />);
       const before = useAppStore.getState().preferences;
-      await userEvent.click(screen.getByRole('radio', { name: 'Glitch' }));
+      await userEvent.click(screen.getByRole('radio', { name: 'Neon' }));
       await userEvent.click(checkbox());
       expect(useAppStore.getState().preferences).toBe(before);
     });

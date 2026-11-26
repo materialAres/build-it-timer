@@ -55,7 +55,7 @@ describe('SOUND_THEMES', () => {
 describe('DEFAULT_SOUND_THEME_ID / findSoundTheme', () => {
   it('defaults to a theme that exists', () => {
     expect(SOUND_THEMES.map((theme) => theme.id)).toContain(DEFAULT_SOUND_THEME_ID);
-    expect(DEFAULT_SOUND_THEME_ID).toBe('neon');
+    expect(DEFAULT_SOUND_THEME_ID).toBe('glitch');
   });
 
   it.each(SOUND_THEMES.map((theme) => theme.id))('finds %s', (id) => {

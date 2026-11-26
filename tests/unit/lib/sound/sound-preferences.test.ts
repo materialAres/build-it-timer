@@ -14,10 +14,10 @@ const CURRENT: SoundPreferences = Object.freeze({
 });
 
 describe('DEFAULT_SOUND_PREFERENCES', () => {
-  it('is on, neon, 50%', () => {
+  it('is on, glitch, 50%', () => {
     expect(DEFAULT_SOUND_PREFERENCES).toEqual({
       enabled: true,
-      themeId: 'neon',
+      themeId: 'glitch',
       volume: 50,
     });
   });
@@ -41,7 +41,7 @@ describe('sanitizeSoundPreferences (lenient, for persisted data)', () => {
   });
 
   it('falls back to the default theme for an unknown theme', () => {
-    expect(sanitizeSoundPreferences({ themeId: 'bogus' }).themeId).toBe('neon');
+    expect(sanitizeSoundPreferences({ themeId: 'bogus' }).themeId).toBe('glitch');
   });
 
   it('falls back to the default for a non-boolean enabled', () => {

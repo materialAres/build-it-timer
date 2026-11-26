@@ -4,7 +4,7 @@ import { NEON_THEME } from './themes/neon';
 import { SYNTHWAVE_THEME } from './themes/synthwave';
 import { TERMINAL_THEME } from './themes/terminal';
 
-export const DEFAULT_SOUND_THEME_ID: SoundThemeId = 'neon';
+export const DEFAULT_SOUND_THEME_ID: SoundThemeId = 'glitch';
 
 /**
  * The themes, in the order the Settings panel lists them. Each recipe is data

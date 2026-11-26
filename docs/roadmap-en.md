@@ -743,10 +743,10 @@ Each task is a standalone card, with this fixed format:
 >
 > **Decisions (fixed; a task does not reopen them).**
 > - **Synthesized live, no audio files.** Every sound is a *recipe* (plain data) rendered with the Web Audio API. No `.ogg`/`.wav` assets, no new dependency, no licence to track. Pre-rendering to files is out of scope.
-> - **Four themes**, defined as data (Open/Closed): `neon` (detuned chime), `synthwave` (rising arpeggio), `glitch` (bit-crushed burst), `terminal` (retro beeps). The default is `neon`.
+> - **Four themes**, defined as data (Open/Closed): `neon` (detuned chime), `synthwave` (rising arpeggio), `glitch` (bit-crushed burst), `terminal` (retro beeps). The default is `glitch`.
 > - **Only two events make a sound.** A *fresh start* (`TIMER_STARTED` while `idle`, which creates a new session) plays the start sound. A *natural completion* (`createSessionCompletion` closes the session: the alarm fired, or the startup catch-up found the deadline passed) plays the end sound. Resume, pause, reset and duration changes are silent.
 > - **Lateness guard.** The end sound plays only if the completion is handled at most **60 s** after `timer.endsAt` (`END_SOUND_MAX_LATENESS_MS = 60_000`). When it is handled later (machine asleep, browser closed at the deadline), the session still completes, silently. 60 s absorbs normal alarm and worker wake-up delays.
-> - **Preferences** are `{ enabled, themeId, volume }`, defaults `{ true, 'neon', 50 }`, with `volume` an integer 0–100. They are persisted and written only by the background (single writer, M1.T9) through the `PREFERENCES_SOUND_SET` mutation. They are **not locked** during a session.
+> - **Preferences** are `{ enabled, themeId, volume }`, defaults `{ true, 'glitch', 50 }`, with `volume` an integer 0–100. They are persisted and written only by the background (single writer, M1.T9) through the `PREFERENCES_SOUND_SET` mutation. They are **not locked** during a session.
 > - **Settings UI**: a fifth popup tab, placed last and shown as a **gear icon** whose accessible name comes from `tabs.settings`. A text label could overflow the fixed 32 rem tab row in longer languages.
 > - **Where sound plays.** Both cues are triggered by the **background**, the only context that sees both events with the popup closed.
 >   - **Chrome:** the MV3 service worker has no `AudioContext`, so it plays through an **offscreen document** (`browser.offscreen`, reason `AUDIO_PLAYBACK`). The existence check uses `browser.runtime.getContexts` (Chrome 116+).
@@ -793,7 +793,7 @@ Each task is a standalone card, with this fixed format:
   - `SoundRecipe { voices: (OscillatorVoice | NoiseVoice)[]; effects: SoundEffects }`; `SoundTheme { id: SoundThemeId; start: SoundRecipe; end: SoundRecipe }`.
 * **Data** (`sound-themes.ts`):
   - `SOUND_THEMES: ReadonlyArray<SoundTheme>` in the order neon, synthwave, glitch, terminal.
-  - `DEFAULT_SOUND_THEME_ID = 'neon'`.
+  - `DEFAULT_SOUND_THEME_ID = 'glitch'`.
   - `isSoundThemeId(value: unknown): value is SoundThemeId`.
   - `findSoundTheme(id: SoundThemeId): SoundTheme`.
   - Labels are **not** here: i18n belongs to the UI (M5.T16).

@@ -943,7 +943,7 @@ description: Rules for updating the changelog
 
 ### M5.T1 — Sound types and the four sound themes (data)
 - `lib/sound/sound.types.ts` (type-only) defines `SoundCue`, `SoundThemeId`, `Waveform`, `SoundNote` (with optional `glideToHz`), `SoundEnvelope`, `SoundFilter`, `OscillatorVoice` (one oscillator per detune value per note), `NoiseVoice`, `SoundEffects` (`delay`, `bitcrush`), `SoundRecipe` and `SoundTheme`; every field is `readonly`.
-- `lib/sound/sound-themes.ts` exports `SOUND_THEMES` (neon, synthwave, glitch, terminal, each with a `start` and an `end` recipe), `DEFAULT_SOUND_THEME_ID = 'neon'`, `isSoundThemeId` and `findSoundTheme`. Labels are not here: i18n belongs to the UI (M5.T16).
+- `lib/sound/sound-themes.ts` exports `SOUND_THEMES` (neon, synthwave, glitch, terminal, each with a `start` and an `end` recipe), `DEFAULT_SOUND_THEME_ID = 'glitch'`, `isSoundThemeId` and `findSoundTheme`. Labels are not here: i18n belongs to the UI (M5.T16).
 - Files created: `lib/sound/sound.types.ts`, `lib/sound/sound-themes.ts`, `tests/unit/lib/sound/sound-themes.test.ts`.
 - Dependencies added: none.
 - Tests: `tests/unit/lib/sound/sound-themes.test.ts` (65 tests, unit) — four themes in order with unique ids; the default exists; `findSoundTheme` for every id; `isSoundThemeId` accepts the four ids and rejects `'NEON'`, `''`, `1`, `null`, `undefined`, `{}`; for each of the 8 recipes: at least one voice, frequencies (including `glideToHz` and filter cutoffs) within 20–20 000 Hz, gains in (0, 1] summing to at most 1, every note/burst ending within 1.5 s release included, positive attack/release, `bits` an integer in 2–8, `feedback` < 0.8 and `mix` in [0, 1].
@@ -981,7 +981,7 @@ description: Rules for updating the changelog
 - Acceptance criteria: verified. `bun run compile`, `bun run lint` and the full suite are clean.
 
 ### M5.T5 — Sound preferences model and validation (pure)
-- `lib/sound/sound-preferences.ts` owns the shape, the defaults and the validation of the sound preferences, shared later by the store, the mutation handler and the cues: `SoundPreferences { enabled, themeId, volume }` (volume an integer 0–100), `SoundPreferencesPatch = Partial<SoundPreferences>`, `DEFAULT_SOUND_PREFERENCES = { enabled: true, themeId: 'neon', volume: 50 }`.
+- `lib/sound/sound-preferences.ts` owns the shape, the defaults and the validation of the sound preferences, shared later by the store, the mutation handler and the cues: `SoundPreferences { enabled, themeId, volume }` (volume an integer 0–100), `SoundPreferencesPatch = Partial<SoundPreferences>`, `DEFAULT_SOUND_PREFERENCES = { enabled: true, themeId: 'glitch', volume: 50 }`.
 - `sanitizeSoundPreferences(value: unknown)` is lenient, for persisted data: each bad or missing field falls back to its own default, an in-range fractional volume is rounded and an out-of-range one clamped; a non-object (including `null` and arrays) gives the defaults; unknown keys are dropped.
 - `applySoundPreferencesPatch(current, patch: unknown): Result<SoundPreferences>` is strict, for incoming messages: it returns `err` for a non-object, an array, `{}`, an unknown key, a non-boolean `enabled`, an unknown `themeId`, or a `volume` that is not an integer from 0 to 100 (a key present with value `undefined` also counts as invalid); a valid one-, two- or three-key patch returns the merged preferences and never mutates `current`.
 - `isSoundAudible(preferences)` = `enabled && volume > 0`.
