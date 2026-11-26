@@ -131,5 +131,15 @@ describe('BlockedOverlay (M2.T8)', () => {
       expect(rule(sheet(), '.blocked-overlay__button')).toContain('border-radius: 999px');
     });
   });
-});
 
+  it('renders the domain as text, never as HTML (M6.T4)', () => {
+    const hostile = '<img src=x onerror="alert(1)"><b>bold</b>';
+    const { container } = render(
+      <BlockedOverlay domain={hostile} dismissed={false} onProceed={vi.fn()} onGoBack={vi.fn()} />,
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('b')).toBeNull();
+    expect(container.textContent).toContain(hostile);
+  });
+});

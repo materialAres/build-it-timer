@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import { i18n } from '#i18n';
 
 /**
@@ -95,10 +96,13 @@ export interface BlockedOverlayProps {
    * navigate back (the tab can have no history to return to).
    */
   readonly dismissed: boolean;
-  /** "Yes": the caller reports the attempt and hands the page over (M2.T10). */
-  readonly onProceed: () => void;
+  /**
+   * "Yes": the caller reports the attempt and hands the page over (M2.T10). It
+   * receives the click so it can tell a real one from a script-fired one (M6.T4).
+   */
+  readonly onProceed: (event: MouseEvent<HTMLButtonElement>) => void;
   /** "No": the caller reports the refusal and tries to go back. */
-  readonly onGoBack: () => void;
+  readonly onGoBack: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
 /**
