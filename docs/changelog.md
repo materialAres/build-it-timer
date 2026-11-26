@@ -29,7 +29,7 @@ description: Rules for updating the changelog
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean, exit 0** (CR6.T13 added `.claude/**`, `test-results/**` and `playwright-report/**` to the ESLint ignores, which resolves the former Open issue #21).
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
-- E2E: `bun run e2e` (Playwright, Chromium, on the built extension: `bun run build && bun run e2e`) → **12 passing tests** (`tests/e2e/popup.spec.ts`, the sound suite `tests/e2e/sound.spec.ts` of M5.T20 and the 3D city suite `tests/e2e/city-3d.spec.ts` of CR6.T12).
+- E2E: `bun run e2e` (Playwright, Chromium, on the built extension: `bun run build && bun run e2e`) → **13 passing tests** (`tests/e2e/popup.spec.ts`, the sound suite `tests/e2e/sound.spec.ts` of M5.T20, the 3D city suite `tests/e2e/city-3d.spec.ts` of CR6.T12 and the pause/resume test `tests/e2e/session-pause.spec.ts`, which has no roadmap card). Four more 5-minute tests, `tests/e2e/session-long.spec.ts`, run only with `bun run e2e:sessions` (4 passing, about 6 minutes in parallel) and are not part of the 13.
 
 ## Completed tasks summary
 
