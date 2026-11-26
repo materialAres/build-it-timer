@@ -109,7 +109,7 @@ const createAppState =
     ...createBlocklistSlice(dependencies)(set, get, ...rest),
     ...createScoreSlice(set, get, ...rest),
     ...createSessionHistorySlice(set, get, ...rest),
-    ...createPreferencesSlice()(set, get, ...rest),
+    ...createPreferencesSlice(dependencies)(set, get, ...rest),
     ui: initialUiState,
     setActiveTab(tab: PopupTab): void {
       set({ ui: { ...get().ui, activeTab: tab } });

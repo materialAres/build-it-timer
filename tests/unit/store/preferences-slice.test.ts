@@ -6,6 +6,7 @@ import {
   selectSoundThemeId,
   selectSoundVolume,
 } from '@/store';
+import type { MutationMessage } from '@/lib/messaging/messages.types';
 import type { TimerStatus } from '@/store/store.types';
 import { DEFAULT_SOUND_PREFERENCES } from '@/lib/sound/sound-preferences';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
@@ -91,4 +92,62 @@ describe('preferencesSlice (M5.T6)', () => {
       expect(store.getState().preferences.sound.volume).toBe(10);
     },
   );
+});
+
+describe('requestSetSoundPreferences (M5.T9)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  const createStore = (
+    sendMutation?: (message: MutationMessage) => void,
+  ): ReturnType<typeof createAppStore> =>
+    createAppStore({
+      dependencies: { alarmProvider: new FakeAlarmProvider(), sendMutation },
+    });
+
+  it('sends exactly one PREFERENCES_SOUND_SET with the given patch', () => {
+    const sendMutation = vi.fn();
+    const store = createStore(sendMutation);
+
+    store.getState().requestSetSoundPreferences({ volume: 80 });
+
+    expect(sendMutation).toHaveBeenCalledTimes(1);
+    expect(sendMutation).toHaveBeenCalledWith({
+      type: 'PREFERENCES_SOUND_SET',
+      payload: { volume: 80 },
+    });
+  });
+
+  it('does not change the local state: the popup converges through the sync', () => {
+    const store = createStore(vi.fn());
+    const before = store.getState().preferences;
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    store.getState().requestSetSoundPreferences({ enabled: false, volume: 5 });
+
+    expect(store.getState().preferences).toBe(before);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op that does not throw without a sendMutation', () => {
+    const store = createStore(undefined);
+    expect(() => {
+      store.getState().requestSetSoundPreferences({ volume: 80 });
+    }).not.toThrow();
+    expect(store.getState().preferences.sound).toEqual(DEFAULT_SOUND_PREFERENCES);
+  });
+
+  it('forwards the patch as given, without validating it (the background does)', () => {
+    const sendMutation = vi.fn();
+    const store = createStore(sendMutation);
+
+    store.getState().requestSetSoundPreferences({ volume: 500 });
+
+    expect(sendMutation).toHaveBeenCalledWith({
+      type: 'PREFERENCES_SOUND_SET',
+      payload: { volume: 500 },
+    });
+  });
 });
