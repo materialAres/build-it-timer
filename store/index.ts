@@ -25,7 +25,7 @@ import {
   type PreferencesSlice,
   type PreferencesState,
 } from './preferences.slice';
-export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
+export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score' | 'settings';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
 // temporary flags). Reset on every context startup and never persisted.

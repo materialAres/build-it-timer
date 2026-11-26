@@ -97,11 +97,36 @@ function BlocklistSection() {
   );
 }
 
+// The heading follows the other section titles (monospace, small, spaced
+// capitals). Its style is embedded, like the tab bar's, to keep this task to the
+// files it names; M5.T19 fills the section and can move it with its own styles.
+const SETTINGS_TITLE_STYLES = `
+  .popup-section__title {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+`;
+
+function SettingsSection() {
+  return (
+    <div className="popup-section popup-section--settings">
+      <style>{SETTINGS_TITLE_STYLES}</style>
+      <h2 className="popup-section__title">{i18n.t('settings.title')}</h2>
+    </div>
+  );
+}
+
 const SECTIONS: Readonly<Record<PopupTab, () => React.JSX.Element>> = {
   timer: TimerSection,
   city: CitySection,
   blocklist: BlocklistSection,
   score: ScoreSection,
+  settings: SettingsSection,
 };
 
 function App() {
