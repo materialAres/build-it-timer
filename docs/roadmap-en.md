@@ -855,7 +855,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M5.T4 — Web Audio renderer behind an injected `AudioContext`
 * **Objective**: schedule a `PlaybackPlan` on a Web Audio context as a thin adapter with no decisions of its own, testable with a fake context.
-* **Files**: `lib/sound/web-audio-renderer.ts` (new), `tests/helpers/fake-audio-context.ts` (new), `tests/unit/lib/sound/web-audio-renderer.test.ts` (new).
+* **Files**: `lib/sound/web-audio-renderer.ts` (new), `lib/sound/audio-context.types.ts` (new, type-only: `AudioContextLike` and the node interfaces; the renderer re-exports `AudioContextLike`), `tests/helpers/fake-audio-context.ts` (new), `tests/unit/lib/sound/web-audio-renderer.test.ts` (new).
 * **Dependencies**: M5.T2, M5.T3
 * **API**:
   - `AudioContextLike`: the minimal subset of `AudioContext` the renderer uses, so the real `AudioContext` satisfies it structurally: `currentTime`, `state`, `sampleRate`, `destination`, `resume()`, `close()`, `createOscillator()`, `createGain()`, `createBiquadFilter()`, `createBufferSource()`, `createBuffer()`, `createDelay()`, `createWaveShaper()`.
