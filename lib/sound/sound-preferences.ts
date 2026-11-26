@@ -27,7 +27,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isValidVolume(value: unknown): value is number {
+/** A whole number from 0 to 100: the only volume a message may carry. */
+export function isSoundVolume(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 100;
 }
 
@@ -70,7 +71,7 @@ function validatePatch(patch: unknown): Result<SoundPreferencesPatch> {
   if ('themeId' in patch && !isSoundThemeId(patch.themeId)) {
     return err(new Error('unknown themeId'));
   }
-  if ('volume' in patch && !isValidVolume(patch.volume)) {
+  if ('volume' in patch && !isSoundVolume(patch.volume)) {
     return err(new Error('volume must be an integer from 0 to 100'));
   }
   return ok(patch as SoundPreferencesPatch);

@@ -956,7 +956,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M5.T10 — `SoundPlayer` port, direct player and the `PLAY_SOUND` message
 * **Objective**: define the single interface every context uses to play a cue, its direct implementation over the renderer, and the message the background sends to the offscreen page.
-* **Files**: `lib/sound/sound-player.ts` (new), `lib/messaging/messages.types.ts` (new `PLAY_SOUND` variant), `tests/unit/lib/sound/sound-player.test.ts` (new).
+* **Files**: `lib/sound/sound-player.ts` (new), `lib/messaging/messages.types.ts` (new `PLAY_SOUND` variant), `lib/sound/sound-preferences.ts` (export the volume check as `isSoundVolume`, reused by `isSoundPlayRequest`), `tests/unit/lib/sound/sound-player.test.ts` (new).
 * **Dependencies**: M5.T1, M5.T2, M5.T4, M1.T6
 * **API**:
   - `SoundPlayRequest { themeId: SoundThemeId; cue: SoundCue; volume: number }`, plus `isSoundPlayRequest(value: unknown): value is SoundPlayRequest`, which requires a known theme, a cue of `'start'` or `'end'`, and an integer volume from 0 to 100.

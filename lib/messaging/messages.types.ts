@@ -1,4 +1,5 @@
 import type { SoundPreferencesPatch } from '@/lib/sound/sound-preferences';
+import type { SoundPlayRequest } from '@/lib/sound/sound-player';
 import type { SessionSummary } from '@/store/store.types';
 
 interface TimerTickMessage {
@@ -114,6 +115,14 @@ interface PreferencesSoundSetMessage {
   readonly payload: SoundPreferencesPatch;
 }
 
+// Sound playback (M5.T10). The background sends it to the offscreen page,
+// which plays it. It is a command to one listener, not a request to change
+// persisted state, so it is neither a mutation nor a background listener type.
+interface PlaySoundMessage {
+  readonly type: 'PLAY_SOUND';
+  readonly payload: SoundPlayRequest;
+}
+
 export type RuntimeMessage =
   | TimerTickMessage
   | TimerStartedMessage
@@ -129,7 +138,8 @@ export type RuntimeMessage =
   | PresetSaveMessage
   | PresetRenameMessage
   | PresetDeleteMessage
-  | PreferencesSoundSetMessage;
+  | PreferencesSoundSetMessage
+  | PlaySoundMessage;
 
 /** The blocklist and preset mutations: the family the lock applies to. */
 export const BLOCKLIST_MUTATION_TYPES = [
