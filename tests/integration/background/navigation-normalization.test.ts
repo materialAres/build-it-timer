@@ -96,6 +96,43 @@ describe('navigation-check normalization (M2.T21)', () => {
     expect(predicate('https://example.com')).toBe(false);
   });
 
+  it('blocks an IDN entry typed in Unicode on the punycode URL the browser reports (M6.T2)', () => {
+    const store = createRunningStore(['münchen.de']);
+    const predicate = createDistractionPredicate(store);
+
+    expect(store.getState().blocklist.blocklist[0]?.domain.value).toBe(
+      'xn--mnchen-3ya.de',
+    );
+    expect(predicate('https://www.xn--mnchen-3ya.de/stadt')).toBe(true);
+    expect(predicate('https://münchen.de')).toBe(true);
+  });
+
+  it('never confuses a homograph with the Latin domain it imitates (M6.T2)', () => {
+    // `р` and `а` are Cyrillic.
+    expect(
+      createDistractionPredicate(createRunningStore(['paypal.com']))(
+        'https://xn--ypal-43d9g.com/',
+      ),
+    ).toBe(false);
+    expect(
+      createDistractionPredicate(createRunningStore(['раypal.com']))(
+        'https://paypal.com',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not treat a non-http(s) URL of a blocked domain as a visit (M6.T2)', () => {
+    const predicate = createDistractionPredicate(createRunningStore(['facebook.com']));
+
+    for (const url of [
+      'ftp://facebook.com',
+      'view-source:https://facebook.com',
+      'chrome://facebook.com',
+    ]) {
+      expect(predicate(url)).toBe(false);
+    }
+  });
+
   it('never blocks while the timer is not running', () => {
     const store = createRunningStore(['facebook.com']);
     store.setState({ timer: { ...store.getState().timer, status: 'paused' } });
