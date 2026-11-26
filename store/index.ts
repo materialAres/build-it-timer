@@ -19,6 +19,7 @@ import {
 } from './blocklist.slice';
 import { createScoreSlice, deriveScoreState, type ScoreSlice } from './score.slice';
 import { createSessionHistorySlice, type SessionHistorySlice } from './session-history.slice';
+import { createPreferencesSlice, type PreferencesSlice } from './preferences.slice';
 export type PopupTab = 'timer' | 'city' | 'blocklist' | 'score';
 
 // Volatile slice: derived/transient state (fine-grained countdown, UI state,
@@ -50,6 +51,7 @@ export type AppState =
   BlocklistSlice &
   ScoreSlice &
   SessionHistorySlice &
+  PreferencesSlice &
   UiSlice;
 
 // The persisted payload: the data of the persisted slices only. The action
@@ -101,6 +103,7 @@ const createAppState =
     ...createBlocklistSlice(dependencies)(set, get, ...rest),
     ...createScoreSlice(set, get, ...rest),
     ...createSessionHistorySlice(set, get, ...rest),
+    ...createPreferencesSlice()(set, get, ...rest),
     ui: initialUiState,
     setActiveTab(tab: PopupTab): void {
       set({ ui: { ...get().ui, activeTab: tab } });
@@ -140,6 +143,7 @@ export type AppStore = ReturnType<typeof buildStore>;
  * | `city` | background | n/a (grown/destroyed in the background) |
  * | `score` | background | n/a (computed in the background) |
  * | `sessionHistory` | background | n/a (recorded at session end) |
+ * | `preferences` | background | mutation message (M5.T8) |
  * | `blocklist` | background | mutation message (M1.T10) |
  * | `ui` | each context | volatile, never persisted |
  *
@@ -334,6 +338,13 @@ export {
   selectPopulation,
   selectBuiltCharacters,
 } from './score.slice';
+export {
+  createPreferencesSlice,
+  selectSoundEnabled,
+  selectSoundThemeId,
+  selectSoundVolume,
+} from './preferences.slice';
+export type { PreferencesSlice, PreferencesState } from './preferences.slice';
 export type { TimerSlice } from './timer.slice';
 export type { CitySlice } from './city.slice';
 export type { BlocklistSlice } from './blocklist.slice';
