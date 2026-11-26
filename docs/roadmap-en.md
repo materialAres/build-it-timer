@@ -1059,7 +1059,7 @@ Each task is a standalone card, with this fixed format:
 
 #### M5.T16 — Settings and sound locale strings (EN/IT)
 * **Objective**: add every string the Settings tab needs, in both languages, before any UI uses them.
-* **Files**: `locales/en.yml`, `locales/it.yml`.
+* **Files**: `locales/en.yml`, `locales/it.yml`, `tests/unit/i18n/settings-locales.test.ts` (new).
 * **Dependencies**: M5.T1, M3.T10
 * **Acceptance criteria**:
   - Keys and their values:
