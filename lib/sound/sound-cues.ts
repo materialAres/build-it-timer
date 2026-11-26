@@ -50,8 +50,9 @@ export function createSoundCues({
           volume: preferences.volume,
         });
         if (!result.ok) logger.warn('sound cue failed', { cue });
-      } catch {
-        logger.warn('sound cue failed', { cue });
+      } catch (cause) {
+        // A player never throws (its contract), so this is a bug: keep the cause.
+        logger.error('sound cue failed', cause, { cue });
       }
     })();
   };

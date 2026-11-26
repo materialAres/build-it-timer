@@ -172,9 +172,12 @@ describe('createSoundCues', () => {
       });
     });
 
-    it('catches a rejecting player', async () => {
+    // A player that throws breaks its "never throws" contract: that is a bug,
+    // so it is logged as an error that keeps the cause.
+    it('catches a rejecting player and logs the cause', async () => {
+      const cause = new Error('boom');
       const { cues, records } = setup({
-        play: () => Promise.reject(new Error('boom')),
+        play: () => Promise.reject(cause),
       });
 
       expect(() => {
@@ -182,15 +185,17 @@ describe('createSoundCues', () => {
       }).not.toThrow();
 
       await vi.waitFor(() => {
-        const warnings = records.filter((record) => record.level === 'warn');
-        expect(warnings[0]?.details).toEqual([{ cue: 'end' }]);
+        const errors = records.filter((record) => record.level === 'error');
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.details).toEqual([cause, { cue: 'end' }]);
       });
     });
 
-    it('catches a player that throws synchronously', async () => {
+    it('catches a player that throws synchronously and logs the cause', async () => {
+      const cause = new Error('boom');
       const { cues, records } = setup({
         play: () => {
-          throw new Error('boom');
+          throw cause;
         },
       });
 
@@ -199,7 +204,8 @@ describe('createSoundCues', () => {
       }).not.toThrow();
 
       await vi.waitFor(() => {
-        expect(records.some((record) => record.level === 'warn')).toBe(true);
+        const errors = records.filter((record) => record.level === 'error');
+        expect(errors[0]?.details).toEqual([cause, { cue: 'start' }]);
       });
     });
 

@@ -27,6 +27,20 @@ const defaultLogger = createLogger('settings:preview');
 const createDefaultRenderer = (): SoundRenderer =>
   createWebAudioRenderer(() => new AudioContext());
 
+/** When the end sound starts, and how long it lasts, both in milliseconds. */
+function calculatePreviewTimings(
+  themeId: SoundThemeId,
+  volume: number,
+): { readonly endDelayMs: number; readonly endDurationMs: number } {
+  const theme = findSoundTheme(themeId);
+  const startSec = calculatePlaybackPlan(theme.start, volume).durationSec;
+  const endSec = calculatePlaybackPlan(theme.end, volume).durationSec;
+  return {
+    endDelayMs: Math.round((startSec + END_GAP_SEC) * 1000),
+    endDurationMs: Math.round(endSec * 1000),
+  };
+}
+
 function playCue(
   player: SoundPlayer,
   logger: Logger,
@@ -42,26 +56,20 @@ function playCue(
   }, failed);
 }
 
-/**
- * Preview of a sound theme for the Settings panel (M5.T18). The popup plays
- * only this, after a click, so autoplay is allowed; the real start and end
- * sounds come from the background. The audio context is created on the first
- * preview and closed on unmount, and a new preview cuts the previous one off.
- */
-export function useSoundPreview({
-  createRenderer = createDefaultRenderer,
-  logger = defaultLogger,
-}: SoundPreviewOptions = {}): SoundPreview {
-  const [previewingThemeId, setPreviewingThemeId] = useState<SoundThemeId | null>(null);
+interface PreviewAudio {
+  /** The player, created on first use; `null` when there is no audio here. */
+  readonly ensurePlayer: () => SoundPlayer | null;
+  /** Cuts off whatever is still sounding. */
+  readonly stopAll: () => void;
+}
+
+/** The audio behind the preview: created on the first preview, closed on unmount. */
+function usePreviewAudio(
+  createRenderer: () => SoundRenderer,
+  logger: Logger,
+): PreviewAudio {
   const rendererRef = useRef<SoundRenderer | null>(null);
   const playerRef = useRef<SoundPlayer | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearTimer = useCallback((): void => {
-    if (timerRef.current === null) return;
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }, []);
 
   const ensurePlayer = useCallback((): SoundPlayer | null => {
     if (playerRef.current !== null) return playerRef.current;
@@ -76,20 +84,53 @@ export function useSoundPreview({
     }
   }, [createRenderer, logger]);
 
+  const stopAll = useCallback((): void => {
+    rendererRef.current?.stopAll();
+  }, []);
+
+  useEffect(
+    () => () => {
+      const renderer = rendererRef.current;
+      rendererRef.current = null;
+      playerRef.current = null;
+      if (renderer !== null) void renderer.dispose();
+    },
+    [],
+  );
+
+  return { ensurePlayer, stopAll };
+}
+
+/**
+ * Preview of a sound theme for the Settings panel (M5.T18). The popup plays
+ * only this, after a click, so autoplay is allowed; the real start and end
+ * sounds come from the background. A new preview cuts the previous one off.
+ */
+export function useSoundPreview({
+  createRenderer = createDefaultRenderer,
+  logger = defaultLogger,
+}: SoundPreviewOptions = {}): SoundPreview {
+  const [previewingThemeId, setPreviewingThemeId] = useState<SoundThemeId | null>(null);
+  const { ensurePlayer, stopAll } = usePreviewAudio(createRenderer, logger);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = useCallback((): void => {
+    if (timerRef.current === null) return;
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
   const preview = useCallback(
     (themeId: SoundThemeId, volume: number): void => {
       // Cut off whatever is still playing, and its pending end sound.
       clearTimer();
-      rendererRef.current?.stopAll();
+      stopAll();
       setPreviewingThemeId(null);
       if (!Number.isFinite(volume) || volume <= 0) return;
-
       const player = ensurePlayer();
       if (player === null) return;
-      const theme = findSoundTheme(themeId);
-      const endDelaySec = calculatePlaybackPlan(theme.start, volume).durationSec + END_GAP_SEC;
-      const endDurationSec = calculatePlaybackPlan(theme.end, volume).durationSec;
 
+      const { endDelayMs, endDurationMs } = calculatePreviewTimings(themeId, volume);
       setPreviewingThemeId(themeId);
       playCue(player, logger, themeId, 'start', volume);
       timerRef.current = setTimeout(() => {
@@ -97,22 +138,13 @@ export function useSoundPreview({
         timerRef.current = setTimeout(() => {
           timerRef.current = null;
           setPreviewingThemeId(null);
-        }, Math.round(endDurationSec * 1000));
-      }, Math.round(endDelaySec * 1000));
+        }, endDurationMs);
+      }, endDelayMs);
     },
-    [clearTimer, ensurePlayer, logger],
+    [clearTimer, stopAll, ensurePlayer, logger],
   );
 
-  useEffect(
-    () => () => {
-      clearTimer();
-      const renderer = rendererRef.current;
-      rendererRef.current = null;
-      playerRef.current = null;
-      if (renderer !== null) void renderer.dispose();
-    },
-    [clearTimer],
-  );
+  useEffect(() => clearTimer, [clearTimer]);
 
   return { preview, previewingThemeId };
 }

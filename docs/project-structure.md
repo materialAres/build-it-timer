@@ -67,6 +67,7 @@ timer-focus/
 │   │   └── SessionHistory.tsx   # last 5 sessions
 │   ├── settings/                # M5: Settings tab (gear icon)
 │   │   ├── SoundSettings.tsx    # toggle, theme list with preview, volume slider
+│   │   ├── use-volume-draft.ts  # the dragged volume, sent once on release
 │   │   └── use-sound-preview.ts # popup-only preview playback (start then end)
 │   └── common/                  # shared buttons, modals, etc.
 ├── store/
@@ -102,7 +103,8 @@ timer-focus/
 │   │   └── malus-escalation.ts  # the escalating malus schedule (M4.T1, moved into the score by CR6.T5b)
 │   ├── sound/                   # M5: synthesized sound cues (pure core + injected adapters; `browser.*` only through the message bus, the offscreen adapter and the platform check)
 │   │   ├── sound.types.ts       # recipe, theme, cue types
-│   │   ├── sound-themes.ts      # the four themes as data
+│   │   ├── sound-themes.ts      # theme registry (order, default, lookup)
+│   │   ├── themes/              # one data file per theme: neon, synthwave, glitch, terminal
 │   │   ├── playback-plan.ts     # recipe + volume → timed tones (pure)
 │   │   ├── waveshapes.ts        # seeded noise, bit-crush curve (pure)
 │   │   ├── web-audio-renderer.ts # plan → Web Audio nodes, context injected
