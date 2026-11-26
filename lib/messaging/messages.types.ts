@@ -1,3 +1,4 @@
+import type { SoundPreferencesPatch } from '@/lib/sound/sound-preferences';
 import type { SessionSummary } from '@/store/store.types';
 
 interface TimerTickMessage {
@@ -105,6 +106,14 @@ interface PresetDeleteMessage {
   readonly payload: { readonly presetId: string };
 }
 
+// Preferences (M5.T8). The patch is untrusted: `setSoundPreferences` validates
+// it in the background, so the type only says what a well-behaved sender puts
+// in. Not locked by the timer status.
+interface PreferencesSoundSetMessage {
+  readonly type: 'PREFERENCES_SOUND_SET';
+  readonly payload: SoundPreferencesPatch;
+}
+
 export type RuntimeMessage =
   | TimerTickMessage
   | TimerStartedMessage
@@ -119,7 +128,8 @@ export type RuntimeMessage =
   | PresetToggleMessage
   | PresetSaveMessage
   | PresetRenameMessage
-  | PresetDeleteMessage;
+  | PresetDeleteMessage
+  | PreferencesSoundSetMessage;
 
 /** The blocklist and preset mutations: the family the lock applies to. */
 export const BLOCKLIST_MUTATION_TYPES = [
@@ -139,6 +149,11 @@ export const TIMER_MUTATION_TYPES = [
   'TIMER_SET_DURATION',
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
+/** The preferences mutations (M5.T8): never locked by the timer status. */
+export const PREFERENCES_MUTATION_TYPES = [
+  'PREFERENCES_SOUND_SET',
+] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
+
 /**
  * The `type` values of `MutationMessage`, usable as a runtime list. Declared
  * first so the union below is *derived* from it: a variant added here is
@@ -152,6 +167,7 @@ export const TIMER_MUTATION_TYPES = [
 export const MUTATION_TYPES = [
   ...BLOCKLIST_MUTATION_TYPES,
   ...TIMER_MUTATION_TYPES,
+  ...PREFERENCES_MUTATION_TYPES,
 ] as const satisfies ReadonlyArray<RuntimeMessage['type']>;
 
 /** The mutation variants a read-only context may send to the background. */

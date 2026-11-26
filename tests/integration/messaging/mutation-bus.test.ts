@@ -6,10 +6,12 @@ import { createAppStore, attachStoreSync, STORE_NAME } from '@/store';
 import {
   BLOCKLIST_MUTATION_TYPES,
   MUTATION_TYPES,
+  PREFERENCES_MUTATION_TYPES,
   isBlocklistMutation,
   type RuntimeMessage,
   type MutationMessage,
 } from '@/lib/messaging/messages.types';
+import { DEFAULT_SOUND_PREFERENCES } from '@/lib/sound/sound-preferences';
 import { createLogger, type LogRecord } from '@/utils/logger';
 
 /** Let the storage event → rehydrate chain (async) settle before asserting. */
@@ -405,16 +407,26 @@ describe('mutation type registry (PR5.T2)', () => {
     ]);
   });
 
-  it('composes MUTATION_TYPES from them plus the four timer commands, with no duplicate', () => {
+  it('lists the preferences types (M5.T8)', () => {
+    expect([...PREFERENCES_MUTATION_TYPES]).toEqual(['PREFERENCES_SOUND_SET']);
+  });
+
+  it('composes MUTATION_TYPES from the three families, with no duplicate', () => {
     expect([...MUTATION_TYPES].sort()).toEqual(
-      [...BLOCKLIST_MUTATION_TYPES, ...TIMER_COMMANDS].sort(),
+      [
+        ...BLOCKLIST_MUTATION_TYPES,
+        ...TIMER_COMMANDS,
+        ...PREFERENCES_MUTATION_TYPES,
+      ].sort(),
     );
     expect(new Set(MUTATION_TYPES).size).toBe(MUTATION_TYPES.length);
   });
 
   it.each([...MUTATION_TYPES])('isBlocklistMutation classifies %s', (type) => {
     const message = { type, payload: {} } as unknown as MutationMessage;
-    expect(isBlocklistMutation(message)).toBe(!TIMER_COMMANDS.includes(type));
+    expect(isBlocklistMutation(message)).toBe(
+      (BLOCKLIST_MUTATION_TYPES as ReadonlyArray<string>).includes(type),
+    );
   });
 });
 
@@ -513,4 +525,86 @@ describe('blocklist lock in the mutation handler (CR2.T2, CR5.T2)', () => {
 
     handle.dispose();
   });
+});
+
+describe('sound preferences mutation (M5.T8)', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  async function startedBackground() {
+    const store = createAppStore();
+    await store.persist.rehydrate();
+    const handle = startBackground({ store });
+    await handle.ready;
+    return { store, handle };
+  }
+
+  it('applies a valid patch and persists it', async () => {
+    const { store, handle } = await startedBackground();
+
+    await sendMessage({
+      type: 'PREFERENCES_SOUND_SET',
+      payload: { enabled: false, themeId: 'glitch', volume: 70 },
+    });
+
+    expect(store.getState().preferences.sound).toEqual({
+      enabled: false,
+      themeId: 'glitch',
+      volume: 70,
+    });
+    await vi.waitFor(async () => {
+      const raw = await fakeBrowser.storage.local.get(STORE_NAME);
+      const parsed = JSON.parse(raw[STORE_NAME] as string) as {
+        state: { preferences?: { sound: unknown } };
+      };
+      expect(parsed.state.preferences?.sound).toEqual({
+        enabled: false,
+        themeId: 'glitch',
+        volume: 70,
+      });
+    });
+    handle.dispose();
+  });
+
+  it.each([
+    ['an out-of-range volume', { volume: 500 }],
+    ['an unknown theme', { themeId: 'x' }],
+    ['an empty patch', {}],
+    ['a null payload', null],
+    ['an unknown key', { loud: true }],
+  ])('ignores %s without throwing or persisting', async (_label, payload) => {
+    const { store, handle } = await startedBackground();
+    const setSpy = vi.spyOn(fakeBrowser.storage.local, 'set');
+
+    const forged = {
+      type: 'PREFERENCES_SOUND_SET',
+      payload,
+    } as unknown as RuntimeMessage;
+    await expect(sendMessage(forged)).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+
+    expect(store.getState().preferences.sound).toEqual(DEFAULT_SOUND_PREFERENCES);
+    expect(setSpy).not.toHaveBeenCalled();
+    setSpy.mockRestore();
+    handle.dispose();
+  });
+
+  it.each(['running', 'paused', 'completed'] as const)(
+    'is applied while the timer is %s (never locked)',
+    async (status) => {
+      const { store, handle } = await startedBackground();
+      store.setState({ timer: { ...store.getState().timer, status } });
+
+      await sendMessage({
+        type: 'PREFERENCES_SOUND_SET',
+        payload: { volume: 10 },
+      });
+
+      expect(store.getState().preferences.sound.volume).toBe(10);
+      handle.dispose();
+    },
+  );
 });

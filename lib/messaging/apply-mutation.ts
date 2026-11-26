@@ -172,6 +172,11 @@ export function createMutationHandler(
         store.getState().setFocusDuration(durationSeconds);
         return;
       }
+      case 'PREFERENCES_SOUND_SET':
+        // Untrusted payload: `setSoundPreferences` validates it (M5.T5) and
+        // ignores a bad one, so there is nothing to check here.
+        store.getState().setSoundPreferences(message.payload);
+        return;
       default:
         // A new mutation type that is not handled above fails to compile here.
         message satisfies never;
