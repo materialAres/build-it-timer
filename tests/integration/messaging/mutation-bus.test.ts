@@ -182,9 +182,9 @@ describe('cross-context mutation path (M1.T10)', () => {
     expect(store.getState().blocklist).toBe(before);
     expect(setSpy).not.toHaveBeenCalled();
     const dropped = records.find(
-      (record) => record.message === 'blocklist mutation dropped: malformed payload',
+      (record) => record.message === 'ignored a malformed message',
     );
-    expect(dropped?.level).toBe('debug');
+    expect(dropped?.level).toBe('warn');
     expect(dropped?.details).toEqual([{ type: forged.type }]);
     // The diagnostic carries the type only, never a payload field.
     expect(JSON.stringify(records)).not.toContain('user:focus');

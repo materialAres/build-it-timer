@@ -132,7 +132,7 @@ describe('background orchestrator skeleton (M1.T7)', () => {
     expect(addListener).toHaveBeenCalledTimes(
       MESSAGE_TYPES.length + MUTATION_TYPES.length,
     );
-    expect(MESSAGE_TYPES).toHaveLength(4);
+    expect(MESSAGE_TYPES).toHaveLength(2);
 
     handle.dispose();
     addListener.mockRestore();

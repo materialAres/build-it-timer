@@ -1,7 +1,8 @@
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import { createLogger, type Logger } from '@/utils/logger';
 import type { Result } from '@/utils/result';
 import { ok, err } from '@/utils/result';
+import { parseRuntimeMessage } from './message-guards';
 import type { RuntimeMessage } from './messages.types';
 
 /**
@@ -10,9 +11,9 @@ import type { RuntimeMessage } from './messages.types';
  * keep the three "worlds" (background, content script, popup) decoupled: they
  * exchange typed messages instead of importing each other's modules.
  *
- * This module is deliberately thin: it only handles transport and type-safety.
- * Runtime validation of untrusted payloads and sender provenance hardening are
- * additive and land in M6.T1.
+ * This module handles transport, type-safety and, for every receiver, the two
+ * checks an incoming message needs (M6.T1): it must come from this extension
+ * (`sender.id`) and it must pass the runtime guards of `message-guards.ts`.
  */
 
 export type MessageType = RuntimeMessage['type'];
@@ -23,9 +24,21 @@ export type MessageOf<T extends MessageType> = Extract<RuntimeMessage, { type: T
 /** Handler invoked for a message of a specific `type`, with a typed payload. */
 export type MessageHandler<T extends MessageType> = (
   message: MessageOf<T>,
+  sender: Browser.runtime.MessageSender,
 ) => void | Promise<void>;
 
 const messagingLogger = createLogger('messaging');
+
+/** The raw `type`, read without ever throwing on a hostile object. */
+function readType(raw: unknown): unknown {
+  try {
+    return typeof raw === 'object' && raw !== null
+      ? (raw as { type?: unknown }).type
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Send a typed message to the extension's listeners. Accepts only valid
@@ -61,15 +74,26 @@ export function onMessage<T extends MessageType>(
   handler: MessageHandler<T>,
   logger: Logger = messagingLogger,
 ): () => void {
-  const listener = (rawMessage: unknown): void => {
-    // Minimal structural guard so a foreign/unknown message can never reach a
-    // typed handler. Full runtime validation is M6.T1.
-    if (typeof rawMessage !== 'object' || rawMessage === null) return;
-    const received = (rawMessage as { type?: unknown }).type;
-    if (typeof received !== 'string' || received !== type) return;
+  const listener = (rawMessage: unknown, sender?: Browser.runtime.MessageSender): void => {
+    // Messages of another type are none of this listener's business, so they
+    // are skipped silently: only a message *for* this type is worth a log line.
+    if (readType(rawMessage) !== type) return;
+
+    // Provenance (M6.T1): only this extension's own contexts may talk to us.
+    if (sender === undefined || sender.id !== browser.runtime.id) {
+      logger.warn('ignored a message from a foreign sender', { type });
+      return;
+    }
+    const parsed = parseRuntimeMessage(rawMessage);
+    if (!parsed.ok) {
+      logger.warn('ignored a malformed message', { type });
+      return;
+    }
+    // The guard is keyed by `type`, so the variant is the one registered for.
+    const message = parsed.value as MessageOf<T>;
 
     try {
-      const result = handler(rawMessage as MessageOf<T>);
+      const result = handler(message, sender);
       if (result !== undefined) {
         void result.catch((error: unknown) => {
           logger.error('message handler failed', error, { type });

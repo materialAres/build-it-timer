@@ -21,7 +21,7 @@ describe('typed message bus', () => {
     await sendMessage(message);
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith(message);
+    expect(handler).toHaveBeenCalledWith(message, { id: fakeBrowser.runtime.id });
   });
 
   it('narrows the payload to the registered type', async () => {

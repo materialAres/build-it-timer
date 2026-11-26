@@ -360,7 +360,7 @@ describe('add-direction mutations in the background (CR5.T2)', () => {
     } as unknown as MutationMessage);
 
     expect(domains(store)).toEqual([]);
-    const dropped = records.find((r) => r.message === 'blocklist mutation dropped: malformed payload');
+    const dropped = records.find((r) => r.message === 'ignored a malformed message');
     expect(dropped?.details).toEqual([{ type: 'BLOCKLIST_ADD_SITE' }]);
     handle.dispose();
   });
