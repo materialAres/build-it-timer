@@ -1147,7 +1147,7 @@ Each task is a standalone card, with this fixed format:
 * **Acceptance criteria**:
   - Each scenario runs in its own context from `launchExtensionContext()` (`tests/e2e/setup.ts`), so no offscreen document or setting is left over from a previous one.
   - **Scenario 1**: open the popup → the gear tab → turn sounds off, pick `Glitch`, change the volume → close and reopen the popup → the same values are shown.
-  - **Scenario 2** (sounds on): start a session → within 2 s, `chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })`, evaluated in the service worker, returns one document.
+  - **Scenario 2** (sounds on): start a session → within 2 s, `chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })`, evaluated from an extension page (the popup: it can call it too, and unlike the service worker it cannot be asleep, which would make the "none" case pass for the wrong reason), returns one document.
   - **Scenario 3** (sounds off): start a session → no offscreen document is created.
   - No assertion on audio output, since Playwright cannot hear; the end sound is covered by the M5.T15 integration tests.
   - Run with `bun run build`, then `bun run e2e`; Chromium only (CLAUDE.md §3.2).

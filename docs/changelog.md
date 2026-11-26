@@ -16,7 +16,7 @@ description: Rules for updating the changelog
 - Milestone 2 (core features) — **completed**: M2.T1 … M2.T21 all done.
 - Milestone 3 (secondary features) — **completed**: M3.T1 … M3.T10 all done (M3.T4 was split into M3.T3b/M3.T3c/M3.T4 — see the note at the top of the Milestone 3 section).
 - Milestone 4 (polish and nice-to-have) — **in progress**: M4.T1 done (nice-to-have); **M4.T2 skipped** (nice-to-have, not needed for now); **M4.T3a–e done** (error-hardening umbrella closed); M4.T4 … M4.T5 remaining.
-- Milestone 5 (sound cues) — **in progress**: M5.T1 – M5.T19 done; M5.T20 remaining. Milestone 6 (security hardening, formerly numbered 5) — not started: M6.T1 … M6.T3.
+- Milestone 5 (sound cues) — **completed**: M5.T1 … M5.T20 all done (the Firefox autoplay check is still a manual step, open point 23). Milestone 6 (security hardening, formerly numbered 5) — not started: M6.T1 … M6.T3.
 - Change request CR1 (remove allowlist) — **completed**: CR1.T1 … CR1.T6 done (production code in T1–T5a, tests in T5b/T5c, cleanup and final verification in T6).
 - Change request CR2 (blocklist locked outside `idle`) — **completed**: CR2.T1, CR2.T2, CR2.T3a, CR2.T3b, CR2.T3c and CR2.T4 done.
 - Change request CR3 (completion-based score and tiered population) — **completed**: CR3.T1 … CR3.T11 done (pure logic in T1/T3, `great` level and UI in T2, accounting/slice/background in T4–T6, tests in T7–T9, documentation in T10, changelog and final gate in T11).
@@ -29,7 +29,7 @@ description: Rules for updating the changelog
 - Type-check: `bun run compile` (`tsc --noEmit`) → **clean**.
 - Lint: `bun run lint` → **clean, exit 0** (CR6.T13 added `.claude/**`, `test-results/**` and `playwright-report/**` to the ESLint ignores, which resolves the former Open issue #21).
 - Builds: `bun run build` (Chrome) and `bun run build:firefox` (Firefox) → **both succeed**.
-- E2E: `bun run e2e` (Playwright, Chromium, on the built extension: `bun run build && bun run e2e`) → **9 passing tests** (`tests/e2e/popup.spec.ts` and the 3D city suite `tests/e2e/city-3d.spec.ts` of CR6.T12).
+- E2E: `bun run e2e` (Playwright, Chromium, on the built extension: `bun run build && bun run e2e`) → **12 passing tests** (`tests/e2e/popup.spec.ts`, the sound suite `tests/e2e/sound.spec.ts` of M5.T20 and the 3D city suite `tests/e2e/city-3d.spec.ts` of CR6.T12).
 
 ## Completed tasks summary
 
@@ -199,7 +199,8 @@ description: Rules for updating the changelog
 | M5.T16 | Settings and sound locale strings (EN/IT) | completed | `bee0c8e` |
 | M5.T17 | Settings tab with a gear icon | completed | `93140b5` |
 | M5.T18 | `use-sound-preview` hook (popup preview playback) | completed | `569d012` |
-| M5.T19 | `SoundSettings` panel (toggle, theme list, volume slider) | completed | — (to be committed) |
+| M5.T19 | `SoundSettings` panel (toggle, theme list, volume slider) | completed | `918cebc` |
+| M5.T20 | E2E: sound settings and offscreen playback | completed | — (to be committed) |
 
 ---
 
@@ -1131,6 +1132,19 @@ description: Rules for updating the changelog
 - Relevant notes/decisions: the card allowed a fourth file for the theme row if the component grew past about 150 lines; the row stayed inside the file and the fourth file is the styles file instead, which keeps the component at 143 lines. The test caught a real bug in the first version (the same volume sent twice, once per release event), which is why the `sent` flag exists.
 - Acceptance criteria: verified. `bun run compile`, `bun run lint`, the full suite, `bun run build` and `bun run e2e` are clean.
 
+### M5.T20 — E2E: sound settings and offscreen playback
+- `tests/e2e/sound.spec.ts` (3 tests, Playwright on the built Chrome extension). Each test opens its own browser from `launchExtensionContext()`, so no setting and no offscreen document leaks from one test to the next; the spec is skipped when `.output/chrome-mv3` is missing (build first: `bun run build`).
+- **Settings persist**: open the popup, the gear tab, pick `Glitch`, set the volume to 20 (the slider is released with a `pointerup`, so the value is sent once) and switch sounds off; the stored `preferences.sound` (read from `chrome.storage.local`) becomes `{ enabled: false, themeId: 'glitch', volume: 20 }`; the popup is closed and reopened and shows the same three values.
+- **Sounds on**: before the start there is no offscreen document; after starting a session `chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })` returns exactly one within 2 s.
+- **Sounds off**: after switching sounds off and starting a session, and waiting 1.5 s, there is none.
+- No assertion on audio output (Playwright cannot hear); the end sound is covered by the M5.T15 integration tests.
+- Files created/modified: `tests/e2e/sound.spec.ts` (new). `docs/roadmap-en.md`: the card now says the documents are counted from an extension page.
+- Dependencies added: none.
+- Tests: 3 e2e tests, not counted in the unit-suite total. `bun run e2e` → **12 passing tests** (the 3 new, `popup.spec.ts` and the 8 of the 3D city suite), run three times in a row with the same result.
+- Relevant notes/decisions: the documents are counted from the popup page rather than from the service worker (the card said the service worker): both can call `getContexts`, but a service worker can go to sleep, which would let the "none" test pass for the wrong reason. A first version used `check()` and `uncheck()` and failed in the full run: Playwright verifies the state right after the click, but these controls follow the *stored* preference, which reaches the popup a few milliseconds later through the background and the storage. The spec now clicks and then waits for the stored value, and says why in a comment. The same single-writer round trip is why the checkbox updates a moment after a click.
+- **Manual verification (not committed)**: with a throwaway script attached to the offscreen page through Chrome's debugging protocol, after a session start the page's `AudioContext` was created, reached `running` (autoplay does not block it) and built exactly the nodes of the Neon start sound (7 oscillators, 6 filters, 10 gains, 1 delay), with no console errors. This settles the M5.T12 point: the first `PLAY_SOUND` message is not lost when the page has just been created. Only the Firefox side remains unchecked (open point 23).
+- Acceptance criteria: verified. `bun run compile`, `bun run lint`, the unit suite (1896 tests, 137 files), `bun run build` and `bun run e2e` (12 tests, three runs) are clean.
+
 ---
 
 ## Bug fixes (post-roadmap)
@@ -2043,7 +2057,7 @@ Dev: `wxt`, `@wxt-dev/module-react`, `typescript`, `vitest`, `@vitest/coverage-v
 
 22. **Resolved (PERF22) — the first City frame missed its budget (CR6.T12)** — opening the City tab takes about 490–527 ms to the first frame on an NVIDIA RTX 3060 Laptop GPU and 516–736 ms on software GL, against the 200 ms budget of `docs/features-analysis/city-3d.md` §8. About 440 ms of it is before the renderer exists and 50 ms after; a CPU profile shows mostly main-thread idle (chunk, GPU process, next frame), one unidentified 110 ms function in the shared chunk and only about 60 ms of JavaScript in the three.js chunk. Options (none done): one WebGL2 context instead of a probe plus the renderer, build the scene before the first frame, warm the chunk (conflicts with "the Timer tab never requests it"). To be decided by the developer, or accepted by raising the budget; the e2e fails on this only with `E2E_GPU=1`. **Update (2026-11-17, PERF22):** the unidentified 110 ms was the WebGL2 probe `hasWebGl2()` (about 160 ms, synchronous, before any paint), and the largest cost was React 19 holding the `Suspense` reveal for about 300 ms after the loading fallback. The probe's context is now reused by the renderer, the probe runs after the first paint, and the chunk loads with a plain dynamic `import()`: the e2e first 3D frame on the GPU is **170–223 ms (was 446–543 ms)**, so the 200 ms budget is met about half the time and missed by about 20 ms otherwise. The developer accepted this and the budget was raised to 250 ms (e2e constant and `city-3d.md` §8): resolved.
 
-23. **Firefox autoplay of the session sounds is unverified (M5.T13)** — the Firefox background is an event page that plays through `AudioContext` directly (M5.T13). Firefox may block audio in a background page that has had no user gesture; nothing was run on the Firefox build, so it is unknown whether the start and end sounds are audible there. To check by hand once the wiring (M5.T15) exists: build with `bun run build:firefox`, load it, start a session and listen for the start and end sounds. If it is blocked, record the finding here; M5.T13 adds no workaround.
+23. **Firefox autoplay of the session sounds is unverified (M5.T13)** — the Firefox background is an event page that plays through `AudioContext` directly (M5.T13). Firefox may block audio in a background page that has had no user gesture; nothing was run on the Firefox build, so it is unknown whether the start and end sounds are audible there. The Chrome side was verified in M5.T20 (the offscreen page's `AudioContext` runs and builds the sound). To check the Firefox side by hand: build with `bun run build:firefox`, load it, start a session and listen for the start and end sounds. If it is blocked, record the finding here; M5.T13 adds no workaround.
 
 ---
 
