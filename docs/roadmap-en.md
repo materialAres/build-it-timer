@@ -102,6 +102,8 @@ Each task is a standalone card, with this fixed format:
 | M6.T1 | Message bus hardening: runtime validation + sender provenance | 6 | M1.T6 |
 | M6.T2 | `lib/url/domain.ts` hardening: scheme restriction + canonicalization + IDN | 6 | M1.T2 |
 | M6.T3 | Escaping/validation of `urlFilter` in DNR rule generation | 6 | M2.T6 |
+| M6.T4 | Content-script overlay hardening against the host page | 6 | M2.T8 |
+| M7.T1 | Remove the unused message chain (`MALUS_APPLIED`, `SESSION_ENDED`, `SITE_BLOCKED_ATTEMPT`) | 7 | M2.T8, M2.T16, M3.T3c |
 
 ### 1.3 Milestone 0 — Project setup
 
@@ -1159,7 +1161,7 @@ Each task is a standalone card, with this fixed format:
 > **Out of scope (self-pwn).** Anyone who opens DevTools and modifies code, store, or messages in *their own* browser already controls the extension: there is no sensible defense and none will be built. Same for uninstalling, manually modifying built files, or patching the extension. "An attacker can modify my code" is true for any frontend (web, desktop, native binaries) and is not in the threat model: the security model always excludes the operator of the machine.
 >
 > **In scope.** Any *untrusted* data/code that **crosses** into the extension toward a more privileged context, even with a legitimate operator. The trust boundaries that a backend-less extension does **not** eliminate:
-> 1. **Web page → content script** — the page is arbitrary and hostile (DOM, `postMessage`, crafted navigations). A malicious site is not the user.
+> 1. **Web page → content script** — the page is arbitrary and hostile (DOM, `postMessage`, crafted navigations). A malicious site is not the user (M6.T4).
 > 2. **Content script → background (message bus)** — `runtime.onMessage` can receive well-formed messages forged by other code; hence runtime validation of the discriminated union, checking `sender.id === browser.runtime.id`, `tabId` derived from `sender.tab.id` and never from the payload (M6.T1).
 > 3. **Untrusted URL/domain → DNR rules / domain checks** — injection via *data* (non-http schemes, the `userinfo` trick `https://facebook.com@evil.com`, IDN/homograph, syntactic characters `*`/`|`/`^`/`||` in `urlFilter`), exactly like a SQL injection (M6.T2, M6.T3).
 >
@@ -1204,6 +1206,39 @@ Each task is a standalone card, with this fixed format:
   - An entry with `*` does not produce a wildcard (no over-blocking); a `||` prefix does not unexpectedly alter the anchoring.
   - The "allowlist always wins" precedence is applied in the same generation phase (consistent with M2.T6/M2.T20).
   - Test: entry with `*`/`||` → safe or rejected rule; allow/block conflict → allowlist wins; no real calls to `browser.declarativeNetRequest` (pure module).
+
+#### M6.T4 — Content-script overlay hardening against the host page
+* **Objective**: the blocked-site overlay (M2.T8) runs inside an arbitrary, possibly hostile page (boundary 1 of the threat model above). The page's scripts must not be able to answer the overlay in the user's place or quietly get rid of it, and the content script must read nothing from the page except its URL.
+* **Files**: `entrypoints/blocked-overlay.content.tsx`, `components/common/BlockedOverlay.tsx`.
+* **Dependencies**: M2.T8
+* **Audit references**: none — boundary 1 of the threat model had no task; gap noted while analyzing Milestone 6 (2026-11-26). Impact today: the score is not affected (the background measures distraction from the tab URL), but a page can defeat the nudge: the shadow root is `open` and the buttons accept synthetic clicks, so `host.shadowRoot.querySelector('button').click()` answers "Open anyway", and removing the host element hides the overlay until the next storage change.
+* **Acceptance criteria**:
+  - Only real user input answers the overlay: a click fired by page script (`event.isTrusted === false`) neither unmounts the overlay nor sends `SITE_BLOCKED_ATTEMPT`. The trust check is injectable, because the synthetic events of component tests are untrusted too.
+  - The overlay mounts again as soon as the page removes its host element or replaces `document.body`, while the session is running and the user has not answered — without waiting for the next storage change.
+  - The content script reads nothing from the page besides `location.href`: no `window` `message` listener, no reads of page DOM content, and the domain is rendered as text, never as HTML (already true today; locked by tests).
+  - Test (integration, happy-dom): untrusted click → no message sent, overlay still mounted; host element removed → overlay back; no `message` listener registered on `window`.
+* **Out of scope**: the operator modifying the page or the extension in their own browser (self-pwn, see the threat model); a page covering the overlay with its own elements or hiding it with inline styles from script (an arms race with no end, for a nudge the user can dismiss anyway).
+
+### 1.10 Milestone 7 — Refactoring
+
+> Clean-ups found while analyzing Milestone 6 (2026-11-26). They add no feature and change no behavior the user can see: they remove code that no longer has a reason to exist, so there is less to maintain and less to secure.
+
+#### M7.T1 — Remove the unused message chain (`MALUS_APPLIED`, `SESSION_ENDED`, `SITE_BLOCKED_ATTEMPT`)
+* **Objective**: remove three message variants that no context consumes, and the code that exists only to produce them. Found while analyzing M6.T1:
+  - `SESSION_ENDED` is sent by the background at session completion, but nothing receives it: the background stores the summary itself (`recordSession`), and its own listener never fires for a message it sends.
+  - `MALUS_APPLIED` is sent by `createMalusWiring`, and nothing receives it either. Since CR6.T5b it is only a report: the malus is inside `calculateBuiltCharacters`, charged from the tab URL whatever the overlay answer.
+  - `SITE_BLOCKED_ATTEMPT` is sent by the overlay, and its only consumer is `createMalusWiring` (to decide whether to send `MALUS_APPLIED`), so it becomes dead with it.
+* **Files**: `lib/messaging/messages.types.ts`, `entrypoints/background.ts` (`createMalusWiring` and its types, the `MALUS_APPLIED`/`SESSION_ENDED`/`SITE_BLOCKED_ATTEMPT` entries of `MESSAGE_TYPES`, the `SITE_BLOCKED_ATTEMPT` branch of the passive handler, the `SESSION_ENDED` send in `createSessionCompletion`), `entrypoints/blocked-overlay.content.tsx` (`sendAttempt`/`reportAttempt` and the `sendAttempt` dependency), `store/session-history.slice.ts` (comments). Tests: `tests/unit/background/malus-wiring.test.ts`, `tests/integration/background/{malus,background,session-completion,sound-cues}.test.ts`, `tests/integration/messaging/bus.test.ts`, `tests/integration/content/blocked-overlay.test.ts`. Docs that describe the chain as current: `docs/features-analysis/city-3d.md`, `docs/features-analysis/score-population.md`, `docs/store-analysis.md`, `docs/timer-duration-plan.md`, `docs/testing-matrix.md` (past entries in `docs/changelog.md`, `docs/issue/` and `docs/pr-review/` stay as history).
+* **Dependencies**: M2.T8, M2.T16, M3.T3c
+* **Sequencing**: after Milestone 6. M6.T1 hardens `SITE_BLOCKED_ATTEMPT` as it stands (require `sender.tab`, derive the domain from the tab URL); this task then removes the message together with that hardening (its guard and its tests).
+* **Acceptance criteria**:
+  - `RuntimeMessage` has no `MALUS_APPLIED`, `SESSION_ENDED` or `SITE_BLOCKED_ATTEMPT` variant, and no code sends or listens for them; `MESSAGE_TYPES` keeps only the variants a listener actually handles.
+  - `createMalusWiring` and its types are removed; nothing else in the background changes.
+  - Overlay behavior is unchanged for the user: "Open anyway" removes it for the rest of the visit, "Back to work" shows the encouragement and goes back. It sends no runtime message.
+  - Session completion still records the summary in history, completes the timer and plays the end sound.
+  - Distraction accounting and the malus are unchanged: `distractedMs` and `builtCharacters` evolve exactly as before for the same tab history, whatever the overlay answer.
+  - Tests of the removed code are removed; the remaining overlay, session-completion and malus-accounting tests pass unchanged in what they assert; a test checks the overlay sends no runtime message on either answer.
+  - The docs listed above no longer describe the removed messages as current.
 
 ---
 
