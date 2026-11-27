@@ -166,6 +166,10 @@ function parseUnsafe(raw: unknown): Result<RuntimeMessage> {
   const payload = own(raw, 'payload');
   if (!isFields(payload)) return err(new Error(`${type}: payload is not an object`));
 
+  // `PAYLOAD_PARSERS` is keyed by `type`, so the parser picked for `type`
+  // returns that variant's payload and `{ type, payload }` is a valid
+  // `RuntimeMessage`. TypeScript cannot correlate the two through an indexed
+  // access, hence the casts below.
   const parse = PAYLOAD_PARSERS[type as MessageType] as (
     fields: Fields,
   ) => RuntimeMessage['payload'] | undefined;
