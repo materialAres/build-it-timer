@@ -41,8 +41,9 @@ interface TimerSetDurationMessage {
 
 // The overlay's answer for a blocked navigation (M2.T8). `tabId` is absent by
 // design: the content script cannot know its own tab id without the `tabs`
-// permission, and a caller-supplied id is untrusted anyway — the background
-// derives it from `sender.tab.id` (M6.T1, whose payload part landed here).
+// permission, and a caller-supplied id is untrusted anyway. The `domain` is
+// untrusted too: the background replaces it with the one of `sender.tab.url`
+// (M6.T1), and ignores an answer that does not come from a tab.
 interface SiteBlockedAttemptMessage {
   readonly type: 'SITE_BLOCKED_ATTEMPT';
   readonly payload: {

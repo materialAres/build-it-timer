@@ -5,6 +5,7 @@ import { ContentScriptContext } from 'wxt/utils/content-script-context';
 import {
   startBlockedOverlay,
   createStoreReader,
+  type BlockedOverlayDependencies,
   type StoreReader,
 } from '@/entrypoints/blocked-overlay.content.tsx';
 import { onMessage } from '@/lib/messaging/bus';
@@ -72,6 +73,16 @@ function overlayText(): string {
   return host()?.shadowRoot?.textContent ?? '';
 }
 
+/**
+ * The synthetic `click()` of these tests is untrusted, like a page script's
+ * (M6.T4), so the trust check is injected: these tests exercise the overlay's
+ * behaviour, the hardening tests exercise the check itself.
+ */
+const start = (
+  ctx: ContentScriptContext,
+  dependencies: BlockedOverlayDependencies = {},
+): (() => void) => startBlockedOverlay(ctx, { isTrustedEvent: () => true, ...dependencies });
+
 describe('blocked overlay content script (M2.T8)', () => {
   let ctx: ContentScriptContext;
   let teardown: (() => void) | undefined;
@@ -91,7 +102,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('mounts the overlay on a blocked domain during a running session', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://m.facebook.com/feed',
     });
@@ -105,7 +116,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('isolates the overlay in a shadow root that the page cannot style', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
     });
@@ -125,7 +136,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('does not mount when the timer is not running', async () => {
     const { reader } = fakeStoreReader({ ...runningSnapshot(['facebook.com']), timerStatus: 'idle' });
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
     });
@@ -138,7 +149,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('does not mount on a domain that is not blocked', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, { storeReader: reader, url: 'https://example.com/' });
+    teardown = start(ctx, { storeReader: reader, url: 'https://example.com/' });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -148,7 +159,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('does not crash on a URL without a registrable domain', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, { storeReader: reader, url: 'about:blank' });
+    teardown = start(ctx, { storeReader: reader, url: 'about:blank' });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -159,8 +170,8 @@ describe('blocked overlay content script (M2.T8)', () => {
     const first = fakeStoreReader(runningSnapshot(['facebook.com']));
     const second = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, { storeReader: first.reader, url: 'https://facebook.com/' });
-    startBlockedOverlay(ctx, { storeReader: second.reader, url: 'https://facebook.com/' });
+    teardown = start(ctx, { storeReader: first.reader, url: 'https://facebook.com/' });
+    start(ctx, { storeReader: second.reader, url: 'https://facebook.com/' });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -170,7 +181,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('reacts to a blocklist change that arrives while the page is open', async () => {
     const { reader, update } = fakeStoreReader({ timerStatus: 'running', blocklist: [] });
 
-    teardown = startBlockedOverlay(ctx, { storeReader: reader, url: 'https://facebook.com/' });
+    teardown = start(ctx, { storeReader: reader, url: 'https://facebook.com/' });
     await Promise.resolve();
     await Promise.resolve();
     expect(host()).toBeNull();
@@ -194,7 +205,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
 
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -214,7 +225,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -236,7 +247,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const sendAttempt = vi.fn(() => Promise.resolve());
     const { reader, update } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -265,7 +276,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     });
 
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -288,7 +299,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const goBack = vi.fn(); // stands in for a tab with nothing to return to
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -311,7 +322,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const { records, logger } = captureLogger();
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       logger,
@@ -342,7 +353,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       subscribe: () => () => undefined,
     };
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       logger,
@@ -374,7 +385,7 @@ describe('blocked overlay content script (M2.T8)', () => {
         '{"state":{"blocklist":{"blocklist":[{"domain":{"value":"facebook.com"',
     });
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: createStoreReader(logger),
       url: 'https://facebook.com/',
     });
@@ -414,7 +425,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     );
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: reader,
       url: 'https://facebook.com/',
       sendAttempt,
@@ -457,7 +468,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       }),
     });
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: createStoreReader(),
       url: 'https://facebook.com/',
     });
@@ -485,7 +496,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       }),
     });
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: createStoreReader(),
       url: 'https://facebook.com/',
     });
@@ -494,7 +505,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     expect(host()).toBeNull();
 
     teardown();
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: createStoreReader(),
       url: 'https://instagram.com/',
     });
@@ -519,7 +530,7 @@ describe('blocked overlay content script (M2.T8)', () => {
       }),
     });
 
-    teardown = startBlockedOverlay(ctx, {
+    teardown = start(ctx, {
       storeReader: createStoreReader(),
       url: 'https://facebook.com/',
     });
@@ -531,7 +542,7 @@ describe('blocked overlay content script (M2.T8)', () => {
   it('removes the overlay when the content script context is invalidated', async () => {
     const { reader } = fakeStoreReader(runningSnapshot(['facebook.com']));
 
-    startBlockedOverlay(ctx, { storeReader: reader, url: 'https://facebook.com/' });
+    start(ctx, { storeReader: reader, url: 'https://facebook.com/' });
     await vi.waitFor(() => {
       expect(host()).not.toBeNull();
     });
@@ -545,7 +556,7 @@ describe('blocked overlay content script (M2.T8)', () => {
     const addListener = vi.spyOn(browser.storage.onChanged, 'addListener');
     const removeListener = vi.spyOn(browser.storage.onChanged, 'removeListener');
 
-    const teardownReader = startBlockedOverlay(ctx, {
+    const teardownReader = start(ctx, {
       storeReader: createStoreReader(),
       url: 'https://facebook.com/',
     });

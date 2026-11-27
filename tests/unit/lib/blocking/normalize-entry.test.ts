@@ -74,6 +74,20 @@ describe('normalizeEntry (M2.T21)', () => {
     });
   });
 
+  it.each([
+    ['münchen.de', 'https://www.xn--mnchen-3ya.de/'],
+    ['https://münchen.de', 'https://xn--mnchen-3ya.de'],
+    ['FACEBOOK.COM.', 'https://m.facebook.com/'],
+    ['facebook.com:8080', 'https://facebook.com/feed'],
+  ])(
+    'gives the typed entry %j the canonical form of the browser URL %j (M6.T2)',
+    (typed, navigated) => {
+      const entry = normalizeEntry(typed);
+      expect(entry.ok).toBe(true);
+      expect(normalizeEntry(navigated)).toEqual(entry);
+    },
+  );
+
   it('agrees with getRegistrableDomain (single normalization point, DRY)', () => {
     const corpus = [
       'https://m.facebook.com/x',
@@ -83,6 +97,10 @@ describe('normalizeEntry (M2.T21)', () => {
       '',
       'https://192.168.1.1',
       'github.io',
+      'münchen.de',
+      'ftp://facebook.com',
+      'mailto:someone@facebook.com',
+      'https://facebook.com@evil.com',
     ];
 
     for (const input of corpus) {

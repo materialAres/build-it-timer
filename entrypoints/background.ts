@@ -10,6 +10,7 @@ import {
   createBrowserRuleApplier,
   type RuleApplier,
 } from '@/lib/blocking/apply-rules';
+import type { Browser } from 'wxt/browser';
 import { onMessage, sendMessage, type MessageType } from '@/lib/messaging/bus';
 import {
   MUTATION_TYPES,
@@ -17,6 +18,7 @@ import {
   type RuntimeMessage,
 } from '@/lib/messaging/messages.types';
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
+import { bindAttemptToSender } from '@/lib/messaging/blocked-attempt-sender';
 import { createStartupGate } from '@/lib/messaging/startup-gate';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { isAddDirectionMutation } from '@/lib/messaging/blocklist-payload';
@@ -37,10 +39,10 @@ import type { SoundPlayer } from '@/lib/sound/sound-player';
 import { createLogger, type Logger } from '@/utils/logger';
 
 /**
- * The passive `RuntimeMessage` variants defined in M1.T1. The background
- * registers one listener per type, so the wiring is complete before the
- * business logic lands in M2 (M2.T2 timer restore, M2.T7 DNR, M2.T15 growth,
- * M2.T16 malus).
+ * The passive `RuntimeMessage` variants the background consumes: the sampling
+ * tick (M2.T15) and the overlay's answer (M2.T16). `MALUS_APPLIED` and
+ * `SESSION_ENDED` are only *sent* by the background and nothing receives them,
+ * so they have no listener here (M6.T1).
  *
  * The timer *commands* (`TIMER_STARTED`/`TIMER_PAUSED`/`TIMER_RESET`) are not
  * here: they are mutations (M3.T3b) and are registered through `MUTATION_TYPES`,
@@ -49,8 +51,6 @@ import { createLogger, type Logger } from '@/utils/logger';
 export const MESSAGE_TYPES = [
   'TIMER_TICK',
   'SITE_BLOCKED_ATTEMPT',
-  'MALUS_APPLIED',
-  'SESSION_ENDED',
 ] as const satisfies ReadonlyArray<MessageType>;
 
 export interface BackgroundDependencies {
@@ -553,13 +553,23 @@ export function startBackground(
   armProgressAlarm();
 
   // Passive variants: the malus consumes `SITE_BLOCKED_ATTEMPT` and the same
-  // sampling `TIMER_TICK` that drives growth; every other variant stays a
-  // placeholder until its owning task (M2.T2/M2.T7) lands.
-  const handlePassiveMessage = (message: RuntimeMessage): void => {
+  // sampling `TIMER_TICK` that drives growth. The overlay's answer is bound to
+  // the sending tab (M6.T1): no tab, or a tab whose URL has no domain, is ignored.
+  const handlePassiveMessage = (
+    message: RuntimeMessage,
+    sender: Browser.runtime.MessageSender,
+  ): void => {
     if (message.type === 'TIMER_TICK') {
       growthTick.handleTick();
     } else if (message.type === 'SITE_BLOCKED_ATTEMPT') {
-      malus.handleAttempt(message);
+      const bound = bindAttemptToSender(message, sender);
+      if (!bound.ok) {
+        log.child('bus').debug('blocked-site answer ignored', {
+          type: message.type,
+        });
+        return;
+      }
+      malus.handleAttempt(bound.value);
     }
   };
 

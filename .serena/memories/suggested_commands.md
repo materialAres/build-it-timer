@@ -16,5 +16,4 @@ All from the repo root, via Bun:
 Notes:
 - `wxt` needs a Chromium binary; `wxt.config.ts` resolves Playwright's bundled one, and an explicit `CHROME_PATH` takes precedence.
 - Manual load: Chrome `chrome://extensions` → Load unpacked → `.output/chrome-mv3`; Firefox `about:debugging#/runtime/this-firefox` → Temporary Add-on → `.output/firefox-mv3/manifest.json`.
-- Prefer `repowise distill <cmd>` for noisy commands (tests, builds, git, searches); recover omitted lines with `repowise expand <ref>`.
 - Serena memory hygiene: `serena memories check`.

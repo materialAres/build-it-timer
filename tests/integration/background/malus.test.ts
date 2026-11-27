@@ -7,6 +7,7 @@ import {
   DEFAULT_FOCUS_PRESET,
   tickMsForDurationSeconds,
 } from '@/lib/timer/focus-presets';
+import { deliverAs, sendFromTab } from '@/tests/helpers/fake-extension-sender';
 import { FakeAlarmProvider } from '@/tests/helpers/fake-alarm-adapter';
 import { FakeTabEventSource } from '@/tests/helpers/fake-tab-event-source';
 import type { RuntimeMessage } from '@/lib/messaging/messages.types';
@@ -36,7 +37,10 @@ describe('malus linked to the score and the city (M2.T16, CR6.T5b)', () => {
   }
 
   async function proceed(domain = 'facebook.com'): Promise<void> {
-    await sendMessage({ type: 'SITE_BLOCKED_ATTEMPT', payload: { domain, choice: 'proceed' } });
+    await sendFromTab(
+      { type: 'SITE_BLOCKED_ATTEMPT', payload: { domain, choice: 'proceed' } },
+      `https://${domain}/`,
+    );
   }
 
   /** A focused stretch builds `built` characters, then a blocked tab is open. */
@@ -193,6 +197,63 @@ describe('malus linked to the score and the city (M2.T16, CR6.T5b)', () => {
     expect(store.getState().timer.focusedMs).toBe(30_000);
     expect(store.getState().timer.distractedMs).toBe(10_000);
     handle.dispose();
+  });
+
+  describe('the answer is bound to the sending tab (M6.T1)', () => {
+    const forged = (domain: string) => ({
+      type: 'SITE_BLOCKED_ATTEMPT',
+      payload: { domain, choice: 'proceed', tabId: 99 },
+    });
+
+    async function chargeAndCollect(
+      send: () => Promise<void>,
+    ): Promise<RuntimeMessage[]> {
+      const { handle } = await focusThenOpenBlockedTab(100);
+      const { received, stop } = collectMalus();
+      await send();
+      now += 20 * TICK_MS;
+      await sendMessage({ type: 'TIMER_TICK', payload: { remainingSeconds: 900 } });
+      stop();
+      handle.dispose();
+      return received;
+    }
+
+    it('reports the domain of the sender tab, not the one written in the payload', async () => {
+      const received = await chargeAndCollect(() =>
+        sendFromTab(forged('evil.com'), 'https://m.facebook.com/feed'),
+      );
+
+      expect(received).toEqual([
+        { type: 'MALUS_APPLIED', payload: { domain: 'facebook.com', charactersRemoved: 44 } },
+      ]);
+    });
+
+    it('ignores an answer that does not come from a tab', async () => {
+      const received = await chargeAndCollect(async () => {
+        await sendMessage(forged('facebook.com') as unknown as RuntimeMessage);
+      });
+
+      expect(received).toEqual([]);
+    });
+
+    it('ignores an answer whose tab is not a web page', async () => {
+      const received = await chargeAndCollect(() =>
+        sendFromTab(forged('facebook.com'), 'chrome://newtab/'),
+      );
+
+      expect(received).toEqual([]);
+    });
+
+    it('ignores an answer from a foreign extension even with a tab', async () => {
+      const received = await chargeAndCollect(async () => {
+        await deliverAs(forged('facebook.com'), {
+          id: 'someone-else',
+          tab: { id: 1, url: 'https://facebook.com/' },
+        });
+      });
+
+      expect(received).toEqual([]);
+    });
   });
 });
 

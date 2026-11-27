@@ -99,6 +99,12 @@ export interface BlockedOverlayDependencies {
   readonly goBack?: () => void;
   /** Diagnostics sink (M4.T3e); defaults to scope `content:blocked-overlay`. */
   readonly logger?: Logger;
+  /**
+   * Whether a click comes from the user (M6.T4). Defaults to `event.isTrusted`,
+   * which is `false` for anything the page's own scripts fire. Injectable
+   * because the synthetic events of component tests are untrusted too.
+   */
+  readonly isTrustedEvent?: (event: Event) => boolean;
 }
 
 /**
@@ -131,6 +137,8 @@ export function startBlockedOverlay(
       // a rejection. Surface it as a rejection so the caller's boundary logs it.
       if (!result.ok) throw result.error;
     });
+  const isTrustedEvent =
+    dependencies.isTrustedEvent ?? ((event: Event): boolean => event.isTrusted);
   const goBack =
     dependencies.goBack ??
     ((): void => {
@@ -148,10 +156,29 @@ export function startBlockedOverlay(
   const host = (): HTMLElement | undefined =>
     document.getElementById(HOST_ID) ?? undefined;
 
+  // Watches the page while the overlay is up (M6.T4): a page that removes the
+  // host, or replaces `document.body`, would otherwise hide the overlay until
+  // the next storage change. Only alive while mounted, so a page that is not
+  // blocked pays nothing for it.
+  let hostWatcher: MutationObserver | undefined;
+
   const unmount = (): void => {
+    hostWatcher?.disconnect();
+    hostWatcher = undefined;
     root?.unmount();
     root = undefined;
     host()?.remove();
+  };
+
+  const watchHost = (): void => {
+    hostWatcher = new MutationObserver(() => {
+      if (!ctx.isValid || host() !== undefined) return;
+      // The page took the host away: drop the orphaned React root and let
+      // `evaluate` decide again (running, blocked, not yet answered).
+      unmount();
+      evaluate();
+    });
+    hostWatcher.observe(document.documentElement, { childList: true, subtree: true });
   };
 
   // The background may be absent, restarting, or rejecting the message. The
@@ -179,6 +206,7 @@ export function startBlockedOverlay(
     const shadow = element.attachShadow({ mode: 'open' });
     root = createRoot(shadow);
     document.body.append(element);
+    watchHost();
 
     render();
     function render(): void {
@@ -186,12 +214,14 @@ export function startBlockedOverlay(
         <BlockedOverlay
           domain={domain}
           dismissed={dismissed}
-          onProceed={() => {
+          onProceed={(event) => {
+            if (!isTrustedEvent(event.nativeEvent)) return;
             proceeded = true;
             unmount();
             reportAttempt(domain, 'proceed');
           }}
-          onGoBack={() => {
+          onGoBack={(event) => {
+            if (!isTrustedEvent(event.nativeEvent)) return;
             // Reported even though no malus follows: the background learns the
             // user backed off, and the payload is what M2.T10 keys on.
             reportAttempt(domain, 'go-back');

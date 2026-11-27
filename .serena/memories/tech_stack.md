@@ -14,4 +14,3 @@
 - Runtime browser APIs: `storage`, `alarms`, `declarativeNetRequest`, `tabs`, `runtime` messaging; host permission `<all_urls>`.
 - Build outputs: `.output/chrome-mv3`, `.output/firefox-mv3`; zip scripts package for the stores.
 - Dev browser: `wxt dev` reuses Playwright's bundled Chromium; `CHROME_PATH` overrides it.
-- Repowise indexes the repo and provides output distillation (`.repowise/`, `AGENTS.md`).

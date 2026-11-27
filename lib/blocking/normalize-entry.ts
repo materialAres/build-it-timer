@@ -28,7 +28,7 @@ export const INVALID_URL_MESSAGE = 'Enter a valid URL';
  *
  * Pure and total at the untrusted boundary (§1.4): an invalid input — a "bare"
  * public suffix (`co.uk`, `com`, `github.io`), a malformed URL, an IP, an empty
- * string — yields `{ ok: false }` carrying {@link INVALID_URL_MESSAGE} instead of
+ * string, a scheme other than `http`/`https` (M6.T2) — yields `{ ok: false }` carrying {@link INVALID_URL_MESSAGE} instead of
  * throwing. A rejected *entry* is what the UI turns into "Enter a valid URL"; a
  * rejected *navigation* URL simply does not match any list (no crash, no block).
  */

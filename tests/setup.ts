@@ -4,6 +4,7 @@ import React from 'react';
 import type * as FramerMotion from 'framer-motion';
 import { installFakeDynamicRules } from '@/tests/helpers/fake-declarative-net-request';
 import { installI18nBackend, resetTestLocale } from '@/tests/helpers/i18n';
+import { installExtensionSender } from '@/tests/helpers/fake-extension-sender';
 
 // Animated transitions (the duration drum, M3.T5 history)
 // are purely visual. In tests they would keep an exiting character mounted
@@ -84,6 +85,9 @@ installFakeDynamicRules();
 installI18nBackend();
 
 beforeEach(() => {
+  // `fakeBrowser.runtime.sendMessage` delivers no `sender`; the bus rejects a
+  // message without one (M6.T1), so deliver as the extension's own context.
+  installExtensionSender();
   // The fake's ruleset is process-wide, while `fakeBrowser.reset()` (called by
   // the test files themselves) does not know about it: clear it per test so
   // rules cannot leak from one test to the next.
