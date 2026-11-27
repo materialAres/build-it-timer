@@ -3,19 +3,19 @@
 > PR: `feat(M6): security hardening of urls, messages and overlay` (`feat/milestone-6-security` → `main`), open.
 > Review: done in the agent session with the `review-pr` skill and posted as a PR comment (https://github.com/materialAres/build-it-timer/pull/10#issuecomment-7215828618), made on 2026-11-27 at `af467c5`. At that commit `bun run compile` was clean and `bun run test` passed 2119/2119. Lint, builds and e2e were not run.
 
-## Progress (2026-11-27)
+## Progress (2026-11-28)
 
 | Task | Result | Commit |
 |---|---|---|
-| PR10.T1 | Not started | — |
-| PR10.T2 | Not started | — |
-| PR10.T3 | Not started | — |
-| PR10.T4 | Not started | — |
-| PR10.T5 | Not started | — |
-| PR10.T5b | Not started | — |
-| PR10.T6 | Not started | — |
-| PR10.T7 | Not started | — |
-| PR10.T8 | Not started | — |
+| PR10.T1 | Done | `c52cf6b` |
+| PR10.T2 | Done | `1a0d9d7` |
+| PR10.T3 | Done | `e92223f` |
+| PR10.T4 | Done | `43b27f6` |
+| PR10.T5 | Done | `4c5a415` |
+| PR10.T5b | Done | `ca1e646` |
+| PR10.T6 | Done | `d780bfb` |
+| PR10.T7 | Done | `f7c6876` |
+| PR10.T8 | Done | — (its own commit cannot hold its hash) |
 
 ## 1. Review summary
 
@@ -105,7 +105,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T1 — Record the M6.T4 commit hash (F5)
 
-- **Status:** not started.
+- **Status:** done (`c52cf6b`).
 - **Files:** `docs/changelog.md`, `.serena/memories/core.md`.
 - **Work:**
   - In `docs/changelog.md`, the Completed tasks summary row `| M6.T4 | Content-script overlay hardening against the host page | completed | — (to be committed) |` gets the commit `` `af467c5` ``.
@@ -119,7 +119,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T2 — Extract the overlay host watcher into `lib/browser/host-watcher.ts` (F4)
 
-- **Status:** not started.
+- **Status:** done (`1a0d9d7`).
 - **Size:** about 140 changed lines, so at most 4 files.
 - **Files:** `lib/browser/host-watcher.ts` (new), `tests/unit/lib/browser/host-watcher.test.ts` (new), `entrypoints/blocked-overlay.content.tsx`, `docs/changelog.md`.
 - **Current behavior:** `startBlockedOverlay` owns a `MutationObserver` inline (`blocked-overlay.content.tsx:159–182`: `let hostWatcher`, `watchHost`, and the `disconnect` in `unmount`). On any `childList` change under `document.documentElement` it checks `!ctx.isValid || host() !== undefined`, and otherwise calls `unmount(); evaluate();`.
@@ -156,7 +156,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T3 — Recognize the overlay host by a private registry, not by its id (F1)
 
-- **Status:** not started.
+- **Status:** done (`e92223f`).
 - **Depends on:** PR10.T2.
 - **Files:** `entrypoints/blocked-overlay.content.tsx`, `tests/integration/content/blocked-overlay-hardening.test.ts`, `docs/changelog.md`.
 - **Current behavior:** `host()` returns `document.getElementById(HOST_ID)`, so an element the page creates with the id `buildit-blocked-overlay` counts as the overlay. It blocks `mount`, stops the remount, and is the element `unmount` removes.
@@ -180,7 +180,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T4 — Remount the overlay when the page empties its shadow root (F2)
 
-- **Status:** not started.
+- **Status:** done (`43b27f6`).
 - **Depends on:** PR10.T2, PR10.T3.
 - **Files:** `entrypoints/blocked-overlay.content.tsx`, `tests/integration/content/blocked-overlay-hardening.test.ts`, `docs/changelog.md`.
 - **Current behavior:** the watcher observes only `document.documentElement`. `host.shadowRoot.replaceChildren()` removes the overlay, keeps the host, and nothing remounts it.
@@ -203,7 +203,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T5 — Pure predicate for extension-page senders (F3)
 
-- **Status:** not started.
+- **Status:** done (`4c5a415`).
 - **Files:** `lib/messaging/extension-page-sender.ts` (new), `tests/unit/lib/messaging/extension-page-sender.test.ts` (new), `docs/changelog.md`.
 - **Wanted behavior:** a pure function that tells whether a message comes from one of the extension's own pages (popup, offscreen document), not from a content script.
 - **Work:**
@@ -227,7 +227,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T5b — Accept mutations only from extension pages (F3)
 
-- **Status:** not started.
+- **Status:** done (`ca1e646`).
 - **Depends on:** PR10.T5.
 - **Files:** `entrypoints/background.ts`, `tests/helpers/fake-extension-sender.ts`, `tests/integration/messaging/message-hardening.test.ts`, `docs/changelog.md`. Done with more files (D6): also `lib/messaging/extension-page-sender.ts`, `tests/unit/lib/messaging/extension-page-sender.test.ts` and `tests/integration/messaging/bus.test.ts` (its sender assertion now expects the popup `url`), plus this document.
 - **Current behavior:** the mutation loop (`entrypoints/background.ts:620–630`) registers `onMessage(type, (message) => { startup.run(() => { applyMutation(message); }); }, busLog)` for every `MUTATION_TYPES` entry, whoever the sender is.
@@ -250,7 +250,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T6 — `PLAY_SOUND` parser reads its fields through `own()` (F6)
 
-- **Status:** not started.
+- **Status:** done (`d780bfb`).
 - **Files:** `lib/messaging/message-guards.ts`, `tests/unit/lib/messaging/message-guards.test.ts`, `docs/changelog.md`.
 - **Current behavior:** `PLAY_SOUND(payload)` (`message-guards.ts:150–154`) validates `payload` with `isSoundPlayRequest`, which destructures it and so reads inherited properties, then destructures it again.
 - **Wanted behavior:** like every other parser, it reads `themeId`, `cue` and `volume` with `own(payload, …)`, validates the rebuilt object `{ themeId, cue, volume }` with `isSoundPlayRequest`, and returns that object.
@@ -262,7 +262,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T7 — Explain the cast in `parseUnsafe` (F7)
 
-- **Status:** not started.
+- **Status:** done (`f7c6876`).
 - **Files:** `lib/messaging/message-guards.ts`, `docs/changelog.md`.
 - **Work:** above the casts in `parseUnsafe` (`message-guards.ts:166–172`), add one short comment that gives the *why*: `PAYLOAD_PARSERS` is keyed by `type`, so the parser picked for `type` returns that variant's payload, and `{ type, payload }` is a valid `RuntimeMessage`. TypeScript cannot correlate the two through an indexed access, hence the casts. Do not change any code.
 - **Acceptance criteria:**
@@ -272,7 +272,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 ### PR10.T8 — Close-out
 
-- **Status:** not started.
+- **Status:** done.
 - **Depends on:** PR10.T1–PR10.T7.
 - **Files:** `docs/changelog.md`, `docs/pr-review/pr-10-review.md`, `.serena/memories/core.md`.
 - **Work:**
