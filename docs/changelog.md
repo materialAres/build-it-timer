@@ -204,7 +204,8 @@ description: Rules for updating the changelog
 | M6.T2 | Hardening of `lib/url/domain.ts`: scheme restriction, canonicalization, and IDN | completed | `1bfef91` |
 | M6.T3 | Escaping/validation of `urlFilter` in DNR rule generation | completed | `9593b1a` |
 | M6.T1 | Message bus hardening: runtime validation and sender provenance | completed | `6d65b56` |
-| M6.T4 | Content-script overlay hardening against the host page | completed | — (to be committed) |
+| M6.T4 | Content-script overlay hardening against the host page | completed | `af467c5` |
+| PR10.T1 | Record the M6.T4 commit hash (F5) | completed | — (to be committed) |
 
 ---
 
@@ -2067,6 +2068,16 @@ description: Rules for updating the changelog
 - Tests: none added; no code changed, so the counts above are unchanged.
 - Relevant notes/decisions: `gh pr edit 6 --body-file` failed twice with a GraphQL error about the deprecated Projects (classic) field (`repository.pullRequest.projectCards`). The same body was applied with `gh api -X PATCH repos/{owner}/{repo}/pulls/6 -F body=@<file>`, after the developer approved the update. The description read back from GitHub matches the draft, apart from a trailing newline added by GitHub.
 - Acceptance criteria: verified — the body was read back with `gh api` and checked: both review-follow-up and "also included" sections present, 20 commit lines, no mention of Q5.
+- Commit: — (to be committed).
+
+### PR10.T1 — Record the M6.T4 commit hash (F5)
+
+- The Completed tasks summary row of M6.T4 now shows `af467c5` instead of `— (to be committed)`. In `.serena/memories/core.md`, the Milestone 6 bullet says `**M6.T4 done 2026-11-26** (`af467c5`; 2119 tests/141 files, e2e 13)` instead of "uncommitted at writing". No other line of either file changed.
+- Files created/modified: `docs/changelog.md`, `.serena/memories/core.md`.
+- Dependencies added: none.
+- Tests: none added; no code changed, so the counts are unchanged (**2119 passing tests across 141 files**).
+- Relevant notes/decisions: the other `— (to be committed)` rows belong to other tasks and are not touched.
+- Acceptance criteria: verified — `grep -n "to be committed" docs/changelog.md` shows no M6.T4 row; `core.md` names `af467c5` and no longer says "uncommitted".
 - Commit: — (to be committed).
 
 ---
