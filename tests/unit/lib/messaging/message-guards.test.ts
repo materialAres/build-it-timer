@@ -161,4 +161,15 @@ describe('parseRuntimeMessage (M6.T1)', () => {
     expect(() => parseRuntimeMessage(proxy)).not.toThrow();
     expect(parseRuntimeMessage(proxy).ok).toBe(false);
   });
+
+  it('does not accept inherited PLAY_SOUND fields', () => {
+    const fields = { themeId: 'glitch', cue: 'start', volume: 50 };
+    const inherited = Object.create(fields) as Record<string, unknown>;
+
+    expect(parseRuntimeMessage({ type: 'PLAY_SOUND', payload: inherited }).ok).toBe(false);
+
+    const parsed = parseRuntimeMessage({ type: 'PLAY_SOUND', payload: { ...fields } });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.payload).toEqual(fields);
+  });
 });

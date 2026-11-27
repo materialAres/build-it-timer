@@ -148,9 +148,12 @@ const PAYLOAD_PARSERS: PayloadParsers = {
     return Object.keys(patch).length === 0 ? undefined : patch;
   },
   PLAY_SOUND(payload) {
-    if (!isSoundPlayRequest(payload)) return undefined;
-    const { themeId, cue, volume } = payload;
-    return { themeId, cue, volume };
+    const request = {
+      themeId: own(payload, 'themeId'),
+      cue: own(payload, 'cue'),
+      volume: own(payload, 'volume'),
+    };
+    return isSoundPlayRequest(request) ? request : undefined;
   },
 };
 
