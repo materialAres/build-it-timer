@@ -242,6 +242,40 @@ describe('blocked overlay against the host page (M6.T4)', () => {
       expect(ownHost()).toBeUndefined();
     });
 
+    it('mounts it again when the page empties the shadow root', async () => {
+      await mountOverlay();
+      const first = ownHost();
+      expect(first?.shadowRoot?.textContent).toBeDefined();
+
+      first?.shadowRoot?.replaceChildren();
+
+      await vi.waitFor(() => {
+        expect(ownHost()?.shadowRoot?.textContent).toContain('facebook.com');
+      });
+      const hosts = [...document.querySelectorAll(`#${HOST_ID}`)].filter(
+        (candidate) => candidate.shadowRoot !== null,
+      );
+      expect(hosts).toHaveLength(1);
+    });
+
+    it('does not remount on its own renders', async () => {
+      await mountOverlay({ isTrustedEvent: () => true });
+      await vi.waitFor(() => {
+        expect(ownHost()?.shadowRoot?.textContent).toContain('Back to work');
+      });
+      const first = ownHost();
+
+      button('Back to work').click();
+      await vi.waitFor(() => {
+        expect(ownHost()?.shadowRoot?.textContent).toContain('Great! Keep focusing!');
+      });
+      await settle();
+
+      expect(ownHost()).toBe(first);
+      expect(document.querySelectorAll(`#${HOST_ID}`)).toHaveLength(1);
+      expect(sendAttempt).toHaveBeenCalledTimes(1);
+    });
+
     it('does not bring it back after teardown', async () => {
       await mountOverlay();
 

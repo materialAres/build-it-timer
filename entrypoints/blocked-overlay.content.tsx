@@ -173,16 +173,26 @@ export function startBlockedOverlay(
   const unmount = (): void => {
     hostWatcher?.disconnect();
     hostWatcher = undefined;
-    root?.unmount();
+    try {
+      root?.unmount();
+    } catch (error: unknown) {
+      // The page emptied the shadow root, so React's nodes are already gone.
+      // Keep going: the host must still be removed for the remount to happen.
+      logger.error('overlay root could not be unmounted cleanly', error);
+    }
     root = undefined;
     host()?.remove();
   };
 
-  const watchHost = (): void => {
+  const watchHost = (shadow: ShadowRoot): void => {
     hostWatcher = createHostWatcher({
-      targets: [document.documentElement],
-      isLost: () => ctx.isValid && host() === undefined,
-      // The page took the host away: drop the orphaned React root and let
+      // The open shadow root is watched too: the page can empty it without
+      // touching the host. React's own renders keep `.blocked-overlay`, so they
+      // do not count as a loss.
+      targets: [document.documentElement, shadow],
+      isLost: () =>
+        ctx.isValid && (host() === undefined || shadow.querySelector('.blocked-overlay') === null),
+      // The page took the overlay away: drop the orphaned React root and let
       // `evaluate` decide again (running, blocked, not yet answered).
       onLost: () => {
         unmount();
@@ -217,7 +227,7 @@ export function startBlockedOverlay(
     root = createRoot(shadow);
     ownHosts.add(element);
     document.body.append(element);
-    watchHost();
+    watchHost(shadow);
 
     render();
     function render(): void {
