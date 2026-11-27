@@ -23,8 +23,9 @@ export function sendFromTab(message: unknown, url: string): Promise<void> {
 
 /**
  * Replaces `fakeBrowser.runtime.sendMessage` so every test message arrives as
- * the extension's own context would deliver it, and still rejects when nobody
- * listens, like the real call.
+ * the extension's popup would deliver it (this extension's id, no tab, a
+ * `popup.html` url), and still rejects when nobody listens, like the real call.
+ * The background accepts mutations only from such a sender (PR10.T5b).
  */
 export function installExtensionSender(): void {
   fakeBrowser.runtime.sendMessage = (message: unknown): Promise<undefined> => {
@@ -33,6 +34,9 @@ export function installExtensionSender(): void {
         new Error('Could not establish connection. Receiving end does not exist.'),
       );
     }
-    return deliverAs(message, { id: fakeBrowser.runtime.id }).then(() => undefined);
+    return deliverAs(message, {
+      id: fakeBrowser.runtime.id,
+      url: fakeBrowser.runtime.getURL('/popup.html'),
+    }).then(() => undefined);
   };
 }

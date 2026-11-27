@@ -19,6 +19,7 @@ import {
 } from '@/lib/messaging/messages.types';
 import { createMutationHandler } from '@/lib/messaging/apply-mutation';
 import { bindAttemptToSender } from '@/lib/messaging/blocked-attempt-sender';
+import { isExtensionPageSender } from '@/lib/messaging/extension-page-sender';
 import { createStartupGate } from '@/lib/messaging/startup-gate';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { isAddDirectionMutation } from '@/lib/messaging/blocklist-payload';
@@ -617,11 +618,21 @@ export function startBackground(
     }
     if (addsSites) void refreshDistractionTracker();
   };
+  // WXT types `getURL` to the paths it built; `'/'` is the extension root.
+  const extensionOrigin = browser.runtime.getURL('/' as Parameters<typeof browser.runtime.getURL>[0]);
   for (const type of MUTATION_TYPES) {
     disposers.push(
       onMessage(
         type,
-        (message) => {
+        (message, sender) => {
+          // Content scripts share a renderer process with the page, so only
+          // the extension's own pages may change the state (PR10.T5b).
+          if (!isExtensionPageSender(sender, extensionOrigin)) {
+            busLog.warn('ignored a mutation from outside an extension page', {
+              type: message.type,
+            });
+            return;
+          }
           startup.run(() => {
             applyMutation(message);
           });

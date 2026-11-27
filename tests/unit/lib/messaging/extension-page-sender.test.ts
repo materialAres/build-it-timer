@@ -12,9 +12,9 @@ describe('isExtensionPageSender (PR10.T5)', () => {
     expect(isExtensionPageSender({ url: POPUP }, ORIGIN)).toBe(true);
   });
 
-  it('rejects an extension page shown in a tab', () => {
+  it('accepts an extension page shown in a tab', () => {
     const sender: Sender = { url: POPUP, tab: { id: 1 } as Browser.tabs.Tab };
-    expect(isExtensionPageSender(sender, ORIGIN)).toBe(false);
+    expect(isExtensionPageSender(sender, ORIGIN)).toBe(true);
   });
 
   it('rejects a content-script sender', () => {

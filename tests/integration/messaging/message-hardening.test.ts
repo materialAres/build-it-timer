@@ -72,6 +72,47 @@ describe('message bus hardening (M6.T1)', () => {
       stop();
     });
 
+    describe.each([
+      [
+        'a tab (content script)',
+        {
+          id: fakeBrowser.runtime.id,
+          tab: { id: 1, url: 'https://evil.com/' },
+          url: 'https://evil.com/',
+        },
+      ],
+      ['a sender with no url', { id: fakeBrowser.runtime.id }],
+    ])('a mutation sent from %s', (_label, sender) => {
+      it('is rejected and leaves the timer idle', async () => {
+        const { store, handle } = await startWired();
+
+        await deliver({ type: 'TIMER_STARTED', payload: {} }, sender);
+
+        expect(store.getState().timer.status).toBe('idle');
+        const logged = records.find(
+          (r) => r.message === 'ignored a mutation from outside an extension page',
+        );
+        expect(logged?.details).toEqual([{ type: 'TIMER_STARTED' }]);
+        handle.dispose();
+      });
+    });
+
+    it('accepts a mutation from an extension page shown in a tab', async () => {
+      const { store, handle } = await startWired();
+
+      await deliver(
+        { type: 'TIMER_STARTED', payload: {} },
+        {
+          id: fakeBrowser.runtime.id,
+          tab: { id: 1, url: fakeBrowser.runtime.getURL('/popup.html') },
+          url: fakeBrowser.runtime.getURL('/popup.html'),
+        },
+      );
+
+      expect(store.getState().timer.status).toBe('running');
+      handle.dispose();
+    });
+
     it('accepts the same message from the extension itself', async () => {
       const { store, handle } = await startWired();
 

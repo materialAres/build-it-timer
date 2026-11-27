@@ -72,7 +72,7 @@ The shadow root is `open` (`:206`), so the page can reach it through `host.shado
 
 `onMessage` (`lib/messaging/bus.ts:77–93`) checks only `sender.id === browser.runtime.id`. A content script has the extension's id and a `sender.tab`, so it passes. The background's mutation loop (`entrypoints/background.ts:620–630`) adds no other check, so `TIMER_RESET`, `BLOCKLIST_REMOVE_SITE` and the other `MUTATION_TYPES` are accepted from a tab. Content scripts share a renderer process with the hostile page (threat-model boundary 2 of the roadmap). The M6.T1 card asks only for the `sender.id` check, so this is not a criterion miss.
 
-**Fix direction (decision D2):** accept `MUTATION_TYPES` only from extension pages: no `sender.tab`, and a `sender.url` that starts with the extension's origin (`browser.runtime.getURL('/')`). The passive `SITE_BLOCKED_ATTEMPT`, which the overlay sends from a tab, is not a mutation and stays allowed. The full-city page (`entrypoints/city/`) opens in a tab but uses the read-only store (`entrypoints/city/main.tsx:10–11`) and sends no mutation, so it is not affected.
+**Fix direction (decision D2):** accept `MUTATION_TYPES` only from extension pages: a `sender.url` that starts with the extension's origin (`browser.runtime.getURL('/')`). The review also suggested "no `sender.tab`"; decision D6 dropped that condition. The passive `SITE_BLOCKED_ATTEMPT`, which the overlay sends from a tab, is not a mutation and stays allowed. The full-city page (`entrypoints/city/`) opens in a tab but uses the read-only store (`entrypoints/city/main.tsx:10–11`) and sends no mutation, so it is not affected.
 
 ## F4 — Overlay content script size
 
@@ -97,6 +97,7 @@ Every parser in `PAYLOAD_PARSERS` reads fields with `own(payload, key)`, so an i
 - **D3 — F4 first, in `lib/browser/` (2026-11-27).** The watcher is extracted into `lib/browser/host-watcher.ts` before the F1/F2 fixes. It cannot live in `entrypoints/`, because WXT treats every file there as an entrypoint.
 - **D4 — Nits get tasks (2026-11-27).** F6 and F7 get one task each.
 - **D5 — F1 host recognition (2026-11-27).** A module-level `WeakSet` of the hosts the script created, rather than a per-instance reference. Both ignore decoys. The `WeakSet` also keeps exactly one overlay when two instances run on one page. With per-instance references, two overlays would stack, each with its own watcher and answered state.
+- **D6 — Extension pages in a tab are accepted (2026-11-27).** While doing PR10.T5b, 7 e2e tests failed: the e2e suite opens `popup.html` with `page.goto`, so the popup has a `sender.tab`, and the rule "no `sender.tab`" ignored its messages. Confirmed by removing the condition, rebuilding and re-running the sound specs. The user chose to drop it: a content script's `sender.url` is the web page's, never an extension URL, so the URL prefix alone excludes content scripts, and an extension page in a tab is still extension code. This changes the review's suggestion and the PR10.T5 predicate (committed in `4c5a415`), which PR10.T5b amends.
 
 ## 3. Tasks
 
@@ -204,18 +205,17 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 - **Status:** not started.
 - **Files:** `lib/messaging/extension-page-sender.ts` (new), `tests/unit/lib/messaging/extension-page-sender.test.ts` (new), `docs/changelog.md`.
-- **Wanted behavior:** a pure function that tells whether a message comes from one of the extension's own pages (popup, offscreen document), not from a tab.
+- **Wanted behavior:** a pure function that tells whether a message comes from one of the extension's own pages (popup, offscreen document), not from a content script.
 - **Work:**
   - Red first (§3.1): write the unit test, then the module.
-  - Export `isExtensionPageSender(sender: Browser.runtime.MessageSender, extensionOrigin: string): boolean` (`import type { Browser } from 'wxt/browser'`, as in `blocked-attempt-sender.ts`). It returns `true` only when all of these hold:
-    - `sender.tab` is `undefined`;
+  - Export `isExtensionPageSender(sender: Browser.runtime.MessageSender, extensionOrigin: string): boolean` (`import type { Browser } from 'wxt/browser'`, as in `blocked-attempt-sender.ts`). It returns `true` only when all of these hold (the `sender.tab` condition was dropped, decision D6):
     - `sender.url` is a string;
     - `extensionOrigin` is non-empty and ends with `/`;
     - `sender.url.startsWith(extensionOrigin)`.
-  - The origin is a parameter, so the module never calls `browser.*` (§1.1 D). A doc comment gives the *why*: content scripts share a renderer process with the page, so the `sender.id` check alone does not exclude them.
+  - The origin is a parameter, so the module never calls `browser.*` (§1.1 D). A doc comment gives the *why*: content scripts share a renderer process with the page, so the `sender.id` check alone does not exclude them. Their `sender.url` is the web page's, so the URL prefix tells them apart.
 - **Acceptance criteria:** unit tests (describe *"isExtensionPageSender (PR10.T5)"*) with origin `chrome-extension://test-extension-id/`:
   - `{ url: 'chrome-extension://test-extension-id/popup.html' }` → `true`;
-  - the same `url` with `tab: { id: 1 }` (an extension page shown in a tab) → `false`;
+  - the same `url` with `tab: { id: 1 }` (an extension page shown in a tab) → `true` (amended by D6; the card first said `false`);
   - a content-script sender `{ tab: { id: 1, url: 'https://evil.com/' }, url: 'https://evil.com/' }` → `false`;
   - no `url` → `false`;
   - another extension `chrome-extension://other-id/popup.html` → `false`;
@@ -229,7 +229,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 
 - **Status:** not started.
 - **Depends on:** PR10.T5.
-- **Files:** `entrypoints/background.ts`, `tests/helpers/fake-extension-sender.ts`, `tests/integration/messaging/message-hardening.test.ts`, `docs/changelog.md`.
+- **Files:** `entrypoints/background.ts`, `tests/helpers/fake-extension-sender.ts`, `tests/integration/messaging/message-hardening.test.ts`, `docs/changelog.md`. Done with more files (D6): also `lib/messaging/extension-page-sender.ts`, `tests/unit/lib/messaging/extension-page-sender.test.ts` and `tests/integration/messaging/bus.test.ts` (its sender assertion now expects the popup `url`), plus this document.
 - **Current behavior:** the mutation loop (`entrypoints/background.ts:620–630`) registers `onMessage(type, (message) => { startup.run(() => { applyMutation(message); }); }, busLog)` for every `MUTATION_TYPES` entry, whoever the sender is.
 - **Wanted behavior:** a mutation whose sender fails `isExtensionPageSender` is ignored before `startup.run`, with `busLog.warn('ignored a mutation from outside an extension page', { type: message.type })` (type only, never a payload field). Passive messages (`MESSAGE_TYPES`: `TIMER_TICK`, `SITE_BLOCKED_ATTEMPT`) are not affected.
 - **Work:**
@@ -239,7 +239,7 @@ Task IDs are local to this document (`PR10.Tn`). Do them one at a time, in order
 - **Acceptance criteria:**
   - New tests in `message-hardening.test.ts`, describe *"sender provenance"*:
     - *"rejects a mutation sent from a tab (content script)"*: `TIMER_STARTED` delivered with `{ id: fakeBrowser.runtime.id, tab: { id: 1, url: 'https://evil.com/' }, url: 'https://evil.com/' }` leaves `timer.status` at `idle`, and the warn record carries `{ type: 'TIMER_STARTED' }` only.
-    - *"rejects a mutation from an extension page shown in a tab"*: same, with `url: fakeBrowser.runtime.getURL('/city.html')` and a `tab`.
+    - *"accepts a mutation from an extension page shown in a tab"* (amended by D6; the card first asked for a rejection): `TIMER_STARTED` with a popup `url` and a `tab` makes `timer.status` `running`.
     - *"rejects a mutation with no sender url"*: `{ id: fakeBrowser.runtime.id }`.
   - The existing test *"accepts the same message from the extension itself"* passes unchanged.
   - `tests/integration/background/malus.test.ts` passes unchanged: `SITE_BLOCKED_ATTEMPT` from a tab is still accepted.
