@@ -18,6 +18,10 @@ const HOST_ID = 'buildit-blocked-overlay';
 
 const defaultLogger = createLogger('content:blocked-overlay');
 
+// The page shares the DOM but cannot reach this script's variables, so an id
+// can be forged and membership of this set cannot (PR10.T3).
+const ownHosts = new WeakSet<HTMLElement>();
+
 /** Read-only view of the persisted store, kept up to date while the page lives. */
 export interface StoreReader {
   /** Latest snapshot, or `undefined` when storage is empty/unreadable. */
@@ -117,7 +121,8 @@ export interface BlockedOverlayDependencies {
  * navigation never produces a document to overlay.
  *
  * Returns a teardown function. Running the script twice on the same page yields
- * exactly one overlay (idempotence), because the host is found by `HOST_ID`.
+ * exactly one overlay (idempotence), because the host is found among the
+ * elements this module created (`ownHosts`), not by `HOST_ID` alone.
  */
 export function startBlockedOverlay(
   ctx: ContentScriptContext,
@@ -155,7 +160,9 @@ export function startBlockedOverlay(
   let proceeded = false;
 
   const host = (): HTMLElement | undefined =>
-    document.getElementById(HOST_ID) ?? undefined;
+    [...document.querySelectorAll<HTMLElement>(`#${HOST_ID}`)].find((candidate) =>
+      ownHosts.has(candidate),
+    );
 
   // Watches the page while the overlay is up (M6.T4): a page that removes the
   // host, or replaces `document.body`, would otherwise hide the overlay until
@@ -208,6 +215,7 @@ export function startBlockedOverlay(
     // the e2e tests can still reach them through `host.shadowRoot`.
     const shadow = element.attachShadow({ mode: 'open' });
     root = createRoot(shadow);
+    ownHosts.add(element);
     document.body.append(element);
     watchHost();
 

@@ -26,6 +26,19 @@ const reader = {
 
 const host = (): HTMLElement | null => document.getElementById(HOST_ID);
 
+/** The overlay's own host: the page can forge the id, not the shadow root. */
+const ownHost = (): HTMLElement | undefined =>
+  [...document.querySelectorAll<HTMLElement>(`#${HOST_ID}`)].find(
+    (candidate) => candidate.shadowRoot !== null,
+  );
+
+const addDecoy = (): HTMLElement => {
+  const decoy = document.createElement('div');
+  decoy.id = HOST_ID;
+  document.body.append(decoy);
+  return decoy;
+};
+
 function button(label: string): HTMLButtonElement {
   const found = [...(host()?.shadowRoot?.querySelectorAll('button') ?? [])].find(
     (candidate) => candidate.textContent === label,
@@ -189,6 +202,44 @@ describe('blocked overlay against the host page (M6.T4)', () => {
       await settle();
 
       expect(host()).toBeNull();
+    });
+
+    it('mounts even when the page already holds an element with the overlay id', async () => {
+      addDecoy();
+      await mountOverlay();
+
+      await vi.waitFor(() => {
+        expect(ownHost()?.shadowRoot?.textContent).toContain('facebook.com');
+      });
+    });
+
+    it('mounts it again when the page adds a decoy and removes the real host', async () => {
+      await mountOverlay();
+      const real = ownHost();
+      expect(real).toBeDefined();
+
+      addDecoy();
+      real?.remove();
+
+      await vi.waitFor(() => {
+        expect(ownHost()).toBeDefined();
+      });
+      expect(ownHost()).not.toBe(real);
+    });
+
+    it("leaves the page's decoy in place on teardown", async () => {
+      const decoy = addDecoy();
+      await mountOverlay();
+      await vi.waitFor(() => {
+        expect(ownHost()).toBeDefined();
+      });
+
+      teardown?.();
+      teardown = undefined;
+      await settle();
+
+      expect(document.body.contains(decoy)).toBe(true);
+      expect(ownHost()).toBeUndefined();
     });
 
     it('does not bring it back after teardown', async () => {
