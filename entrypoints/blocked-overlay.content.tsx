@@ -5,6 +5,7 @@ import { BlockedOverlay } from '@/components/common/BlockedOverlay';
 import { isDomainBlocked } from '@/lib/blocking/is-domain-blocked';
 import { parseStoreSnapshot, STORE_STORAGE_KEY, type StoreSnapshot } from '@/lib/blocking/store-snapshot';
 import { normalizeEntry } from '@/lib/blocking/normalize-entry';
+import { createHostWatcher, type HostWatcher } from '@/lib/browser/host-watcher';
 import { sendMessage } from '@/lib/messaging/bus';
 import { createLogger, type Logger } from '@/utils/logger';
 
@@ -160,7 +161,7 @@ export function startBlockedOverlay(
   // host, or replaces `document.body`, would otherwise hide the overlay until
   // the next storage change. Only alive while mounted, so a page that is not
   // blocked pays nothing for it.
-  let hostWatcher: MutationObserver | undefined;
+  let hostWatcher: HostWatcher | undefined;
 
   const unmount = (): void => {
     hostWatcher?.disconnect();
@@ -171,14 +172,16 @@ export function startBlockedOverlay(
   };
 
   const watchHost = (): void => {
-    hostWatcher = new MutationObserver(() => {
-      if (!ctx.isValid || host() !== undefined) return;
+    hostWatcher = createHostWatcher({
+      targets: [document.documentElement],
+      isLost: () => ctx.isValid && host() === undefined,
       // The page took the host away: drop the orphaned React root and let
       // `evaluate` decide again (running, blocked, not yet answered).
-      unmount();
-      evaluate();
+      onLost: () => {
+        unmount();
+        evaluate();
+      },
     });
-    hostWatcher.observe(document.documentElement, { childList: true, subtree: true });
   };
 
   // The background may be absent, restarting, or rejecting the message. The
